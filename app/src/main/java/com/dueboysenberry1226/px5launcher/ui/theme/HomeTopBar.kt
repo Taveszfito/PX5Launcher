@@ -12,9 +12,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.data.Tab
 
 @Composable
@@ -47,7 +49,7 @@ fun HomeTopBar(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             PSTab(
-                text = "Alkalmazások",
+                text = stringResource(R.string.topbar_tab_apps),
                 selected = gamesSelected,
                 underline = gamesUnderline,
                 focused = topBarFocused,
@@ -55,7 +57,7 @@ fun HomeTopBar(
             )
             Spacer(Modifier.width(18.dp))
             PSTab(
-                text = "Médiafájlok",
+                text = stringResource(R.string.topbar_tab_media),
                 selected = mediaSelected,
                 underline = mediaUnderline,
                 focused = topBarFocused,
@@ -63,7 +65,7 @@ fun HomeTopBar(
             )
             Spacer(Modifier.width(18.dp))
             PSTab(
-                text = "Értesítések",
+                text = stringResource(R.string.topbar_tab_notifications),
                 selected = notificationsSelected,
                 underline = notificationsUnderline,
                 focused = topBarFocused,

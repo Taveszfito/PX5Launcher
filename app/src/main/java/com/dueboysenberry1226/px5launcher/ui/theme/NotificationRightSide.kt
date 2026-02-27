@@ -19,9 +19,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dueboysenberry1226.px5launcher.R
 
 @Composable
 fun NotificationRightSide(
@@ -134,12 +136,7 @@ private fun QuickTileCell(
     Box(
         modifier = modifier
             .clip(shape)
-            .background(
-                if (focused)
-                    Color.White.copy(alpha = 0.22f)
-                else
-                    colors.cardAlt
-            )
+            .background(if (focused) Color.White.copy(alpha = 0.22f) else colors.cardAlt)
             .border(
                 width = if (focused) 2.dp else 1.dp,
                 color = if (focused) Color.White else colors.stroke,
@@ -170,7 +167,7 @@ private fun QuickTileCell(
             ) {
                 Icon(
                     imageVector = type.icon,
-                    contentDescription = type.label,
+                    contentDescription = type.label(), // ✅
                     tint = colors.text,
                     modifier = Modifier.size(22.dp)
                 )
@@ -178,7 +175,7 @@ private fun QuickTileCell(
                 Spacer(Modifier.height(6.dp))
 
                 Text(
-                    text = type.label,
+                    text = type.label(), // ✅
                     color = colors.text,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -191,7 +188,12 @@ private fun QuickTileCell(
                 onDismissRequest = { menuOpen = false }
             ) {
                 DropdownMenuItem(
-                    text = { Text("🗑  Törlés", color = Color(0xFFFF8080)) },
+                    text = {
+                        Text(
+                            text = "🗑  ${stringResource(R.string.common_delete)}",
+                            color = Color(0xFFFF8080)
+                        )
+                    },
                     onClick = {
                         menuOpen = false
                         onRemove()
@@ -214,7 +216,7 @@ private fun QuickTilePickerDialog(
     AlertDialog(
         onDismissRequest = onCancel,
         title = {
-            Text("Csempe hozzáadása", color = colors.text)
+            Text(stringResource(R.string.qs_add_tile_title), color = colors.text)
         },
         text = {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -230,7 +232,7 @@ private fun QuickTilePickerDialog(
                             .clickable { selected = t }
                             .padding(12.dp)
                     ) {
-                        Text(t.label, color = colors.text)
+                        Text(t.label(), color = colors.text) // ✅
                     }
                 }
             }
@@ -240,12 +242,12 @@ private fun QuickTilePickerDialog(
                 onClick = { selected?.let(onConfirm) },
                 enabled = selected != null
             ) {
-                Text("Kiválasztás")
+                Text(stringResource(R.string.common_select))
             }
         },
         dismissButton = {
             TextButton(onClick = onCancel) {
-                Text("Vissza")
+                Text(stringResource(R.string.notifications_back))
             }
         }
     )

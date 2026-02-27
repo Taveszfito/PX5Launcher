@@ -19,10 +19,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.data.NotificationsRepository
 
 @Composable
@@ -59,7 +61,7 @@ fun NotificationLeftSide(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Nincs értesítés",
+                    text = stringResource(R.string.notifications_empty),
                     color = Color.White.copy(alpha = 0.35f),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold
@@ -106,7 +108,12 @@ fun NotificationLeftSide(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             FocusableBottomButton(
-                text = if (historyMode) "Vissza" else "Előzmények",
+                text = if (historyMode) {
+                    // ha van nálad már common_back, nyugodtan cseréld arra
+                    stringResource(R.string.common_back)
+                } else {
+                    stringResource(R.string.notifications_history)
+                },
                 onClick = onToggleHistoryMode,
                 colors = colors,
                 focusRequester = firstBottomButtonFR,
@@ -117,7 +124,7 @@ fun NotificationLeftSide(
             )
 
             FocusableBottomButton(
-                text = "Össz. Törl.",
+                text = stringResource(R.string.notifications_clear_all_short),
                 onClick = onClearAll,
                 colors = colors,
                 onFocusChanged = { focused ->
@@ -171,7 +178,10 @@ private fun NotificationRow(
                 if (historyMode) {
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "• ${formatTimeStamp(item.postedAtMillis)}",
+                        text = stringResource(
+                            R.string.notifications_time_bullet,
+                            formatTimeStamp(item.postedAtMillis)
+                        ),
                         color = colors.subtle.copy(alpha = 0.85f),
                         fontSize = 12.sp,
                         maxLines = 1,

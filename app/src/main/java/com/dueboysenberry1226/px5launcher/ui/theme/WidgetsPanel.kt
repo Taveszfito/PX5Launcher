@@ -27,10 +27,12 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.data.WidgetGridSpec
 import com.dueboysenberry1226.px5launcher.data.WidgetPlacement
 import kotlin.math.ceil
@@ -396,7 +398,7 @@ fun WidgetsPanel(
             ) {
                 Box(Modifier.fillMaxSize()) {
                     Text(
-                        text = "Widget hozzáadása",
+                        text = stringResource(R.string.widgets_add),
                         color = Color.White.copy(alpha = 0.85f),
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 16.sp,
@@ -613,11 +615,23 @@ fun WidgetsPanel(
                 modifier = Modifier.background(Color(0xFF111827))
             ) {
                 DropdownMenuItem(
-                    text = { Text("Áthelyezés", color = Color.White, fontWeight = FontWeight.Medium) },
+                    text = {
+                        Text(
+                            text = stringResource(R.string.widgets_move),
+                            color = Color.White,
+                            fontWeight = FontWeight.Medium
+                        )
+                    },
                     onClick = { target?.let(onMove); closeMenu() }
                 )
                 DropdownMenuItem(
-                    text = { Text("Törlés", color = Color.White, fontWeight = FontWeight.Medium) },
+                    text = {
+                        Text(
+                            text = stringResource(R.string.widgets_delete),
+                            color = Color.White,
+                            fontWeight = FontWeight.Medium
+                        )
+                    },
                     onClick = { target?.let(onDelete); closeMenu() }
                 )
             }

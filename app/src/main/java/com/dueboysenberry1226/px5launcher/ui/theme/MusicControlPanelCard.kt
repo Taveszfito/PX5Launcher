@@ -37,12 +37,14 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
+import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.media.PX5NotificationListener
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -70,7 +72,7 @@ fun MusicControlPanelCard(
     var selected by remember { mutableStateOf(Selected.SEEK) }
     var lastControlSelected by remember { mutableStateOf(Selected.PLAY_PAUSE) }
 
-    var title by remember { mutableStateOf("Nincs aktív lejátszás") }
+    var title by remember { mutableStateOf(context.getString(R.string.music_no_active_playback)) }
     var artist by remember { mutableStateOf("") }
     var isPlaying by remember { mutableStateOf(false) }
     var durationMs by remember { mutableStateOf(0L) }
@@ -176,8 +178,18 @@ fun MusicControlPanelCard(
 
     fun pullFromController(c: MediaController?) {
         if (c == null) {
-            title = if (hasPermissionIssue) "Adj értesítés-hozzáférést" else "Nincs aktív lejátszás"
-            artist = if (hasPermissionIssue) "A/Enter vagy katt: megnyitom a beállítást" else ""
+            title = if (hasPermissionIssue) {
+                context.getString(R.string.music_grant_notification_access)
+            } else {
+                context.getString(R.string.music_no_active_playback)
+            }
+
+            artist = if (hasPermissionIssue) {
+                context.getString(R.string.music_open_settings_hint)
+            } else {
+                ""
+            }
+
             isPlaying = false
             durationMs = 0L
             positionMs = 0L
@@ -190,7 +202,8 @@ fun MusicControlPanelCard(
 
         val md = c.metadata
         val desc = md?.description
-        val controllerTitle = desc?.title?.toString()?.takeIf { it.isNotBlank() } ?: "Ismeretlen média"
+        val controllerTitle = desc?.title?.toString()?.takeIf { it.isNotBlank() }
+            ?: context.getString(R.string.music_unknown_media)
         val controllerArtist = desc?.subtitle?.toString().orEmpty()
 
         val st = c.playbackState
@@ -246,7 +259,8 @@ fun MusicControlPanelCard(
             if (rawQueue.isNotEmpty() && curIdxInRaw < 0) {
                 val curNorm = normalizeTitle(controllerTitle)
                 val filtered = rawQueue.filter { normalizeTitle(it.title) != curNorm }
-                listOf(QueueItemUi(queueId = -1L, title = "▶ $controllerTitle")) + filtered
+                val prefixedNowPlaying = context.getString(R.string.music_now_playing_prefix, controllerTitle)
+                listOf(QueueItemUi(queueId = -1L, title = prefixedNowPlaying)) + filtered
             } else rawQueue
 
         queueItems = uiQueue
@@ -256,7 +270,8 @@ fun MusicControlPanelCard(
         val trackChanged = trackKeyNow.isNotBlank() && trackKeyNow != lastTrackKey
 
         if (trackChanged && queueItems.isNotEmpty()) {
-            val isFallback = queueItems.firstOrNull()?.title?.startsWith("▶ ") == true
+            val rawPrefix = context.getString(R.string.music_now_playing_prefix_raw)
+            val isFallback = queueItems.firstOrNull()?.title?.startsWith(rawPrefix) == true
             if (isFallback) {
                 listIndex = if (queueItems.size >= 2) 1 else 0
             } else {
@@ -309,7 +324,7 @@ fun MusicControlPanelCard(
         val safeIndex = index.coerceIn(0, queueItems.lastIndex)
         val item = queueItems[safeIndex]
         if (item.queueId == -1L) {
-            listHint = "Ez a mostani"
+            listHint = context.getString(R.string.music_list_hint_this_is_current)
             return true
         }
 
@@ -324,13 +339,13 @@ fun MusicControlPanelCard(
 
         val curIdx = indexOfTitleInQueue(title, queueItems)
         if (curIdx < 0) {
-            listHint = "Nem találom a mostanit"
+            listHint = context.getString(R.string.music_list_hint_cant_find_current)
             return true
         }
 
         val delta = safeIndex - curIdx
         if (delta == 0) {
-            listHint = "Már ez megy"
+            listHint = context.getString(R.string.music_list_hint_already_playing)
             return true
         }
 
@@ -339,7 +354,7 @@ fun MusicControlPanelCard(
 
         autoSkipActive = true
         autoSkipTargetTitleNorm = normalizeTitle(queueItems[safeIndex].title)
-        listHint = "Ugrás… (${steps}x)"
+        listHint = context.getString(R.string.music_list_hint_skipping, steps)
         seekMode = false
 
         if (autoSkipSavedVolume == null) {
@@ -364,7 +379,7 @@ fun MusicControlPanelCard(
             if (autoSkipActive) {
                 autoSkipActive = false
                 autoSkipTargetTitleNorm = ""
-                listHint = "Nem biztos, hogy elérte"
+                listHint = context.getString(R.string.music_list_hint_maybe_not_reached)
             }
 
             autoSkipSavedVolume?.let {
@@ -403,7 +418,7 @@ fun MusicControlPanelCard(
                 if (autoSkipActive) {
                     autoSkipActive = false
                     autoSkipTargetTitleNorm = ""
-                    listHint = "Megszakítva"
+                    listHint = context.getString(R.string.music_list_hint_cancelled)
 
                     autoSkipSavedVolume?.let {
                         audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, it, 0)
@@ -581,12 +596,12 @@ fun MusicControlPanelCard(
 
             Text(
                 text = when {
-                    hasPermissionIssue -> "A/Enter vagy katt: engedély bekapcsolása"
-                    autoSkipActive -> "Következőre lépés… (B: megszakít)"
-                    seekMode -> "Seek mód: DPAD ←/→ teker • Kilépés: B/Back"
-                    showQueue && !canSkipToQueueItem -> "Jobbra: következők (A: auto-skip)"
-                    showQueue -> "Jobbra: következő számok"
-                    else -> "A a csíkon: seek mód"
+                    hasPermissionIssue -> stringResource(R.string.music_hint_enable_permission)
+                    autoSkipActive -> stringResource(R.string.music_hint_skipping_cancel)
+                    seekMode -> stringResource(R.string.music_hint_seek_mode)
+                    showQueue && !canSkipToQueueItem -> stringResource(R.string.music_hint_queue_autoskip)
+                    showQueue -> stringResource(R.string.music_hint_queue_next_songs)
+                    else -> stringResource(R.string.music_hint_strip_seek_mode)
                 },
                 color = Color.White.copy(alpha = 0.45f),
                 fontSize = 12.sp,
@@ -665,7 +680,7 @@ fun MusicControlPanelCard(
                 )
 
                 Text(
-                    text = "$volNow/$volMax",
+                    text = stringResource(R.string.music_volume_format, volNow, volMax),
                     color = Color.White.copy(alpha = 0.65f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -704,13 +719,13 @@ fun MusicControlPanelCard(
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(
-                    text = formatMs(positionMs),
+                    text = formatMs(context, positionMs),
                     color = Color.White.copy(alpha = 0.55f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
                 )
                 Text(
-                    text = if (durationMs > 0) formatMs(durationMs) else "--:--",
+                    text = if (durationMs > 0) formatMs(context, durationMs) else stringResource(R.string.music_time_unknown),
                     color = Color.White.copy(alpha = 0.55f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
@@ -829,7 +844,7 @@ private fun QueuePanel(
                 .padding(12.dp)
         ) {
             Text(
-                text = "Következők",
+                text = stringResource(R.string.music_queue_title),
                 color = Color.White.copy(alpha = 0.85f),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold
@@ -838,7 +853,7 @@ private fun QueuePanel(
             Spacer(Modifier.height(4.dp))
 
             Text(
-                text = hint ?: if (canJump) "A: indít" else "A: auto-skip",
+                text = hint ?: if (canJump) stringResource(R.string.music_queue_hint_play) else stringResource(R.string.music_queue_hint_autoskip),
                 color = Color.White.copy(alpha = 0.45f),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
@@ -886,7 +901,7 @@ private fun QueuePanel(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = item.durationMs?.let { formatMs(it) } ?: "--:--",
+                            text = item.durationMs?.let { formatMs(LocalContext.current, it) } ?: stringResource(R.string.music_time_unknown),
                             color = Color.White.copy(alpha = 0.55f),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
@@ -912,14 +927,14 @@ private fun QueuePanel(
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = "Következőre lépés…",
+                        text = stringResource(R.string.music_busy_title),
                         color = Color.White.copy(alpha = 0.88f),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        text = "B: megszakít",
+                        text = stringResource(R.string.music_busy_cancel),
                         color = Color.White.copy(alpha = 0.55f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
@@ -929,7 +944,6 @@ private fun QueuePanel(
         }
     }
 }
-
 
 @Composable
 private fun SeekBar(
@@ -1001,10 +1015,10 @@ private fun SeekBar(
 
         Text(
             text = when {
-                hasPermissionIssue -> "Engedély kell (katt/A)"
-                durationMs <= 0L -> "Nincs seek adat"
-                seekMode && selected -> "Seek mód: ←/→ (5 mp)"
-                selected -> "Kijelölve • A: megfog"
+                hasPermissionIssue -> stringResource(R.string.music_seek_perm_needed)
+                durationMs <= 0L -> stringResource(R.string.music_seek_no_data)
+                seekMode && selected -> stringResource(R.string.music_seek_mode_step)
+                selected -> stringResource(R.string.music_seek_selected_hint)
                 else -> ""
             },
             modifier = Modifier.align(Alignment.Center),
@@ -1031,8 +1045,8 @@ private fun doSeekBy(
     updatePos(target)
 }
 
-private fun formatMs(ms: Long): String {
-    if (ms <= 0L) return "0:00"
+private fun formatMs(context: Context, ms: Long): String {
+    if (ms <= 0L) return context.getString(R.string.music_time_zero)
     val totalSec = ms / 1000
     val m = totalSec / 60
     val s = totalSec % 60

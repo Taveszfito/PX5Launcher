@@ -34,11 +34,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.media.MediaAlbum
 import com.dueboysenberry1226.px5launcher.media.MediaEntry
 import com.dueboysenberry1226.px5launcher.media.MediaKind
@@ -138,7 +140,7 @@ fun MediaRoute(
 
     fun openVideoExternal(uri: Uri) {
         val i = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "video/*")
+            setDataAndType(uri, "video/*") // nem UI szöveg, maradhat
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         if (i.resolveActivity(context.packageManager) != null) context.startActivity(i)
@@ -387,7 +389,7 @@ fun MediaRoute(
 
             MediaScreen.IMAGES -> {
                 MediaGrid(
-                    title = "Képek",
+                    title = stringResource(R.string.media_title_images),
                     items = gridItems,
                     selectedIndex = selectedIndex,
                     columns = columns,
@@ -400,7 +402,7 @@ fun MediaRoute(
 
             MediaScreen.VIDEOS -> {
                 MediaGrid(
-                    title = "Videók",
+                    title = stringResource(R.string.media_title_videos),
                     items = gridItems,
                     selectedIndex = selectedIndex,
                     columns = columns,
@@ -413,7 +415,7 @@ fun MediaRoute(
 
             MediaScreen.ALBUMS -> {
                 MediaGrid(
-                    title = "Albumok",
+                    title = stringResource(R.string.media_title_albums),
                     items = gridItems,
                     selectedIndex = selectedIndex,
                     columns = columns,
@@ -430,7 +432,7 @@ fun MediaRoute(
 
             MediaScreen.ALBUM_CONTENT -> {
                 MediaGrid(
-                    title = currentAlbumName ?: "Album",
+                    title = currentAlbumName ?: stringResource(R.string.media_title_album_fallback),
                     items = gridItems,
                     selectedIndex = selectedIndex,
                     columns = columns,
@@ -471,21 +473,21 @@ private fun MediaPermissionCard(
     ) {
         Column(Modifier.padding(18.dp)) {
             Text(
-                "Média engedély szükséges",
+                text = stringResource(R.string.media_perm_title),
                 color = Color.White,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "A Képek / Videók / Albumok megjelenítéséhez engedélyezd a médiafájlok olvasását.",
+                text = stringResource(R.string.media_perm_desc),
                 color = Color.White.copy(alpha = 0.75f),
                 fontSize = 13.sp
             )
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                TouchTextButton(text = "Engedély kérése", onClick = onRequest)
-                TouchTextButton(text = "Vissza", onClick = onBack, alpha = 0.85f)
+                TouchTextButton(text = stringResource(R.string.media_perm_request), onClick = onRequest)
+                TouchTextButton(text = stringResource(R.string.common_back), onClick = onBack, alpha = 0.85f)
             }
         }
     }
@@ -533,7 +535,7 @@ private fun MediaHub(
         ) {
             MediaBigButton(
                 icon = "🖼️",
-                text = "Képek",
+                text = stringResource(R.string.media_title_images),
                 selected = hubSelectionEnabled && selectedIndex == 0,
                 onClick = {
                     onSelect(0)
@@ -542,7 +544,7 @@ private fun MediaHub(
             )
             MediaBigButton(
                 icon = "🎬",
-                text = "Videók",
+                text = stringResource(R.string.media_title_videos),
                 selected = hubSelectionEnabled && selectedIndex == 1,
                 onClick = {
                     onSelect(1)
@@ -551,7 +553,7 @@ private fun MediaHub(
             )
             MediaBigButton(
                 icon = "📁",
-                text = "Albumok",
+                text = stringResource(R.string.media_title_albums),
                 selected = hubSelectionEnabled && selectedIndex == 2,
                 onClick = {
                     onSelect(2)
@@ -652,7 +654,7 @@ private fun MediaGrid(
                 when (item) {
                     is MediaGridItem.Back -> BackTile(
                         selected = isSel,
-                        label = "Vissza",
+                        label = stringResource(R.string.common_back),
                         onClick = { selectAnd { onBack() } }
                     )
 
@@ -694,7 +696,11 @@ private fun BackTile(selected: Boolean, label: String, onClick: () -> Unit) {
             )
     ) {
         Box(Modifier.fillMaxSize().padding(12.dp), contentAlignment = Alignment.CenterStart) {
-            Text("←  $label", color = Color.White, fontWeight = FontWeight.SemiBold)
+            Text(
+                text = stringResource(R.string.media_back_tile, label),
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }
@@ -738,7 +744,7 @@ private fun AlbumTile(selected: Boolean, album: MediaAlbum, onClick: () -> Unit)
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    "Megnyitás",
+                    text = stringResource(R.string.common_open),
                     color = Color.White.copy(alpha = 0.6f),
                     fontSize = 12.sp
                 )
@@ -853,14 +859,14 @@ private fun MediaImageViewer(
             )
         } else {
             Text(
-                "Betöltés...",
+                text = stringResource(R.string.media_loading),
                 color = Color.White.copy(alpha = 0.75f),
                 modifier = Modifier.align(Alignment.Center)
             )
         }
 
         Text(
-            text = "Bezár",
+            text = stringResource(R.string.homescreen_close),
             color = Color.White,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier

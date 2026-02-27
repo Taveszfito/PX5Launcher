@@ -1,0 +1,370 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- ===================== -->
+    <!-- COMMON -->
+    <!-- ===================== -->
+
+    <string name="common_on">BE</string>
+    <string name="common_off">KI</string>
+    <string name="common_back">Vissza</string>
+
+    <string name="common_selected">Kiválasztva</string>
+    <string name="common_not_selected">Nincs kiválasztva</string>
+
+    <string name="common_active">Aktív</string>
+    <string name="common_not_enabled">Nincs engedélyezve</string>
+
+    <string name="common_system">Rendszer</string>
+    <string name="common_english">English</string>
+
+    <string name="common_ps">PS</string>
+    <string name="common_xbox">Xbox</string>
+    <string name="common_tv">TV</string>
+
+    <string name="common_audio">Hang</string>
+
+    <string name="common_settings">Beállítások</string>
+    <string name="common_app_info">App info megnyitása</string>
+    <string name="common_open">Megnyitás</string>
+
+    <string name="common_back_hint">B / Back: vissza</string>
+
+    <!-- ===================== -->
+    <!-- SETTINGS -->
+    <!-- ===================== -->
+
+    <!-- Categories -->
+    <string name="settings_category_general">Általános</string>
+    <string name="settings_category_audio">Hangok</string>
+    <string name="settings_category_controls">Irányítás</string>
+    <string name="settings_category_home">Home / All Apps</string>
+    <string name="settings_category_permissions">Engedélyek</string>
+    <string name="settings_category_about">Névjegy</string>
+
+    <!-- General -->
+    <string name="settings_clock_24h_title">24 órás óra</string>
+    <string name="settings_clock_24h_subtitle">12h esetén AM/PM</string>
+
+    <string name="settings_big_app_name_title">Nagy app név</string>
+    <string name="settings_big_app_name_subtitle">Home képernyőn a nagy cím</string>
+
+    <string name="settings_accent_from_icon_title">Accent szín app ikonból</string>
+    <string name="settings_accent_from_icon_subtitle">
+        Ha ki van kapcsolva, fix sötét téma marad
+    </string>
+
+    <string name="settings_wallpaper_title">Háttérkép kiválasztása</string>
+
+    <string name="settings_language_title">Nyelv</string>
+    <string name="settings_language_subtitle">
+        UI nyelv (ha még nincs kész: csak mentés)
+    </string>
+    <string name="settings_language_hungarian">Magyar</string>
+
+    <string name="settings_widgets_reset_title">Widgetek reset</string>
+    <string name="settings_widgets_reset_subtitle">
+        Widget elrendezés törlése
+    </string>
+
+    <!-- Sound -->
+    <string name="settings_ambient_title">Ambient sound</string>
+    <string name="settings_ambient_subtitle">Háttér zene/hang</string>
+
+    <string name="settings_ambient_mute_title">Ambient némítás</string>
+    <string name="settings_ambient_mute_subtitle">Gyors mute</string>
+
+    <string name="settings_ambient_volume_title">Ambient hangerő</string>
+    <string name="settings_ambient_change_title">Ambient hang cseréje</string>
+
+    <string name="settings_click_sound_title">Click sound</string>
+    <string name="settings_click_sound_subtitle">UI kattintás hang</string>
+    <string name="settings_click_volume_title">Click hangerő</string>
+
+    <!-- Controls -->
+    <string name="settings_button_layout_title">Gombkiosztás</string>
+    <string name="settings_button_layout_subtitle">PS / Xbox / TV</string>
+    <string name="settings_layout_playstation">PlayStation</string>
+
+    <string name="settings_vibration_title">Vibráció</string>
+    <string name="settings_vibration_subtitle">Haptics ki/be</string>
+
+    <!-- Home / All Apps -->
+    <string name="settings_allapps_columns_title">All Apps oszlopszám</string>
+
+    <string name="settings_recents_max_title">Recents max darabszám</string>
+    <string name="settings_recents_max_subtitle">
+        Mentéskor ennyire vágjuk
+    </string>
+
+    <!-- Permissions -->
+    <string name="settings_notifications_permission_title">
+        Értesítések engedély
+    </string>
+
+    <string name="settings_storage_permission_title">
+        Tárhely / Média hozzáférés
+    </string>
+    <string name="settings_storage_permission_subtitle">
+        App beállítások megnyitása
+    </string>
+
+    <string name="settings_system_settings_title">Rendszer beállítások</string>
+    <string name="settings_android_settings_subtitle">Android Settings</string>
+
+    <!-- ===================== -->
+    <!-- TOPBAR -->
+    <!-- ===================== -->
+
+    <!-- Tabs -->
+    <string name="topbar_tab_apps">Alkalmazások</string>
+    <string name="topbar_tab_media">Médiafájlok</string>
+    <string name="topbar_tab_notifications">Értesítések</string>
+
+    <!-- ===================== -->
+    <!-- HOMESCREEN -->
+    <!-- ===================== -->
+
+    <!-- App section -->
+    <string name="homescreen_apps_title">Alkalmazások</string>
+
+    <!-- Actions -->
+    <string name="homescreen_action_play">Játék indítása</string>
+    <string name="homescreen_action_menu">⋯</string>
+
+    <!-- Menu -->
+    <string name="homescreen_menu_pin">Kitűzés</string>
+    <string name="homescreen_menu_unpin">Kitűzés eltávolítása</string>
+    <string name="homescreen_menu_app_info">App infó</string>
+    <string name="homescreen_menu_uninstall">Törlés (uninstall)</string>
+    <string name="homescreen_menu_disable">Letiltás</string>
+
+    <!-- Search -->
+    <string name="homescreen_search_title">Keresés</string>
+    <string name="homescreen_search_placeholder">Írd be az app nevét…</string>
+    <string name="homescreen_search_empty_hint">Találatok itt fognak megjelenni.</string>
+
+    <!-- Generic close -->
+    <string name="homescreen_close">Bezár</string>
+
+    <!-- Uninstall -->
+    <string name="homescreen_uninstall_no_handler">
+        Nincs eltávolítás kezelő ezen az eszközön.
+    </string>
+    <string name="homescreen_uninstall_open_failed">
+        Nem sikerült megnyitni az eltávolítást.
+    </string>
+
+    <!-- Widget errors -->
+    <string name="homescreen_widget_error_title">Widget hiba</string>
+
+    <string name="homescreen_widget_no_space_for_size">
+        Nincs hely ide ehhez a mérethez.
+    </string>
+    <string name="homescreen_widget_provider_null">
+        Provider null.
+    </string>
+    <string name="homescreen_widget_no_space_here">
+        Nincs hely ekkora widgetnek ide.
+    </string>
+    <string name="homescreen_widget_bind_failed">
+        Nem lett bindelve a widget (AppWidgetInfo null). id=%1$d
+    </string>
+    <string name="homescreen_widget_no_empty_slot">
+        Nincs üres hely ekkora widgetnek.
+    </string>
+
+    <!-- Quick Settings / Flashlight -->
+    <string name="homescreen_qs_no_flashlight">
+        Nincs vaku ezen az eszközön.
+    </string>
+    <string name="homescreen_qs_no_flash_camera">
+        Nem találok vakus kamerát.
+    </string>
+    <string name="homescreen_qs_flashlight_toggle_failed">
+        Nem sikerült a zseblámpát kapcsolni.
+    </string>
+
+    <!-- ===================== -->
+    <!-- ALLAPPS -->
+    <!-- ===================== -->
+
+    <string name="allapps_back_to_home">←  Főmenü</string>
+
+    <!-- ===================== -->
+    <!-- BOTTOM PANEL -->
+    <!-- ===================== -->
+
+    <string name="bottompanel_hint_lb">LB</string>
+    <string name="bottompanel_hint_rb">RB</string>
+
+    <string name="bottompanel_tab_widgets">Widgetek</string>
+    <string name="bottompanel_tab_calendar">Naptár</string>
+    <string name="bottompanel_tab_music">Zene vezérlő</string>
+
+    <!-- ===================== -->
+    <!-- CALENDAR -->
+    <!-- ===================== -->
+
+    <string name="calendar_hint_paging_mode">Lapozás: Fel/Le • Kilépés: A / B</string>
+    <string name="calendar_hint_enter_paging">Belépés lapozásba: A</string>
+
+    <!-- ===================== -->
+    <!-- NOTIFICATIONS -->
+    <!-- ===================== -->
+
+    <string name="notifications_no_open_action">
+        Ehhez az értesítéshez nincs megnyitható művelet.
+    </string>
+
+    <string name="notifications_fallback_title">Értesítés</string>
+
+    <string name="notifications_empty">Nincs értesítés</string>
+    <string name="notifications_history">Előzmények</string>
+    <string name="notifications_back">Vissza</string>
+    <string name="notifications_clear_all_short">Össz. Törl.</string>
+    <string name="notifications_timestamp_prefix">• %1$s</string>
+
+    <!-- ===================== -->
+    <!-- QUICK SETTINGS -->
+    <!-- ===================== -->
+
+    <string name="qs_dialog_add_tile_title">Csempe hozzáadása</string>
+    <string name="qs_dialog_select">Kiválasztás</string>
+    <string name="qs_dialog_back">Vissza</string>
+
+    <!-- ===================== -->
+    <!-- QUICK TILES -->
+    <!-- ===================== -->
+
+    <string name="quicktile_wifi">Wi-Fi</string>
+    <string name="quicktile_bluetooth">Bluetooth</string>
+    <string name="quicktile_rotation">Forgatás</string>
+    <string name="quicktile_settings">Beállítások</string>
+    <string name="quicktile_flashlight">Lámpa</string>
+    <string name="quicktile_airplane">Repülő</string>
+    <string name="quicktile_location">Hely</string>
+    <string name="quicktile_dnd">Ne zavarj</string>
+
+    <!-- ===================== -->
+    <!-- MEDIA -->
+    <!-- ===================== -->
+
+    <!-- State -->
+    <string name="media_no_playback">Nincs lejátszás</string>
+    <string name="media_grant_notification_access">Adj értesítés-hozzáférést</string>
+
+    <!-- Titles -->
+    <string name="media_title_images">Képek</string>
+    <string name="media_title_videos">Videók</string>
+    <string name="media_title_albums">Albumok</string>
+    <string name="media_album_fallback">Album</string>
+
+    <!-- Permission card -->
+    <string name="media_permission_title">Média engedély szükséges</string>
+    <string name="media_permission_desc">
+        A Képek / Videók / Albumok megjelenítéséhez engedélyezd a médiafájlok olvasását.
+    </string>
+    <string name="media_permission_request">Engedély kérése</string>
+    <string name="media_permission_back">Vissza</string>
+
+    <!-- Grid / tiles -->
+    <string name="media_back">Vissza</string>
+    <string name="media_open">Megnyitás</string>
+
+    <!-- Viewer -->
+    <string name="media_loading">Betöltés...</string>
+    <string name="media_close">Bezár</string>
+
+    <!-- ===================== -->
+    <!-- MUSIC -->
+    <!-- ===================== -->
+
+    <!-- State / titles -->
+    <string name="music_no_active_playback">Nincs aktív lejátszás</string>
+    <string name="music_grant_notification_access">Adj értesítés-hozzáférést</string>
+    <string name="music_open_settings_hint">A/Enter vagy katt: megnyitom a beállítást</string>
+    <string name="music_unknown_media">Ismeretlen média</string>
+
+    <!-- Queue title formatting -->
+    <string name="music_now_playing_prefix">▶ %1$s</string>
+    <string name="music_now_playing_prefix_raw">▶ </string>
+
+    <!-- List hints -->
+    <string name="music_list_hint_this_is_current">Ez a mostani</string>
+    <string name="music_list_hint_cant_find_current">Nem találom a mostanit</string>
+    <string name="music_list_hint_already_playing">Már ez megy</string>
+    <string name="music_list_hint_skipping">Ugrás… (%1$dx)</string>
+    <string name="music_list_hint_maybe_not_reached">Nem biztos, hogy elérte</string>
+    <string name="music_list_hint_cancelled">Megszakítva</string>
+
+    <!-- Main hint line -->
+    <string name="music_hint_enable_permission">A/Enter vagy katt: engedély bekapcsolása</string>
+    <string name="music_hint_skipping_cancel">Következőre lépés… (B: megszakít)</string>
+    <string name="music_hint_seek_mode">Seek mód: DPAD ←/→ teker • Kilépés: B/Back</string>
+    <string name="music_hint_queue_autoskip">Jobbra: következők (A: auto-skip)</string>
+    <string name="music_hint_queue_next_songs">Jobbra: következő számok</string>
+    <string name="music_hint_strip_seek_mode">A a csíkon: seek mód</string>
+
+    <!-- Controls / volume -->
+    <string name="music_volume_format">%1$d/%2$d</string>
+
+    <!-- Queue panel -->
+    <string name="music_queue_title">Következők</string>
+    <string name="music_queue_hint_play">A: indít</string>
+    <string name="music_queue_hint_autoskip">A: auto-skip</string>
+    <string name="music_time_unknown">--:--</string>
+
+    <!-- Busy overlay -->
+    <string name="music_busy_title">Következőre lépés…</string>
+    <string name="music_busy_cancel">B: megszakít</string>
+
+    <!-- Seek bar -->
+    <string name="music_seek_perm_needed">Engedély kell (katt/A)</string>
+    <string name="music_seek_no_data">Nincs seek adat</string>
+    <string name="music_seek_mode_step">Seek mód: ←/→ (5 mp)</string>
+    <string name="music_seek_selected_hint">Kijelölve • A: megfog</string>
+
+    <!-- format fallback -->
+    <string name="music_time_zero">0:00</string>
+
+    <!-- ===================== -->
+    <!-- WIDGETS PANEL -->
+    <!-- ===================== -->
+
+    <string name="widgets_add">Widget hozzáadása</string>
+    <string name="widgets_move">Áthelyezés</string>
+    <string name="widgets_delete">Törlés</string>
+
+    <!-- Calendar weekday short names -->
+    <string name="calendar_weekday_mon">H</string>
+    <string name="calendar_weekday_tue">K</string>
+    <string name="calendar_weekday_wed">Sze</string>
+    <string name="calendar_weekday_thu">Cs</string>
+    <string name="calendar_weekday_fri">P</string>
+    <string name="calendar_weekday_sat">Szo</string>
+    <string name="calendar_weekday_sun">V</string>
+
+    <string name="media_perm_request">Engedély kérése</string>
+    <string name="media_back_tile">← %1$s</string>
+    <string name="media_perm_desc">
+    A Képek / Videók / Albumok megjelenítéséhez engedélyezd a médiafájlok olvasását.
+</string>
+
+    <string name="media_title_album_fallback">Album</string>
+
+    <string name="media_perm_title">Média engedély szükséges</string>
+    <string name="notifications_time_bullet">• %1$s</string>
+    <string name="qs_add_tile_title">Csempe hozzáadása</string>
+    <string name="common_select">Kiválasztás</string>
+    <string name="common_delete">Törlés</string>
+    <string name="qs_tile_wifi">Wi-Fi</string>
+    <string name="qs_tile_bluetooth">Bluetooth</string>
+    <string name="qs_tile_rotation">Forgatás</string>
+    <string name="qs_tile_settings">Beállítások</string>
+    <string name="qs_tile_flashlight">Lámpa</string>
+    <string name="qs_tile_airplane">Repülő</string>
+    <string name="qs_tile_location">Hely</string>
+    <string name="qs_tile_dnd">Ne zavarj</string>
+
+</resources>

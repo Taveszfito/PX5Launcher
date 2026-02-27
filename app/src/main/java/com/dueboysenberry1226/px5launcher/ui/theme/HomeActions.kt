@@ -13,9 +13,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dueboysenberry1226.px5launcher.R
 
 @Composable
 fun HomeActions(
@@ -49,7 +51,10 @@ fun HomeActions(
                 .onFocusChanged { playFocused = it.isFocused }
                 .focusable()
         ) {
-            Text("Játék indítása", fontWeight = FontWeight.SemiBold)
+            Text(
+                text = stringResource(R.string.homescreen_action_play),
+                fontWeight = FontWeight.SemiBold
+            )
         }
 
         Spacer(Modifier.width(10.dp))
@@ -76,7 +81,10 @@ fun HomeActions(
                 .onFocusChanged { menuFocused = it.isFocused }
                 .focusable()
         ) {
-            Text("⋯", fontSize = 20.sp)
+            Text(
+                text = stringResource(R.string.homescreen_action_menu),
+                fontSize = 20.sp
+            )
         }
     }
 }

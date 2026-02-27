@@ -21,11 +21,13 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dueboysenberry1226.px5launcher.R
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -161,7 +163,10 @@ fun CalendarPanelCard(
             )
             Spacer(Modifier.height(10.dp))
             Text(
-                text = if (pagingMode) "Lapozás: Fel/Le • Kilépés: A / B" else "Belépés lapozásba: A",
+                text = if (pagingMode)
+                    stringResource(R.string.calendar_hint_paging_mode)
+                else
+                    stringResource(R.string.calendar_hint_enter_paging),
                 color = Color.White.copy(alpha = 0.45f),
                 fontWeight = FontWeight.Medium,
                 fontSize = 12.sp
@@ -270,7 +275,17 @@ private fun CalendarGridMonthScrollable(
                     .height(headerH),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                listOf("H", "K", "Sze", "Cs", "P", "Szo", "V").forEach {
+                val weekdays = listOf(
+                    stringResource(R.string.calendar_weekday_mon),
+                    stringResource(R.string.calendar_weekday_tue),
+                    stringResource(R.string.calendar_weekday_wed),
+                    stringResource(R.string.calendar_weekday_thu),
+                    stringResource(R.string.calendar_weekday_fri),
+                    stringResource(R.string.calendar_weekday_sat),
+                    stringResource(R.string.calendar_weekday_sun)
+                )
+
+                weekdays.forEach {
                     Text(
                         text = it,
                         modifier = Modifier.weight(1f),

@@ -1,3 +1,341 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">PX5 Launcher</string>
+
+    <!-- ===================== -->
+    <!-- COMMON -->
+    <!-- ===================== -->
+
+    <string name="common_on">ON</string>
+    <string name="common_off">OFF</string>
+    <string name="common_back">Back</string>
+
+    <string name="common_selected">Selected</string>
+    <string name="common_not_selected">Not selected</string>
+
+    <string name="common_active">Active</string>
+    <string name="common_not_enabled">Not enabled</string>
+
+    <string name="common_system">System</string>
+    <string name="common_english">English</string>
+
+    <string name="common_ps">PS</string>
+    <string name="common_xbox">Xbox</string>
+    <string name="common_tv">TV</string>
+
+    <string name="common_audio">Audio</string>
+
+    <string name="common_settings">Settings</string>
+    <string name="common_app_info">Open app info</string>
+    <string name="common_open">Open</string>
+
+    <string name="common_back_hint">B / Back: go back</string>
+
+    <!-- ===================== -->
+    <!-- SETTINGS -->
+    <!-- ===================== -->
+
+    <string name="settings_category_general">General</string>
+    <string name="settings_category_audio">Audio</string>
+    <string name="settings_category_controls">Controls</string>
+    <string name="settings_category_home">Home / All Apps</string>
+    <string name="settings_category_permissions">Permissions</string>
+    <string name="settings_category_about">About</string>
+
+    <string name="settings_clock_24h_title">24-hour clock</string>
+    <string name="settings_clock_24h_subtitle">Use AM/PM when disabled</string>
+
+    <string name="settings_big_app_name_title">Large app name</string>
+    <string name="settings_big_app_name_subtitle">Big title on home screen</string>
+
+    <string name="settings_accent_from_icon_title">Accent color from app icon</string>
+    <string name="settings_accent_from_icon_subtitle">
+        If disabled, fixed dark theme remains
+    </string>
+
+    <string name="settings_wallpaper_title">Select wallpaper</string>
+
+    <string name="settings_language_title">Language</string>
+    <string name="settings_language_subtitle">
+        UI language (if not finished yet: save only)
+    </string>
+    <string name="settings_language_hungarian">Hungarian</string>
+
+    <string name="settings_widgets_reset_title">Reset widgets</string>
+    <string name="settings_widgets_reset_subtitle">
+        Clear widget layout
+    </string>
+
+    <string name="settings_ambient_title">Ambient sound</string>
+    <string name="settings_ambient_subtitle">Background music/sound</string>
+
+    <string name="settings_ambient_mute_title">Mute ambient</string>
+    <string name="settings_ambient_mute_subtitle">Quick mute</string>
+
+    <string name="settings_ambient_volume_title">Ambient volume</string>
+    <string name="settings_ambient_change_title">Change ambient sound</string>
+
+    <string name="settings_click_sound_title">Click sound</string>
+    <string name="settings_click_sound_subtitle">UI click sound</string>
+    <string name="settings_click_volume_title">Click volume</string>
+
+    <string name="settings_button_layout_title">Button layout</string>
+    <string name="settings_button_layout_subtitle">PS / Xbox / TV</string>
+    <string name="settings_layout_playstation">PlayStation</string>
+
+    <string name="settings_vibration_title">Vibration</string>
+    <string name="settings_vibration_subtitle">Haptics on/off</string>
+
+    <string name="settings_allapps_columns_title">All Apps column count</string>
+
+    <string name="settings_recents_max_title">Max recents count</string>
+    <string name="settings_recents_max_subtitle">
+        Limit when saving
+    </string>
+
+    <string name="settings_notifications_permission_title">
+        Notifications permission
+    </string>
+
+    <string name="settings_storage_permission_title">
+        Storage / Media access
+    </string>
+    <string name="settings_storage_permission_subtitle">
+        Open app settings
+    </string>
+
+    <string name="settings_system_settings_title">System settings</string>
+    <string name="settings_android_settings_subtitle">Android Settings</string>
+
+    <!-- ===================== -->
+    <!-- TOPBAR -->
+    <!-- ===================== -->
+
+    <string name="topbar_tab_apps">Apps</string>
+    <string name="topbar_tab_media">Media</string>
+    <string name="topbar_tab_notifications">Notifications</string>
+
+    <!-- ===================== -->
+    <!-- HOMESCREEN -->
+    <!-- ===================== -->
+
+    <string name="homescreen_apps_title">Applications</string>
+
+    <string name="homescreen_action_play">Launch game</string>
+    <string name="homescreen_action_menu">⋯</string>
+
+    <string name="homescreen_menu_pin">Pin</string>
+    <string name="homescreen_menu_unpin">Unpin</string>
+    <string name="homescreen_menu_app_info">App info</string>
+    <string name="homescreen_menu_uninstall">Uninstall</string>
+    <string name="homescreen_menu_disable">Disable</string>
+
+    <string name="homescreen_search_title">Search</string>
+    <string name="homescreen_search_placeholder">Type app name…</string>
+    <string name="homescreen_search_empty_hint">Results will appear here.</string>
+
+    <string name="homescreen_close">Close</string>
+
+    <string name="homescreen_uninstall_no_handler">
+        No uninstall handler available on this device.
+    </string>
+    <string name="homescreen_uninstall_open_failed">
+        Failed to open uninstall screen.
+    </string>
+
+    <string name="homescreen_widget_error_title">Widget error</string>
+
+    <string name="homescreen_widget_no_space_for_size">
+        Not enough space for this size.
+    </string>
+    <string name="homescreen_widget_provider_null">
+        Provider is null.
+    </string>
+    <string name="homescreen_widget_no_space_here">
+        No space for this widget size.
+    </string>
+    <string name="homescreen_widget_bind_failed">
+        Widget binding failed (AppWidgetInfo null). id=%1$d
+    </string>
+    <string name="homescreen_widget_no_empty_slot">
+        No empty slot for this widget size.
+    </string>
+
+    <string name="homescreen_qs_no_flashlight">
+        No flashlight available on this device.
+    </string>
+    <string name="homescreen_qs_no_flash_camera">
+        No camera with flash found.
+    </string>
+    <string name="homescreen_qs_flashlight_toggle_failed">
+        Failed to toggle flashlight.
+    </string>
+
+    <!-- ===================== -->
+    <!-- ALLAPPS -->
+    <!-- ===================== -->
+
+    <string name="allapps_back_to_home">←  Home</string>
+
+    <!-- ===================== -->
+    <!-- BOTTOM PANEL -->
+    <!-- ===================== -->
+
+    <string name="bottompanel_hint_lb">LB</string>
+    <string name="bottompanel_hint_rb">RB</string>
+
+    <string name="bottompanel_tab_widgets">Widgets</string>
+    <string name="bottompanel_tab_calendar">Calendar</string>
+    <string name="bottompanel_tab_music">Music control</string>
+
+    <!-- ===================== -->
+    <!-- CALENDAR -->
+    <!-- ===================== -->
+
+    <string name="calendar_hint_paging_mode">Paging: Up/Down • Exit: A / B</string>
+    <string name="calendar_hint_enter_paging">Enter paging: A</string>
+
+    <!-- ===================== -->
+    <!-- NOTIFICATIONS -->
+    <!-- ===================== -->
+
+    <string name="notifications_no_open_action">
+        No open action available for this notification.
+    </string>
+
+    <string name="notifications_fallback_title">Notification</string>
+
+    <string name="notifications_empty">No notifications</string>
+    <string name="notifications_history">History</string>
+    <string name="notifications_back">Back</string>
+    <string name="notifications_clear_all_short">Clear all</string>
+    <string name="notifications_timestamp_prefix">• %1$s</string>
+
+    <!-- ===================== -->
+    <!-- QUICK SETTINGS -->
+    <!-- ===================== -->
+
+    <string name="qs_dialog_add_tile_title">Add tile</string>
+    <string name="qs_dialog_select">Select</string>
+    <string name="qs_dialog_back">Back</string>
+
+    <!-- ===================== -->
+    <!-- QUICK TILES -->
+    <!-- ===================== -->
+
+    <string name="quicktile_wifi">Wi-Fi</string>
+    <string name="quicktile_bluetooth">Bluetooth</string>
+    <string name="quicktile_rotation">Rotation</string>
+    <string name="quicktile_settings">Settings</string>
+    <string name="quicktile_flashlight">Flashlight</string>
+    <string name="quicktile_airplane">Airplane mode</string>
+    <string name="quicktile_location">Location</string>
+    <string name="quicktile_dnd">Do not disturb</string>
+
+    <!-- ===================== -->
+    <!-- MEDIA -->
+    <!-- ===================== -->
+
+    <string name="media_no_playback">No playback</string>
+    <string name="media_grant_notification_access">Grant notification access</string>
+
+    <string name="media_title_images">Images</string>
+    <string name="media_title_videos">Videos</string>
+    <string name="media_title_albums">Albums</string>
+    <string name="media_album_fallback">Album</string>
+
+    <string name="media_permission_title">Media permission required</string>
+    <string name="media_permission_desc">
+        To display Images / Videos / Albums, allow media access.
+    </string>
+    <string name="media_permission_request">Request permission</string>
+    <string name="media_permission_back">Back</string>
+
+    <string name="media_back">Back</string>
+    <string name="media_open">Open</string>
+
+    <string name="media_loading">Loading...</string>
+    <string name="media_close">Close</string>
+
+    <!-- ===================== -->
+    <!-- MUSIC -->
+    <!-- ===================== -->
+
+    <string name="music_no_active_playback">No active playback</string>
+    <string name="music_grant_notification_access">Grant notification access</string>
+    <string name="music_open_settings_hint">A/Enter or click: open settings</string>
+    <string name="music_unknown_media">Unknown media</string>
+
+    <string name="music_now_playing_prefix">▶ %1$s</string>
+    <string name="music_now_playing_prefix_raw">▶ </string>
+
+    <string name="music_list_hint_this_is_current">This is current</string>
+    <string name="music_list_hint_cant_find_current">Cannot find current track</string>
+    <string name="music_list_hint_already_playing">Already playing</string>
+    <string name="music_list_hint_skipping">Skipping… (%1$dx)</string>
+    <string name="music_list_hint_maybe_not_reached">Maybe not reached</string>
+    <string name="music_list_hint_cancelled">Cancelled</string>
+
+    <string name="music_hint_enable_permission">A/Enter or click: enable permission</string>
+    <string name="music_hint_skipping_cancel">Skipping… (B: cancel)</string>
+    <string name="music_hint_seek_mode">Seek mode: DPAD ←/→ • Exit: B/Back</string>
+    <string name="music_hint_queue_autoskip">Right: next tracks (A: auto-skip)</string>
+    <string name="music_hint_queue_next_songs">Right: next tracks</string>
+    <string name="music_hint_strip_seek_mode">A on strip: seek mode</string>
+
+    <string name="music_volume_format">%1$d/%2$d</string>
+
+    <string name="music_queue_title">Up next</string>
+    <string name="music_queue_hint_play">A: play</string>
+    <string name="music_queue_hint_autoskip">A: auto-skip</string>
+    <string name="music_time_unknown">--:--</string>
+
+    <string name="music_busy_title">Skipping…</string>
+    <string name="music_busy_cancel">B: cancel</string>
+
+    <string name="music_seek_perm_needed">Permission required (click/A)</string>
+    <string name="music_seek_no_data">No seek data</string>
+    <string name="music_seek_mode_step">Seek mode: ←/→ (5 sec)</string>
+    <string name="music_seek_selected_hint">Selected • A: grab</string>
+
+    <string name="music_time_zero">0:00</string>
+
+    <!-- ===================== -->
+    <!-- WIDGETS PANEL -->
+    <!-- ===================== -->
+
+    <string name="widgets_add">Add widget</string>
+    <string name="widgets_move">Move</string>
+    <string name="widgets_delete">Delete</string>
+
+    <!-- Calendar weekday short names -->
+    <string name="calendar_weekday_mon">Mon</string>
+    <string name="calendar_weekday_tue">Tue</string>
+    <string name="calendar_weekday_wed">Wed</string>
+    <string name="calendar_weekday_thu">Thu</string>
+    <string name="calendar_weekday_fri">Fri</string>
+    <string name="calendar_weekday_sat">Sat</string>
+    <string name="calendar_weekday_sun">Sun</string>
+
+    <string name="media_perm_request">Request permission</string>
+    <string name="media_back_tile">← %1$s</string>
+    <string name="media_perm_desc">
+    To view your images, videos, and albums, allow access to your media files.
+</string>
+
+    <string name="media_title_album_fallback">Album</string>
+
+    <string name="media_perm_title">Media permission required</string>
+    <string name="notifications_time_bullet">• %1$s</string>
+    <string name="qs_add_tile_title">Add tile</string>
+    <string name="common_select">Select</string>
+    <string name="common_delete">Delete</string>
+    <string name="qs_tile_wifi">Wi-Fi</string>
+    <string name="qs_tile_bluetooth">Bluetooth</string>
+    <string name="qs_tile_rotation">Rotation</string>
+    <string name="qs_tile_settings">Settings</string>
+    <string name="qs_tile_flashlight">Flashlight</string>
+    <string name="qs_tile_airplane">Airplane</string>
+    <string name="qs_tile_location">Location</string>
+    <string name="qs_tile_dnd">Do not disturb</string>
+
 </resources>

@@ -44,6 +44,12 @@ class WidgetsRepository(private val context: Context) {
         }
     }
 
+    suspend fun clearAll() {
+        context.px5DataStore.edit { prefs ->
+            prefs.remove(PREF_WIDGETS)
+        }
+    }
+
     // ---- encode/decode ----
     // format: id|provider|x|y|sx|sy
     private fun encode(p: WidgetPlacement): String {

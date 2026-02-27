@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.dueboysenberry1226.px5launcher.ui
 
+import com.dueboysenberry1226.px5launcher.R
+
 import android.app.NotificationManager
 import android.bluetooth.BluetoothAdapter
 import android.content.Context
@@ -48,7 +50,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -97,7 +98,7 @@ private enum class SwipeDir { LEFT, RIGHT, UP, DOWN }
 @Composable
 fun PSHomeRoute(
     pm: PackageManager,
-    onOpenSystemSettings: () -> Unit
+    onOpenSettings: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -105,7 +106,6 @@ fun PSHomeRoute(
     val repo = remember(pm, context) { LauncherRepository(context, pm) }
 
     val quickTileClick = rememberQuickTileClickHandler(context)
-
 
     LaunchedEffect(Unit) {
         NotificationsRepository.init(context)
@@ -419,12 +419,12 @@ fun PSHomeRoute(
 
         try {
             if (intent.resolveActivity(context.packageManager) == null) {
-                fallback("Nincs eltávolítás kezelő ezen az eszközön.")
+                fallback(context.getString(R.string.homescreen_uninstall_no_handler))
                 return
             }
             context.startActivity(intent)
         } catch (_: Throwable) {
-            fallback("Nem sikerült megnyitni az eltávolítást.")
+            fallback(context.getString(R.string.homescreen_uninstall_open_failed))
         }
     }
 
@@ -555,7 +555,7 @@ fun PSHomeRoute(
             runCatching { widgetHost.deleteAppWidgetId(appWidgetId) }
             handledWidgetIds.remove(appWidgetId)
             pendingAdd = null
-            showToastWidget("Nincs hely ide ehhez a mérethez.")
+            showToastWidget(context.getString(R.string.homescreen_widget_no_space_for_size))
             return
         }
 
@@ -669,7 +669,7 @@ fun PSHomeRoute(
         cellHeightDp = cellDp,
         onPick = { providerInfo, sx, sy ->
             val provider = providerInfo.provider ?: run {
-                showToastWidget("Provider null.")
+                showToastWidget(context.getString(R.string.homescreen_widget_provider_null))
                 return@rememberWidgetPickerState
             }
 
@@ -682,7 +682,7 @@ fun PSHomeRoute(
             )
 
             if (anchor == null) {
-                showToastWidget("Nincs hely ekkora widgetnek ide.")
+                showToastWidget(context.getString(R.string.homescreen_widget_no_space_here))
                 return@rememberWidgetPickerState
             }
 
@@ -742,7 +742,7 @@ fun PSHomeRoute(
         )
 
         if (next == null) {
-            showToastWidget("Nincs üres hely ekkora widgetnek.")
+            showToastWidget(context.getString(R.string.homescreen_widget_no_empty_slot))
             return
         }
 
@@ -852,7 +852,6 @@ fun PSHomeRoute(
                                     homeSection = HomeSection.TOP
                                 }
                                 Tab.MEDIA -> {
-                                    // BUGFIX: Media tabnál LE vigyen le a contentbe (különben a MediaRoute hubSelectionEnabled=false miatt ott maradsz)
                                     homeSection = HomeSection.TOP
                                 }
                                 Tab.NOTIFICATIONS -> {
@@ -886,18 +885,15 @@ fun PSHomeRoute(
 
                         AndroidKeyEvent.KEYCODE_ENTER,
                         AndroidKeyEvent.KEYCODE_DPAD_CENTER -> {
-                            // nálad itt tipikusan csak "tab commit" / no-op volt
                             true
                         }
 
                         AndroidKeyEvent.KEYCODE_BACK -> {
-                            // Back a topbaron maradjon “lenyelve”
                             true
                         }
 
                         else -> false
                     }
-
 
                     HomeSection.NOTIFS -> when (code) {
 
@@ -905,7 +901,6 @@ fun PSHomeRoute(
                             if (notifUpToTopbarAllowed) {
                                 homeSection = HomeSection.TOPBAR
 
-                                // 🔥 EZ HIÁNYZOTT
                                 topBarIndex = when (tab) {
                                     Tab.GAMES -> 0
                                     Tab.MEDIA -> 1
@@ -1058,22 +1053,19 @@ fun PSHomeRoute(
                 if (allAppsOpen || showWidgetPicker || menuOpen || searchOpen) return@pointerInput
                 if (tab == Tab.MEDIA || tab == Tab.NOTIFICATIONS) return@pointerInput
 
-                // "gear" méretek
-                val appStepPx = 96.dp.toPx()   // kb 1 tile-nyi húzás -> 1 lépés
-                val tapSlopPx = 10.dp.toPx()   // ennyi alatt tapnak számoljuk
+                val appStepPx = 96.dp.toPx()
+                val tapSlopPx = 10.dp.toPx()
 
                 awaitEachGesture {
-                    // csak ha nem gombon kezded
                     val down = awaitFirstDown(requireUnconsumed = true)
                     val id = down.id
 
                     var totalX = 0f
                     var totalY = 0f
 
-                    // ---- gear state (drag közben step) ----
                     var stepAccX = 0f
                     var steppedCount = 0
-                    var dragDominant: Boolean? = null // null amíg nem dől el: true=vízszintes, false=függőleges
+                    var dragDominant: Boolean? = null
 
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Main)
@@ -1090,18 +1082,14 @@ fun PSHomeRoute(
                         val ayNow = abs(totalY)
                         val maxNow = kotlin.math.max(axNow, ayNow)
 
-                        // csak akkor döntjük el az irányt, ha már tényleges swipe
                         if (dragDominant == null && maxNow >= swipeThresholdPx) {
                             dragDominant = (axNow > ayNow)
                         }
 
-                        // ---- drag közbeni gear léptetés csak vízszintes dominanciánál ----
                         if (dragDominant == true) {
-                            // csak az app részre (TOP / ACTIONS). WIDGETS/TOPBAR alatt nincs gear step.
                             if (homeSection != HomeSection.WIDGETS && homeSection != HomeSection.TOPBAR) {
                                 stepAccX += d.x
 
-                                // balra húzás -> +1 (következő)
                                 while (stepAccX <= -appStepPx) {
                                     stepAccX += appStepPx
                                     if (steppedCount < 12) {
@@ -1109,7 +1097,6 @@ fun PSHomeRoute(
                                         steppedCount++
                                     } else break
                                 }
-                                // jobbra húzás -> -1 (előző)
                                 while (stepAccX >= appStepPx) {
                                     stepAccX -= appStepPx
                                     if (steppedCount < 12) {
@@ -1125,7 +1112,6 @@ fun PSHomeRoute(
                     val ay = abs(totalY)
                     val maxA = kotlin.math.max(ax, ay)
 
-                    // ---- TOPBAR tap fix: üres hely tap -> vissza TOP-ba ----
                     if (maxA < tapSlopPx) {
                         if (homeSection == HomeSection.TOPBAR) {
                             homeSection = HomeSection.TOP
@@ -1135,10 +1121,8 @@ fun PSHomeRoute(
                         return@awaitEachGesture
                     }
 
-                    // túl rövid swipe -> ignore
                     if (maxA < swipeThresholdPx) return@awaitEachGesture
 
-                    // TOPBAR-on swipe: csak fel/le logika
                     if (homeSection == HomeSection.TOPBAR) {
                         if (ay >= ax) {
                             if (totalY < 0f) {
@@ -1155,18 +1139,13 @@ fun PSHomeRoute(
                         return@awaitEachGesture
                     }
 
-                    // vízszintes / függőleges (felengedéskor)
                     if (ax > ay) {
-                        // vízszintes:
                         if (homeSection == HomeSection.WIDGETS) {
-                            // WIDGETS-ben marad 1 panel lépés
                             if (totalX < 0f) stepBottomPanel(+1) else stepBottomPanel(-1)
                         } else {
-                            // TOP/ACTIONS-ben NEM csinálunk semmit felengedéskor,
-                            // mert a gear step már drag közben megtörtént.
+                            // no-op (gear step already did it)
                         }
                     } else {
-                        // függőleges:
                         if (totalY < 0f) {
                             if (homeSection != HomeSection.WIDGETS) {
                                 homeSection = HomeSection.WIDGETS
@@ -1228,7 +1207,7 @@ fun PSHomeRoute(
                 clockText = clockText,
                 onTabChange = { tab = it },
                 onSearch = { searchOpen = true },
-                onSettings = onOpenSystemSettings,
+                onSettings = onOpenSettings,
                 topBarFocused = (homeSection == HomeSection.TOPBAR),
                 topBarIndex = topBarIndex
             )
@@ -1325,13 +1304,11 @@ fun PSHomeRoute(
                                     if (target in 0..realLastIndex) topIndex = target
                                 },
                                 onActivate = { item ->
-                                    // ---- TOPBAR BUG FIX: ha topbar állapotból tapolsz tile-ra, előbb hozd vissza a kijelölést ----
                                     if (homeSection == HomeSection.TOPBAR) {
                                         homeSection = HomeSection.TOP
                                         focusManager.clearFocus(force = true)
                                         goHomeTopKeepScroll()
 
-                                        // csak kijelölés (nem launch)
                                         when (item) {
                                             is TopItem.App -> {
                                                 val target = realItems.indexOfFirst {
@@ -1346,7 +1323,6 @@ fun PSHomeRoute(
                                             else -> Unit
                                         }
                                     } else {
-                                        // Tap: ha nem kijelölt -> kijelöl; ha már kijelölt -> indít / allapps open
                                         when (item) {
                                             is TopItem.App -> {
                                                 val curPkg = (rawSelectedTopItem as? TopItem.App)?.app?.packageName
@@ -1388,7 +1364,7 @@ fun PSHomeRoute(
                             Text(
                                 text = when (val it = selectedTopItem) {
                                     is TopItem.App -> it.app.label
-                                    is TopItem.AllApps -> "Alkalmazások"
+                                    is TopItem.AllApps -> context.getString(R.string.homescreen_apps_title)
                                     else -> ""
                                 },
                                 color = Color.White,
@@ -1478,7 +1454,7 @@ fun PSHomeRoute(
                                                     val info = widgetManager.getAppWidgetInfo(placement.appWidgetId)
                                                     if (info == null) {
                                                         Box(modifier, contentAlignment = Alignment.Center) {
-                                                            Text("Widget hiba", color = Color.White.copy(alpha = 0.65f))
+                                                            Text(context.getString(R.string.homescreen_widget_error_title), color = Color.White.copy(alpha = 0.65f))
                                                         }
                                                     } else {
                                                         AndroidView(
@@ -1494,7 +1470,7 @@ fun PSHomeRoute(
                                                                     }
                                                                 } catch (_: Throwable) {
                                                                     FrameLayout(ctx).apply {
-                                                                        addView(TextView(ctx).apply { text = "Widget hiba" })
+                                                                        addView(TextView(ctx).apply { text = context.getString(R.string.homescreen_widget_error_title) })
                                                                     }
                                                                 }
                                                             },
@@ -1591,7 +1567,6 @@ fun PSHomeRoute(
             )
         }
 
-
         if (showWidgetPicker) {
             Box(
                 modifier = Modifier
@@ -1617,6 +1592,7 @@ fun PSHomeRoute(
         }
     }
 }
+
 @Composable
 private fun rememberQuickTileClickHandler(context: Context): (QuickTileType) -> Unit {
     var torchOn by remember { mutableStateOf(false) }
@@ -1701,13 +1677,12 @@ private fun rememberQuickTileClickHandler(context: Context): (QuickTileType) -> 
         val hasFlash = pm.hasSystemFeature(PackageManager.FEATURE_CAMERA_FLASH)
         log("toggleFlashlightInternal hasFlash=$hasFlash")
         if (!hasFlash) {
-            toast("Nincs vaku ezen az eszközön.")
+            toast(context.getString(R.string.homescreen_qs_no_flashlight))
             return
         }
 
         val cam = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
 
-        // ✅ Leglazább: bármelyik kamera ahol FLASH_INFO_AVAILABLE == true
         val cameraId = runCatching {
             cam.cameraIdList.firstOrNull { id ->
                 val ch = cam.getCameraCharacteristics(id)
@@ -1717,7 +1692,7 @@ private fun rememberQuickTileClickHandler(context: Context): (QuickTileType) -> 
 
         log("toggleFlashlightInternal cameraId=$cameraId")
         if (cameraId == null) {
-            toast("Nem találok vakus kamerát.")
+            toast(context.getString(R.string.homescreen_qs_no_flash_camera))
             return
         }
 
@@ -1729,8 +1704,7 @@ private fun rememberQuickTileClickHandler(context: Context): (QuickTileType) -> 
 
         log("toggleFlashlightInternal setTorchMode next=$next ok=$ok")
         if (!ok) {
-            // ✅ NINCS auto settings. Csak jelzés.
-            toast("Nem sikerült a zseblámpát kapcsolni.")
+            toast(context.getString(R.string.homescreen_qs_flashlight_toggle_failed))
         }
     }
 

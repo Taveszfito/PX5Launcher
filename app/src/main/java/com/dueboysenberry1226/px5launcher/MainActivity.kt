@@ -1,20 +1,24 @@
 package com.dueboysenberry1226.px5launcher
 
-import android.content.Intent
 import android.os.Bundle
-import android.provider.Settings
 import android.view.Window
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.dueboysenberry1226.px5launcher.ui.PSHomeRoute
+import com.dueboysenberry1226.px5launcher.ui.settings.SettingsScreen
+
+private enum class RootScreen { HOME, SETTINGS }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -25,15 +29,32 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface(Modifier.fillMaxSize()) {
-                    PSHomeRoute(
-                        pm = packageManager,
-                        onOpenSystemSettings = {
-                            startActivity(
-                                Intent(Settings.ACTION_SETTINGS)
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+                    var rootScreen by rememberSaveable { mutableStateOf(RootScreen.HOME) }
+
+                    // extra safety: Settingsből back mindig Home
+                    BackHandler(enabled = rootScreen == RootScreen.SETTINGS) {
+                        rootScreen = RootScreen.HOME
+                    }
+
+                    when (rootScreen) {
+                        RootScreen.HOME -> {
+                            PSHomeRoute(
+                                pm = packageManager,
+                                onOpenSettings = {
+                                    rootScreen = RootScreen.SETTINGS
+                                }
                             )
                         }
-                    )
+
+                        RootScreen.SETTINGS -> {
+                            SettingsScreen(
+                                onBackToHome = {
+                                    rootScreen = RootScreen.HOME
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }

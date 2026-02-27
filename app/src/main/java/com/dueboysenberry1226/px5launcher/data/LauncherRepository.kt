@@ -54,7 +54,7 @@ class LauncherRepository(
         }
     }
 
-    suspend fun pushRecent(pkg: String) {
+    suspend fun pushRecent(pkg: String, maxRecents: Int = 30) {
         context.px5DataStore.edit { prefs ->
             val current = (prefs[PREF_RECENTS] ?: emptySet())
                 .mapNotNull { s ->
@@ -68,7 +68,7 @@ class LauncherRepository(
             current.remove(pkg)
             current.add(0, pkg)
 
-            val trimmed = current.take(30)
+            val trimmed = current.take(maxRecents.coerceIn(5, 200))
             val encoded = trimmed.mapIndexed { i, p -> "${i + 1}|$p" }.toSet()
             prefs[PREF_RECENTS] = encoded
         }
@@ -108,24 +108,16 @@ class LauncherRepository(
                 }.getOrNull()
 
                 LaunchableApp(
-                    label = label.ifBlank { pkg },
+                    label = label,
                     packageName = pkg,
                     iconBitmap = iconBmp
                 )
             }
-            .distinctBy { it.packageName }
             .sortedBy { it.label.lowercase() }
     }
 
-    // (opcionális, ha máshol használod)
     fun canUninstall(pkg: String): Boolean {
-        if (pkg == context.packageName) return false
-        return runCatching {
-            val ai = pm.getApplicationInfo(pkg, 0)
-            val isSystemOrUpdatedSystem =
-                (ai.flags and ApplicationInfo.FLAG_SYSTEM) != 0 ||
-                        (ai.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
-            !isSystemOrUpdatedSystem
-        }.getOrDefault(false)
+        val ai: ApplicationInfo = runCatching { pm.getApplicationInfo(pkg, 0) }.getOrNull() ?: return false
+        return (ai.flags and ApplicationInfo.FLAG_SYSTEM) == 0
     }
 }
