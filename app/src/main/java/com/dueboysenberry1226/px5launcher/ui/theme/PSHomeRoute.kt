@@ -2,7 +2,7 @@
 package com.dueboysenberry1226.px5launcher.ui
 
 import com.dueboysenberry1226.px5launcher.R
-
+import com.dueboysenberry1226.px5launcher.data.SettingsRepository
 import android.app.NotificationManager
 import android.bluetooth.BluetoothAdapter
 import android.content.Context
@@ -105,7 +105,11 @@ fun PSHomeRoute(
     val focusManager = LocalFocusManager.current
     val repo = remember(pm, context) { LauncherRepository(context, pm) }
 
+    val settingsRepo = remember(context) { SettingsRepository(context) }
+    val is24h by settingsRepo.clock24hFlow.collectAsState(initial = true)
+    val showBigAppName by settingsRepo.showBigAppNameFlow.collectAsState(initial = true)
     val quickTileClick = rememberQuickTileClickHandler(context)
+    val accentFromIcon by settingsRepo.accentFromAppIconFlow.collectAsState(initial = true)
 
     LaunchedEffect(Unit) {
         NotificationsRepository.init(context)
@@ -115,6 +119,7 @@ fun PSHomeRoute(
     val liveNotifs = NotificationsRepository.live.collectAsState().value
     val historyNotifs = NotificationsRepository.history.collectAsState().value
     val qsState = QuickSettingsRepository.state.collectAsState().value
+
 
     var notifHistoryMode by rememberSaveable { mutableStateOf(false) }
 
@@ -245,8 +250,11 @@ fun PSHomeRoute(
     }
 
     var clockText by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) {
-        val fmt = SimpleDateFormat("HH:mm", Locale.getDefault())
+
+    LaunchedEffect(is24h) {
+        val pattern = if (is24h) "HH:mm" else "hh:mm a"
+        val fmt = SimpleDateFormat(pattern, Locale.getDefault())
+
         while (true) {
             clockText = fmt.format(Date())
             delay(1_000)
@@ -342,15 +350,21 @@ fun PSHomeRoute(
     val selectedApp: LaunchableApp? = (selectedTopItem as? TopItem.App)?.app
 
     val dominantCache = remember { mutableStateMapOf<String, Color>() }
-    var accent by remember { mutableStateOf(Color(0xFF101826)) }
+    val defaultAccent = Color(0xFF101826)
+    var accent by remember { mutableStateOf(defaultAccent) }
 
-    LaunchedEffect(selectedApp?.packageName) {
+    LaunchedEffect(accentFromIcon, selectedApp?.packageName) {
+        if (!accentFromIcon) {
+            accent = defaultAccent
+            return@LaunchedEffect
+        }
+
         val app = selectedApp
         if (app == null) {
-            accent = Color(0xFF101826)
+            accent = defaultAccent
         } else {
             dominantCache[app.packageName]?.let { accent = it } ?: run {
-                val c = computeDominantColor(app.iconBitmap, fallback = Color(0xFF101826))
+                val c = computeDominantColor(app.iconBitmap, fallback = defaultAccent)
                 dominantCache[app.packageName] = c
                 accent = c
             }
@@ -1361,21 +1375,28 @@ fun PSHomeRoute(
                             )
                             Spacer(Modifier.height(18.dp))
 
-                            Text(
-                                text = when (val it = selectedTopItem) {
-                                    is TopItem.App -> it.app.label
-                                    is TopItem.AllApps -> context.getString(R.string.homescreen_apps_title)
-                                    else -> ""
-                                },
-                                color = Color.White,
-                                fontSize = 40.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                lineHeight = 44.sp
-                            )
+                            Spacer(Modifier.height(18.dp))
 
-                            Spacer(Modifier.height(14.dp))
+                            if (showBigAppName) {
+                                Text(
+                                    text = when (val it = selectedTopItem) {
+                                        is TopItem.App -> it.app.label
+                                        is TopItem.AllApps -> context.getString(R.string.homescreen_apps_title)
+                                        else -> ""
+                                    },
+                                    color = Color.White,
+                                    fontSize = 40.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    lineHeight = 44.sp
+                                )
+
+                                Spacer(Modifier.height(14.dp))
+                            } else {
+                                // ha kikapcsolod, ne legyen túl nagy lyuk
+                                Spacer(Modifier.height(6.dp))
+                            }
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),

@@ -1,5 +1,6 @@
 package com.dueboysenberry1226.px5launcher
 
+import android.content.Context
 import android.os.Bundle
 import android.view.Window
 import androidx.activity.ComponentActivity
@@ -15,12 +16,26 @@ import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.dueboysenberry1226.px5launcher.data.SettingsRepository
 import com.dueboysenberry1226.px5launcher.ui.PSHomeRoute
 import com.dueboysenberry1226.px5launcher.ui.settings.SettingsScreen
+import com.dueboysenberry1226.px5launcher.util.updateLocale
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 
 private enum class RootScreen { HOME, SETTINGS }
 
 class MainActivity : ComponentActivity() {
+
+    override fun attachBaseContext(newBase: Context) {
+        // ✅ nyelv betöltése DataStore-ból, még a UI előtt
+        val lang = runBlocking {
+            SettingsRepository(newBase).languageCodeFlow.first()
+        }
+        // ✅ locale-olt context az egész Activity-nek
+        super.attachBaseContext(newBase.updateLocale(lang))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -41,17 +56,13 @@ class MainActivity : ComponentActivity() {
                         RootScreen.HOME -> {
                             PSHomeRoute(
                                 pm = packageManager,
-                                onOpenSettings = {
-                                    rootScreen = RootScreen.SETTINGS
-                                }
+                                onOpenSettings = { rootScreen = RootScreen.SETTINGS }
                             )
                         }
 
                         RootScreen.SETTINGS -> {
                             SettingsScreen(
-                                onBackToHome = {
-                                    rootScreen = RootScreen.HOME
-                                }
+                                onBackToHome = { rootScreen = RootScreen.HOME }
                             )
                         }
                     }

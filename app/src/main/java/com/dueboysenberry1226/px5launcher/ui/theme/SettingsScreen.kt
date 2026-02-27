@@ -2,6 +2,7 @@
 
 package com.dueboysenberry1226.px5launcher.ui.settings
 
+import android.app.Activity
 import androidx.compose.foundation.focusable
 import android.content.ComponentName
 import android.content.Context
@@ -98,7 +99,7 @@ fun SettingsScreen(
     val clock24h by settingsRepo.clock24hFlow.collectAsState(initial = true)
     val showBigName by settingsRepo.showBigAppNameFlow.collectAsState(initial = true)
     val accentFromIcon by settingsRepo.accentFromAppIconFlow.collectAsState(initial = true)
-    val wallpaperUri by settingsRepo.wallpaperUriFlow.collectAsState(initial = null)
+    //val wallpaperUri by settingsRepo.wallpaperUriFlow.collectAsState(initial = null)
     val languageCode by settingsRepo.languageCodeFlow.collectAsState(initial = "system")
 
     val ambientEnabled by settingsRepo.ambientEnabledFlow.collectAsState(initial = false)
@@ -116,17 +117,21 @@ fun SettingsScreen(
     val recentsMax by settingsRepo.recentsMaxFlow.collectAsState(initial = 30)
 
     // ---- pickers ----
-    val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        if (uri != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            }
-            scope.launch { settingsRepo.setWallpaperUri(uri.toString()) }
-        }
-    }
+    // val wallpaperPicker = rememberLauncherForActivityResult(
+//     ActivityResultContracts.OpenDocument()
+// ) { uri: Uri? ->
+//     if (uri != null) {
+//         runCatching {
+//             context.contentResolver.takePersistableUriPermission(
+//                 uri,
+//                 Intent.FLAG_GRANT_READ_URI_PERMISSION
+//             )
+//         }
+//         scope.launch {
+//             settingsRepo.setWallpaperUri(uri.toString())
+//         }
+//     }
+// }
 
     val ambientPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) {
@@ -270,18 +275,23 @@ fun SettingsScreen(
                 { accentFromIcon },
                 { settingsRepo.setAccentFromAppIcon(it) }
             ),
-            action(
-                stringResource(R.string.settings_wallpaper_title),
-                wallpaperUri?.let { stringResource(R.string.common_selected) } ?: stringResource(R.string.common_not_selected)
-            ) {
-                wallpaperPicker.launch(arrayOf("image/*"))
-            },
+            // action(
+//     stringResource(R.string.settings_wallpaper_title),
+//     wallpaperUri?.let {
+//         stringResource(R.string.common_selected)
+//     } ?: stringResource(R.string.common_not_selected)
+// ) {
+//     wallpaperPicker.launch(arrayOf("image/*"))
+// },
             picker(
                 stringResource(R.string.settings_language_title),
                 stringResource(R.string.settings_language_subtitle),
                 languageOptions,
                 getIndex = { langIndexFromCode(languageCode) },
-                setIndex = { settingsRepo.setLanguageCode(codeFromLangIndex(it)) }
+                setIndex = {
+                    settingsRepo.setLanguageCode(codeFromLangIndex(it))
+                    (context as? Activity)?.recreate()
+                }
             ),
             action(
                 stringResource(R.string.settings_widgets_reset_title),
