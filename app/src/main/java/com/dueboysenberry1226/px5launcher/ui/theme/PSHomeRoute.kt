@@ -1,6 +1,12 @@
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.dueboysenberry1226.px5launcher.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.tween
 import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.data.SettingsRepository
 import android.app.NotificationManager
@@ -11,6 +17,7 @@ import android.content.pm.PackageManager
 import android.hardware.camera2.CameraManager
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
@@ -31,10 +38,6 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -47,8 +50,10 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -92,7 +97,6 @@ private enum class HomeSection { TOPBAR, TOP, ACTIONS, WIDGETS, NOTIFS }
 private enum class BottomPanel { WIDGETS, CALENDAR, MUSIC }
 
 private const val WIDGET_HOST_ID = 1024
-private enum class SwipeDir { LEFT, RIGHT, UP, DOWN }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -110,6 +114,7 @@ fun PSHomeRoute(
     val showBigAppName by settingsRepo.showBigAppNameFlow.collectAsState(initial = true)
     val quickTileClick = rememberQuickTileClickHandler(context)
     val accentFromIcon by settingsRepo.accentFromAppIconFlow.collectAsState(initial = true)
+    val vibrationEnabled by settingsRepo.vibrationEnabledFlow.collectAsState(initial = true)
 
     LaunchedEffect(Unit) {
         NotificationsRepository.init(context)
@@ -120,12 +125,10 @@ fun PSHomeRoute(
     val historyNotifs = NotificationsRepository.history.collectAsState().value
     val qsState = QuickSettingsRepository.state.collectAsState().value
 
-
     var notifHistoryMode by rememberSaveable { mutableStateOf(false) }
 
     var notifUpFromLeftButtonsAllowed by rememberSaveable { mutableStateOf(false) }
     var notifUpFromQsTopRowAllowed by rememberSaveable { mutableStateOf(false) }
-
     val notifUpToTopbarAllowed = notifUpFromLeftButtonsAllowed || notifUpFromQsTopRowAllowed
 
     var mediaKeyHandler by remember { mutableStateOf<((KeyEvent) -> Boolean)?>(null) }
@@ -463,7 +466,7 @@ fun PSHomeRoute(
     val density = LocalDensity.current
     val swipeThresholdPx = with(density) { 52.dp.toPx() }
 
-    // ----- Widget dolgok (változatlan) -----
+    // ----- Widget dolgok -----
     var cellPx by remember { mutableFloatStateOf(0f) }
     val handledWidgetIds = remember { mutableSetOf<Int>() }
 
@@ -682,6 +685,9 @@ fun PSHomeRoute(
         cellWidthDp = cellDp,
         cellHeightDp = cellDp,
         onPick = { providerInfo, sx, sy ->
+
+            if (vibrationEnabled) Haptics.click(context)
+
             val provider = providerInfo.provider ?: run {
                 showToastWidget(context.getString(R.string.homescreen_widget_provider_null))
                 return@rememberWidgetPickerState
@@ -729,7 +735,9 @@ fun PSHomeRoute(
                 bindLauncher.launch(intent)
             }
         },
-        onBack = { showWidgetPicker = false }
+        onBack = {
+            if (vibrationEnabled) Haptics.click(context)
+            showWidgetPicker = false }
     )
 
     fun requestAddAt(cellX: Int, cellY: Int) {
@@ -764,7 +772,21 @@ fun PSHomeRoute(
         scope.launch { widgetsRepo.upsert(p.copy(cellX = nx, cellY = ny)) }
     }
 
-    // ---------------- TOP STRIP: SIMPLE + SPACERS ----------------
+
+    // ✅ GLOBAL BACK: soha ne zárja be az Activity-t + overlay-ket zárjon
+    BackHandler(enabled = true) {
+        when {
+            showWidgetPicker -> showWidgetPicker = false
+            menuOpen -> closeMenu()
+            searchOpen -> { searchOpen = false; searchQuery = "" }
+            allAppsOpen -> allAppsOpen = false
+            else -> {
+                // elnyeljük: ne lépjen ki az appból
+            }
+        }
+    }
+
+    // ---------------- TOP STRIP ----------------
     val stripState = rememberLazyListState()
     val fling: FlingBehavior = ScrollableDefaults.flingBehavior()
 
@@ -777,13 +799,8 @@ fun PSHomeRoute(
         }
     }
 
-    LaunchedEffect(topItems.size) {
-        scrollSelectedToAnchor(animated = false)
-    }
-
-    LaunchedEffect(topIndex) {
-        scrollSelectedToAnchor(animated = true)
-    }
+    LaunchedEffect(topItems.size) { scrollSelectedToAnchor(animated = false) }
+    LaunchedEffect(topIndex) { scrollSelectedToAnchor(animated = true) }
 
     fun stepStripByController(delta: Int) {
         if (delta == 0) return
@@ -821,6 +838,24 @@ fun PSHomeRoute(
         } else if (action != AndroidKeyEvent.ACTION_DOWN) {
             false
         } else {
+
+            if (vibrationEnabled) {
+                when (code) {
+                    AndroidKeyEvent.KEYCODE_DPAD_LEFT,
+                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT,
+                    AndroidKeyEvent.KEYCODE_DPAD_UP,
+                    AndroidKeyEvent.KEYCODE_DPAD_DOWN,
+                    AndroidKeyEvent.KEYCODE_DPAD_CENTER,
+                    AndroidKeyEvent.KEYCODE_ENTER,
+                    AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
+                    AndroidKeyEvent.KEYCODE_BUTTON_A,
+                    AndroidKeyEvent.KEYCODE_BUTTON_B,
+                    AndroidKeyEvent.KEYCODE_BACK -> {
+                        Haptics.click(context)
+                    }
+                }
+            }
+
             if (!allAppsOpen && (isLB || isRB)) {
                 if (homeSection == HomeSection.WIDGETS) {
                     stepBottomPanel(if (isLB) -1 else +1)
@@ -862,15 +897,9 @@ fun PSHomeRoute(
 
                         AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
                             when (tab) {
-                                Tab.GAMES -> {
-                                    homeSection = HomeSection.TOP
-                                }
-                                Tab.MEDIA -> {
-                                    homeSection = HomeSection.TOP
-                                }
-                                Tab.NOTIFICATIONS -> {
-                                    homeSection = HomeSection.NOTIFS
-                                }
+                                Tab.GAMES -> homeSection = HomeSection.TOP
+                                Tab.MEDIA -> homeSection = HomeSection.TOP
+                                Tab.NOTIFICATIONS -> homeSection = HomeSection.NOTIFS
                             }
                             true
                         }
@@ -879,32 +908,28 @@ fun PSHomeRoute(
 
                         AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
                             topBarIndex = (topBarIndex - 1).coerceAtLeast(0)
-                            when (topBarIndex) {
-                                0 -> tab = Tab.GAMES
-                                1 -> tab = Tab.MEDIA
-                                2 -> tab = Tab.NOTIFICATIONS
+                            tab = when (topBarIndex) {
+                                0 -> Tab.GAMES
+                                1 -> Tab.MEDIA
+                                else -> Tab.NOTIFICATIONS
                             }
                             true
                         }
 
                         AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
                             topBarIndex = (topBarIndex + 1).coerceAtMost(2)
-                            when (topBarIndex) {
-                                0 -> tab = Tab.GAMES
-                                1 -> tab = Tab.MEDIA
-                                2 -> tab = Tab.NOTIFICATIONS
+                            tab = when (topBarIndex) {
+                                0 -> Tab.GAMES
+                                1 -> Tab.MEDIA
+                                else -> Tab.NOTIFICATIONS
                             }
                             true
                         }
 
                         AndroidKeyEvent.KEYCODE_ENTER,
-                        AndroidKeyEvent.KEYCODE_DPAD_CENTER -> {
-                            true
-                        }
+                        AndroidKeyEvent.KEYCODE_DPAD_CENTER -> true
 
-                        AndroidKeyEvent.KEYCODE_BACK -> {
-                            true
-                        }
+                        AndroidKeyEvent.KEYCODE_BACK -> true
 
                         else -> false
                     }
@@ -914,19 +939,14 @@ fun PSHomeRoute(
                         AndroidKeyEvent.KEYCODE_DPAD_UP -> {
                             if (notifUpToTopbarAllowed) {
                                 homeSection = HomeSection.TOPBAR
-
                                 topBarIndex = when (tab) {
                                     Tab.GAMES -> 0
                                     Tab.MEDIA -> 1
                                     Tab.NOTIFICATIONS -> 2
                                 }
-
                                 focusManager.clearFocus(force = true)
-
                                 true
-                            } else {
-                                false
-                            }
+                            } else false
                         }
 
                         AndroidKeyEvent.KEYCODE_BACK -> {
@@ -945,7 +965,11 @@ fun PSHomeRoute(
 
                             AndroidKeyEvent.KEYCODE_DPAD_UP -> {
                                 homeSection = HomeSection.TOPBAR
-                                topBarIndex = if (tab == Tab.GAMES) 0 else 1
+                                topBarIndex = when (tab) {
+                                    Tab.GAMES -> 0
+                                    Tab.MEDIA -> 1
+                                    Tab.NOTIFICATIONS -> 2
+                                }
                                 focusManager.clearFocus(force = true)
                                 true
                             }
@@ -987,7 +1011,7 @@ fun PSHomeRoute(
                                 when {
                                     menuOpen -> { closeMenu(); true }
                                     searchOpen -> { searchOpen = false; searchQuery = ""; true }
-                                    else -> false
+                                    else -> true // elnyeljük
                                 }
                             }
 
@@ -1030,7 +1054,7 @@ fun PSHomeRoute(
                                 when {
                                     menuOpen -> { closeMenu(); true }
                                     searchOpen -> { searchOpen = false; searchQuery = ""; true }
-                                    else -> false
+                                    else -> true
                                 }
                             }
 
@@ -1176,30 +1200,61 @@ fun PSHomeRoute(
                 }
             }
             .onPreviewKeyEvent { e ->
+                val nk = e.nativeKeyEvent
+
+                // 1️⃣ WidgetPicker: itt is kezeljük
                 if (showWidgetPicker) {
-                    return@onPreviewKeyEvent InputController.route(
-                        e = e,
-                        state = InputController.State(zone = InputController.Zone.CONTENT),
-                        topBarHandler = { ev -> pickerState.handleKey(ev) },
-                        contentHandler = { ev -> pickerState.handleKey(ev) }
-                    )
+                    // ✅ haptic a “művelet” gombokra a pickerben (kontroller)
+                    if (nk.action == AndroidKeyEvent.ACTION_DOWN) {
+                        when (nk.keyCode) {
+                            AndroidKeyEvent.KEYCODE_DPAD_CENTER,
+                            AndroidKeyEvent.KEYCODE_ENTER,
+                            AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
+                            AndroidKeyEvent.KEYCODE_BUTTON_A,
+                            AndroidKeyEvent.KEYCODE_BACK,
+                            AndroidKeyEvent.KEYCODE_ESCAPE -> {
+                                if (vibrationEnabled) Haptics.click(context)
+                            }
+                        }
+                    }
+
+                    val handled = pickerState.handleKey(e)
+                    if (handled) return@onPreviewKeyEvent true
+
+                    // (fallback) ha valamiért nem kezelte:
+                    if (nk.action == AndroidKeyEvent.ACTION_DOWN &&
+                        (nk.keyCode == AndroidKeyEvent.KEYCODE_BACK || nk.keyCode == AndroidKeyEvent.KEYCODE_ESCAPE)
+                    ) {
+                        showWidgetPicker = false
+                        return@onPreviewKeyEvent true
+                    }
+
+                    return@onPreviewKeyEvent false
                 }
 
-                if (tab == Tab.MEDIA && homeSection != HomeSection.TOPBAR) {
-                    val nk = e.nativeKeyEvent
-                    val code = nk.keyCode
-                    val action = nk.action
+                // 2️⃣ BACK: ne zárja be az Activity-t
+                if (nk.action == AndroidKeyEvent.ACTION_DOWN &&
+                    nk.keyCode == AndroidKeyEvent.KEYCODE_BACK
+                ) {
+                    // BackHandler úgyis elintézi, de itt is lenyeljük
+                    return@onPreviewKeyEvent true
+                }
 
+                // 3️⃣ Media routing
+                if (tab == Tab.MEDIA && homeSection != HomeSection.TOPBAR) {
                     val handledByMedia = (mediaKeyHandler?.invoke(e) == true)
                     if (handledByMedia) return@onPreviewKeyEvent true
 
-                    if (action == AndroidKeyEvent.ACTION_DOWN && code == AndroidKeyEvent.KEYCODE_DPAD_UP) {
+                    if (nk.action == AndroidKeyEvent.ACTION_DOWN &&
+                        nk.keyCode == AndroidKeyEvent.KEYCODE_DPAD_UP
+                    ) {
                         return@onPreviewKeyEvent keyHandler(e)
                     }
 
                     return@onPreviewKeyEvent false
                 }
 
+                // 4️⃣ Normal routing
                 val isTopbar = homeSection == HomeSection.TOPBAR
                 val state = InputController.State(
                     zone = if (isTopbar) InputController.Zone.TOPBAR else InputController.Zone.CONTENT
@@ -1233,48 +1288,32 @@ fun PSHomeRoute(
                     pm = pm,
                     onRequestBackToGames = { tab = Tab.GAMES },
                     hubSelectionEnabled = (homeSection != HomeSection.TOPBAR),
-                    registerKeyHandler = { handler -> mediaKeyHandler = handler }
+                    registerKeyHandler = { handler -> mediaKeyHandler = handler },
+                    vibrationEnabled = vibrationEnabled
                 )
             } else if (tab == Tab.NOTIFICATIONS) {
                 NotificationsTabScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-
                     liveNotifications = liveNotifs,
                     historyNotifications = historyNotifs,
                     historyMode = notifHistoryMode,
-
-                    onLeftButtonsFocusEdgeChanged = { focused ->
-                        notifUpFromLeftButtonsAllowed = focused
-                    },
-                    onQsTopRowFocusEdgeChanged = { focused ->
-                        notifUpFromQsTopRowAllowed = focused
-                    },
-
+                    onLeftButtonsFocusEdgeChanged = { focused -> notifUpFromLeftButtonsAllowed = focused },
+                    onQsTopRowFocusEdgeChanged = { focused -> notifUpFromQsTopRowAllowed = focused },
                     onDismissOne = { id, fromHistory ->
-                        if (fromHistory) {
-                            NotificationsRepository.removeFromHistory(id)
-                        } else {
-                            NotificationsRepository.dismissLiveToHistory(id)
-                        }
+                        if (fromHistory) NotificationsRepository.removeFromHistory(id)
+                        else NotificationsRepository.dismissLiveToHistory(id)
                     },
                     onClearAll = { fromHistory ->
                         if (fromHistory) NotificationsRepository.clearHistory()
                         else NotificationsRepository.clearLiveToHistory()
                     },
                     onToggleHistoryMode = { notifHistoryMode = !notifHistoryMode },
-
                     tilesState = qsState,
-
                     onTileClick = quickTileClick,
-
-                    onTileRemove = { slotIndex ->
-                        QuickSettingsRepository.remove(slotIndex)
-                    },
-                    onTileAssign = { slotIndex, type ->
-                        QuickSettingsRepository.assign(slotIndex, type)
-                    }
+                    onTileRemove = { slotIndex -> QuickSettingsRepository.remove(slotIndex) },
+                    onTileAssign = { slotIndex, type -> QuickSettingsRepository.assign(slotIndex, type) }
                 )
             } else {
                 if (allAppsOpen) {
@@ -1371,10 +1410,13 @@ fun PSHomeRoute(
                                         is TopItem.App -> openMenuFor(item.app)
                                         else -> Unit
                                     }
+                                },
+                                onSelectionTick = {
+                                    if (vibrationEnabled) Haptics.tick(context)
                                 }
                             )
-                            Spacer(Modifier.height(18.dp))
 
+                            Spacer(Modifier.height(18.dp))
                             Spacer(Modifier.height(18.dp))
 
                             if (showBigAppName) {
@@ -1394,7 +1436,6 @@ fun PSHomeRoute(
 
                                 Spacer(Modifier.height(14.dp))
                             } else {
-                                // ha kikapcsolod, ne legyen túl nagy lyuk
                                 Spacer(Modifier.height(6.dp))
                             }
 
@@ -1406,8 +1447,16 @@ fun PSHomeRoute(
                                     canLaunch = selectedTopItem is TopItem.App,
                                     playFR = playFR,
                                     menuFR = menuFR,
-                                    onPlay = { (selectedTopItem as? TopItem.App)?.app?.let { launchApp(it) } },
-                                    onMenu = { if (selectedTopItem is TopItem.App) openMenuFor((selectedTopItem as TopItem.App).app) }
+                                    onPlay = {
+                                        if (vibrationEnabled) Haptics.click(context)
+                                        (selectedTopItem as? TopItem.App)?.app?.let { launchApp(it) }
+                                    },
+                                    onMenu = {
+                                        if (vibrationEnabled) Haptics.click(context)
+                                        if (selectedTopItem is TopItem.App) {
+                                            openMenuFor((selectedTopItem as TopItem.App).app)
+                                        }
+                                    }
                                 )
 
                                 Spacer(Modifier.width(18.dp))
@@ -1432,7 +1481,7 @@ fun PSHomeRoute(
 
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
-                                shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+                                shape = RoundedCornerShape(22.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(220.dp)
@@ -1475,7 +1524,10 @@ fun PSHomeRoute(
                                                     val info = widgetManager.getAppWidgetInfo(placement.appWidgetId)
                                                     if (info == null) {
                                                         Box(modifier, contentAlignment = Alignment.Center) {
-                                                            Text(context.getString(R.string.homescreen_widget_error_title), color = Color.White.copy(alpha = 0.65f))
+                                                            Text(
+                                                                context.getString(R.string.homescreen_widget_error_title),
+                                                                color = Color.White.copy(alpha = 0.65f)
+                                                            )
                                                         }
                                                     } else {
                                                         AndroidView(
@@ -1491,7 +1543,11 @@ fun PSHomeRoute(
                                                                     }
                                                                 } catch (_: Throwable) {
                                                                     FrameLayout(ctx).apply {
-                                                                        addView(TextView(ctx).apply { text = context.getString(R.string.homescreen_widget_error_title) })
+                                                                        addView(
+                                                                            TextView(ctx).apply {
+                                                                                text = context.getString(R.string.homescreen_widget_error_title)
+                                                                            }
+                                                                        )
                                                                     }
                                                                 }
                                                             },
@@ -1588,21 +1644,37 @@ fun PSHomeRoute(
             )
         }
 
-        if (showWidgetPicker) {
+        // ✅ Widget picker overlay: biztos fókusz + saját key handler
+        val widgetPickerFR = remember { FocusRequester() }
+
+        AnimatedVisibility(
+            visible = showWidgetPicker,
+            enter = fadeIn(animationSpec = tween(160)) +
+                    scaleIn(initialScale = 0.94f, animationSpec = tween(200)),
+            exit = fadeOut(animationSpec = tween(130)) +
+                    scaleOut(targetScale = 0.94f, animationSpec = tween(170))
+        ) {
+            // FONTOS: itt van kompozícióban a Card, ezért itt kérünk fókuszt
+            LaunchedEffect(Unit) {
+                // 1 frame várás, hogy biztosan felépüljön a focus node
+                kotlinx.coroutines.yield()
+                widgetPickerFR.requestFocus()
+            }
+
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.55f))
+                modifier = Modifier.fillMaxSize()
             ) {
                 Card(
                     colors = CardDefaults.cardColors(
-                        containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface
+                        containerColor = MaterialTheme.colorScheme.surface
                     ),
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+                    shape = RoundedCornerShape(22.dp),
                     modifier = Modifier
                         .align(Alignment.Center)
-                        .fillMaxWidth(0.92f)
-                        .fillMaxHeight(0.86f)
+                        .fillMaxWidth(1f)
+                        .fillMaxHeight(1f)
+                        .focusRequester(widgetPickerFR)
+                        .focusable()
                 ) {
                     WidgetPickerScreen(
                         state = pickerState,

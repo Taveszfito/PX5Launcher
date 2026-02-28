@@ -1,7 +1,12 @@
 package com.dueboysenberry1226.px5launcher.ui
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -28,13 +33,15 @@ fun NotificationsTabScreen(
     onLeftButtonsFocusEdgeChanged: (Boolean) -> Unit,
     onQsTopRowFocusEdgeChanged: (Boolean) -> Unit,
 ) {
-    val colors = PaneColors(
-        card = Color.White.copy(alpha = 0.06f),
-        cardAlt = Color.White.copy(alpha = 0.05f),
-        stroke = Color.White.copy(alpha = 0.12f),
-        text = Color.White,
-        subtle = Color.White.copy(alpha = 0.70f)
-    )
+    val colors = remember {
+        PaneColors(
+            card = Color.White.copy(alpha = 0.06f),
+            cardAlt = Color.White.copy(alpha = 0.05f),
+            stroke = Color.White.copy(alpha = 0.12f),
+            text = Color.White,
+            subtle = Color.White.copy(alpha = 0.70f)
+        )
+    }
 
     Row(
         modifier = modifier

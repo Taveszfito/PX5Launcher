@@ -19,6 +19,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.data.NotificationsRepository
+import com.dueboysenberry1226.px5launcher.data.SettingsRepository
 
 @Composable
 fun NotificationLeftSide(
@@ -39,6 +41,13 @@ fun NotificationLeftSide(
     colors: PaneColors,
     onFocusEdgeChanged: (Boolean) -> Unit,
 ) {
+    val context = LocalContext.current
+    val settingsRepo = remember(context) { SettingsRepository(context) }
+    val vibrationEnabled by settingsRepo.vibrationEnabledFlow.collectAsState(initial = true)
+
+    fun hClick() { if (vibrationEnabled) Haptics.click(context) }
+    fun hTick() { if (vibrationEnabled) Haptics.tick(context) }
+
     val items = if (historyMode) historyNotifications else liveNotifications
     val shape = RoundedCornerShape(22.dp)
 
@@ -79,9 +88,11 @@ fun NotificationLeftSide(
                         item = item,
                         historyMode = historyMode,
                         onLaunch = {
+                            hClick()
                             NotificationsRepository.launch(item.id, fromHistory = historyMode)
                         },
                         onDelete = {
+                            hClick()
                             // delete gomb:
                             // live -> dismiss + history
                             // history -> remove history entry
@@ -90,12 +101,12 @@ fun NotificationLeftSide(
                             } else {
                                 NotificationsRepository.dismissLiveToHistory(item.id)
                             }
-                            // ha még nálad van külön UI listakezelés:
                             onDismissOne(item.id)
                         },
                         colors = colors,
                         isFirst = index == 0,
-                        onTopEdgeReached = onFocusEdgeChanged
+                        onTopEdgeReached = onFocusEdgeChanged,
+                        onFocusTick = { hTick() }
                     )
                 }
             }
@@ -109,15 +120,18 @@ fun NotificationLeftSide(
         ) {
             FocusableBottomButton(
                 text = if (historyMode) {
-                    // ha van nálad már common_back, nyugodtan cseréld arra
                     stringResource(R.string.common_back)
                 } else {
                     stringResource(R.string.notifications_history)
                 },
-                onClick = onToggleHistoryMode,
+                onClick = {
+                    hClick()
+                    onToggleHistoryMode()
+                },
                 colors = colors,
                 focusRequester = firstBottomButtonFR,
                 onFocusChanged = { focused ->
+                    if (focused) hTick()
                     // ✅ csak akkor jelezzük a "topbar fel" engedélyt, ha NINCS értesítés
                     if (items.isEmpty()) onFocusEdgeChanged(focused)
                 }
@@ -125,9 +139,13 @@ fun NotificationLeftSide(
 
             FocusableBottomButton(
                 text = stringResource(R.string.notifications_clear_all_short),
-                onClick = onClearAll,
+                onClick = {
+                    hClick()
+                    onClearAll()
+                },
                 colors = colors,
                 onFocusChanged = { focused ->
+                    if (focused) hTick()
                     if (items.isEmpty()) onFocusEdgeChanged(focused)
                 }
             )
@@ -143,7 +161,8 @@ private fun NotificationRow(
     onDelete: () -> Unit,
     colors: PaneColors,
     isFirst: Boolean,
-    onTopEdgeReached: (Boolean) -> Unit
+    onTopEdgeReached: (Boolean) -> Unit,
+    onFocusTick: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -155,6 +174,7 @@ private fun NotificationRow(
             onClick = onLaunch,
             colors = colors,
             onFocusChanged = { focused ->
+                if (focused) onFocusTick()
                 if (isFirst) onTopEdgeReached(focused)
             }
         ) {
@@ -198,7 +218,9 @@ private fun NotificationRow(
             modifier = Modifier.size(width = 58.dp, height = 48.dp),
             onClick = onDelete,
             colors = colors,
-            onFocusChanged = {}
+            onFocusChanged = { focused ->
+                if (focused) onFocusTick()
+            }
         ) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("🗑", color = colors.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)

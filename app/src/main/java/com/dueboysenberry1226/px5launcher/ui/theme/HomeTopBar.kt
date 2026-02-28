@@ -12,12 +12,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.data.Tab
+import com.dueboysenberry1226.px5launcher.ui.Haptics
 
 @Composable
 fun HomeTopBar(
@@ -27,6 +29,7 @@ fun HomeTopBar(
     onSearch: () -> Unit,
     onSettings: () -> Unit,
     onAccount: () -> Unit = {},
+    vibrationEnabled: Boolean = true,
     topBarFocused: Boolean = false,
     topBarIndex: Int = when (tab) {
         Tab.GAMES -> 0
@@ -34,6 +37,8 @@ fun HomeTopBar(
         Tab.NOTIFICATIONS -> 2
     }
 ) {
+    val context = LocalContext.current
+
     val gamesSelected = if (topBarFocused) topBarIndex == 0 else tab == Tab.GAMES
     val mediaSelected = if (topBarFocused) topBarIndex == 1 else tab == Tab.MEDIA
     val notificationsSelected = if (topBarFocused) topBarIndex == 2 else tab == Tab.NOTIFICATIONS
@@ -47,39 +52,81 @@ fun HomeTopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
+
+        // LEFT SIDE (Tabs)
         Row(verticalAlignment = Alignment.CenterVertically) {
+
             PSTab(
                 text = stringResource(R.string.topbar_tab_apps),
                 selected = gamesSelected,
                 underline = gamesUnderline,
                 focused = topBarFocused,
-                onClick = { onTabChange(Tab.GAMES) }
+                onClick = {
+                    if (vibrationEnabled) Haptics.click(context)
+                    onTabChange(Tab.GAMES)
+                }
             )
+
             Spacer(Modifier.width(18.dp))
+
             PSTab(
                 text = stringResource(R.string.topbar_tab_media),
                 selected = mediaSelected,
                 underline = mediaUnderline,
                 focused = topBarFocused,
-                onClick = { onTabChange(Tab.MEDIA) }
+                onClick = {
+                    if (vibrationEnabled) Haptics.click(context)
+                    onTabChange(Tab.MEDIA)
+                }
             )
+
             Spacer(Modifier.width(18.dp))
+
             PSTab(
                 text = stringResource(R.string.topbar_tab_notifications),
                 selected = notificationsSelected,
                 underline = notificationsUnderline,
                 focused = topBarFocused,
-                onClick = { onTabChange(Tab.NOTIFICATIONS) }
+                onClick = {
+                    if (vibrationEnabled) Haptics.click(context)
+                    onTabChange(Tab.NOTIFICATIONS)
+                }
             )
         }
 
+        // RIGHT SIDE (Icons + Clock)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TopIcon("🔍", onSearch)
+
+            TopIcon(
+                symbol = "🔍",
+                onClick = {
+                    if (vibrationEnabled) Haptics.click(context)
+                    onSearch()
+                }
+            )
+
             Spacer(Modifier.width(10.dp))
-            TopIcon("⚙️", onSettings)
+
+            TopIcon(
+                symbol = "⚙️",
+                onClick = {
+                    if (vibrationEnabled) Haptics.click(context)
+                    onSettings()
+                }
+            )
+
             Spacer(Modifier.width(10.dp))
-            TopIcon("🙂", onAccount)
+
+            TopIcon(
+                symbol = "🙂",
+                onClick = {
+                    if (vibrationEnabled) Haptics.click(context)
+                    onAccount()
+                }
+            )
+
             Spacer(Modifier.width(16.dp))
+
             Text(
                 text = clockText,
                 color = Color.White.copy(alpha = 0.85f),

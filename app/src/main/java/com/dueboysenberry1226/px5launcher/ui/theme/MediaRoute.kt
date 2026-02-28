@@ -61,10 +61,15 @@ fun MediaRoute(
     pm: PackageManager,
     onRequestBackToGames: () -> Unit,
     hubSelectionEnabled: Boolean,
-    registerKeyHandler: (((KeyEvent) -> Boolean)) -> Unit
+    registerKeyHandler: (((KeyEvent) -> Boolean)) -> Unit,
+    vibrationEnabled: Boolean
 ) {
     val context = LocalContext.current
     val repo = remember { MediaStoreRepository(context) }
+
+    fun hClick() {
+        if (vibrationEnabled) Haptics.click(context)
+    }
 
     var hasPerm by remember { mutableStateOf(hasAllPermissions(context, repo)) }
 
@@ -140,7 +145,7 @@ fun MediaRoute(
 
     fun openVideoExternal(uri: Uri) {
         val i = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "video/*") // nem UI szöveg, maradhat
+            setDataAndType(uri, "video/*")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         if (i.resolveActivity(context.packageManager) != null) context.startActivity(i)
@@ -227,6 +232,9 @@ fun MediaRoute(
         } else {
             if (action != AndroidKeyEvent.ACTION_DOWN) return@internalKeyHandler false
         }
+
+        // ✅ HAPTIC: OK/Back/Enter/B
+        if (isOk || isBack) hClick()
 
         if (!hubSelectionEnabled && screen == MediaScreen.HUB && code == AndroidKeyEvent.KEYCODE_DPAD_UP) {
             return@internalKeyHandler false
@@ -369,8 +377,8 @@ fun MediaRoute(
     Box(Modifier.fillMaxWidth()) {
         if (!hasPerm) {
             MediaPermissionCard(
-                onRequest = { permLauncher.launch(MediaStoreRepository.requiredPermissions()) },
-                onBack = onRequestBackToGames
+                onRequest = { hClick(); permLauncher.launch(MediaStoreRepository.requiredPermissions()) },
+                onBack = { hClick(); onRequestBackToGames() }
             )
             return@Box
         }
@@ -383,7 +391,8 @@ fun MediaRoute(
                     onSelect = { selectedIndex = it },
                     onOpenImages = { navigateTo(MediaScreen.IMAGES) },
                     onOpenVideos = { navigateTo(MediaScreen.VIDEOS) },
-                    onOpenAlbums = { navigateTo(MediaScreen.ALBUMS) }
+                    onOpenAlbums = { navigateTo(MediaScreen.ALBUMS) },
+                    vibrationEnabled = vibrationEnabled
                 )
             }
 
@@ -396,7 +405,8 @@ fun MediaRoute(
                     onSelectChange = { selectedIndex = it },
                     onBack = { goBackOneLevel() },
                     onOpenEntry = { e -> openViewer(e) },
-                    onOpenAlbum = null
+                    onOpenAlbum = null,
+                    vibrationEnabled = vibrationEnabled
                 )
             }
 
@@ -409,7 +419,8 @@ fun MediaRoute(
                     onSelectChange = { selectedIndex = it },
                     onBack = { goBackOneLevel() },
                     onOpenEntry = { e -> openVideoExternal(e.uri) },
-                    onOpenAlbum = null
+                    onOpenAlbum = null,
+                    vibrationEnabled = vibrationEnabled
                 )
             }
 
@@ -426,7 +437,8 @@ fun MediaRoute(
                         currentAlbumId = a.bucketId
                         currentAlbumName = a.bucketName
                         navigateTo(MediaScreen.ALBUM_CONTENT)
-                    }
+                    },
+                    vibrationEnabled = vibrationEnabled
                 )
             }
 
@@ -441,12 +453,17 @@ fun MediaRoute(
                     onOpenEntry = { e ->
                         if (e.kind == MediaKind.VIDEO) openVideoExternal(e.uri) else openViewer(e)
                     },
-                    onOpenAlbum = null
+                    onOpenAlbum = null,
+                    vibrationEnabled = vibrationEnabled
                 )
             }
 
             MediaScreen.VIEWER -> {
-                MediaImageViewer(entry = viewerEntry, onClose = { goBackOneLevel() })
+                MediaImageViewer(
+                    entry = viewerEntry,
+                    onClose = { goBackOneLevel() },
+                    vibrationEnabled = vibrationEnabled
+                )
             }
         }
     }
@@ -521,8 +538,14 @@ private fun MediaHub(
     onSelect: (Int) -> Unit,
     onOpenImages: () -> Unit,
     onOpenVideos: () -> Unit,
-    onOpenAlbums: () -> Unit
+    onOpenAlbums: () -> Unit,
+    vibrationEnabled: Boolean
 ) {
+    val context = LocalContext.current
+    fun hClick() {
+        if (vibrationEnabled) Haptics.click(context)
+    }
+
     Column(
         Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -538,6 +561,7 @@ private fun MediaHub(
                 text = stringResource(R.string.media_title_images),
                 selected = hubSelectionEnabled && selectedIndex == 0,
                 onClick = {
+                    hClick()
                     onSelect(0)
                     onOpenImages()
                 }
@@ -547,6 +571,7 @@ private fun MediaHub(
                 text = stringResource(R.string.media_title_videos),
                 selected = hubSelectionEnabled && selectedIndex == 1,
                 onClick = {
+                    hClick()
                     onSelect(1)
                     onOpenVideos()
                 }
@@ -556,6 +581,7 @@ private fun MediaHub(
                 text = stringResource(R.string.media_title_albums),
                 selected = hubSelectionEnabled && selectedIndex == 2,
                 onClick = {
+                    hClick()
                     onSelect(2)
                     onOpenAlbums()
                 }
@@ -614,8 +640,14 @@ private fun MediaGrid(
     onSelectChange: (Int) -> Unit,
     onBack: () -> Unit,
     onOpenEntry: ((MediaEntry) -> Unit)?,
-    onOpenAlbum: ((MediaAlbum) -> Unit)?
+    onOpenAlbum: ((MediaAlbum) -> Unit)?,
+    vibrationEnabled: Boolean
 ) {
+    val context = LocalContext.current
+    fun hClick() {
+        if (vibrationEnabled) Haptics.click(context)
+    }
+
     val gridState = rememberLazyGridState()
 
     LaunchedEffect(selectedIndex, items.size) {
@@ -648,6 +680,7 @@ private fun MediaGrid(
 
                 fun selectAnd(block: () -> Unit) {
                     onSelectChange(i)
+                    hClick()
                     block()
                 }
 
@@ -831,9 +864,13 @@ private fun MediaThumbTile(
 @Composable
 private fun MediaImageViewer(
     entry: MediaEntry?,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    vibrationEnabled: Boolean
 ) {
     val context = LocalContext.current
+    fun hClick() {
+        if (vibrationEnabled) Haptics.click(context)
+    }
 
     val bmp: Bitmap? by produceState<Bitmap?>(initialValue = null, entry?.uri) {
         val u = entry?.uri ?: return@produceState
@@ -875,7 +912,7 @@ private fun MediaImageViewer(
                 .combinedClickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = onClose
+                    onClick = { hClick(); onClose() }
                 )
         )
     }

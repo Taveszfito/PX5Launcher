@@ -19,11 +19,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dueboysenberry1226.px5launcher.R
+import com.dueboysenberry1226.px5launcher.data.SettingsRepository
 
 @Composable
 fun NotificationRightSide(
@@ -35,6 +37,13 @@ fun NotificationRightSide(
     colors: PaneColors,
     onTopRowFocusEdgeChanged: (Boolean) -> Unit,
 ) {
+    val context = LocalContext.current
+    val settingsRepo = remember(context) { SettingsRepository(context) }
+    val vibrationEnabled by settingsRepo.vibrationEnabledFlow.collectAsState(initial = true)
+
+    fun hClick() { if (vibrationEnabled) Haptics.click(context) }
+    fun hTick() { if (vibrationEnabled) Haptics.tick(context) }
+
     var pickerOpen by remember { mutableStateOf(false) }
     var pickerTargetSlot by remember { mutableStateOf(-1) }
 
@@ -78,6 +87,7 @@ fun NotificationRightSide(
                                 .height(cellHeight),
                             type = type,
                             onClick = {
+                                hClick()
                                 if (type == null) {
                                     pickerTargetSlot = idx
                                     pickerOpen = true
@@ -85,10 +95,14 @@ fun NotificationRightSide(
                                     onTileClick(type)
                                 }
                             },
-                            onRemove = { onTileRemove(idx) },
+                            onRemove = {
+                                hClick()
+                                onTileRemove(idx)
+                            },
                             colors = colors,
                             isTopRow = (row == 0),
-                            onTopRowFocusEdgeChanged = onTopRowFocusEdgeChanged
+                            onTopRowFocusEdgeChanged = onTopRowFocusEdgeChanged,
+                            onFocusTick = { hTick() }
                         )
                     }
                 }
@@ -102,17 +116,21 @@ fun NotificationRightSide(
         QuickTilePickerDialog(
             available = available,
             onCancel = {
+                hClick()
                 pickerOpen = false
                 pickerTargetSlot = -1
             },
             onConfirm = { selected: QuickTileType ->
+                hClick()
                 if (pickerTargetSlot >= 0) {
                     onTileAssign(pickerTargetSlot, selected)
                 }
                 pickerOpen = false
                 pickerTargetSlot = -1
             },
-            colors = colors
+            colors = colors,
+            onPickClick = { hClick() },
+            onPickTick = { hTick() }
         )
     }
 }
@@ -126,6 +144,7 @@ private fun QuickTileCell(
     colors: PaneColors,
     isTopRow: Boolean,
     onTopRowFocusEdgeChanged: (Boolean) -> Unit,
+    onFocusTick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(14.dp)
     var focused by remember { mutableStateOf(false) }
@@ -144,6 +163,7 @@ private fun QuickTileCell(
             )
             .onFocusChanged {
                 focused = it.isFocused
+                if (it.isFocused) onFocusTick()
                 if (isTopRow) onTopRowFocusEdgeChanged(it.isFocused)
             }
             .clickable(
@@ -167,7 +187,7 @@ private fun QuickTileCell(
             ) {
                 Icon(
                     imageVector = type.icon,
-                    contentDescription = type.label(), // ✅
+                    contentDescription = type.label(),
                     tint = colors.text,
                     modifier = Modifier.size(22.dp)
                 )
@@ -175,7 +195,7 @@ private fun QuickTileCell(
                 Spacer(Modifier.height(6.dp))
 
                 Text(
-                    text = type.label(), // ✅
+                    text = type.label(),
                     color = colors.text,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -210,6 +230,8 @@ private fun QuickTilePickerDialog(
     onCancel: () -> Unit,
     onConfirm: (QuickTileType) -> Unit,
     colors: PaneColors,
+    onPickClick: () -> Unit,
+    onPickTick: () -> Unit,
 ) {
     var selected by remember { mutableStateOf<QuickTileType?>(available.firstOrNull()) }
 
@@ -229,12 +251,20 @@ private fun QuickTilePickerDialog(
                                 if (isSel) Color.White.copy(alpha = 0.15f)
                                 else Color.Transparent
                             )
-                            .clickable { selected = t }
+                            .clickable {
+                                onPickClick()
+                                selected = t
+                            }
                             .padding(12.dp)
                     ) {
-                        Text(t.label(), color = colors.text) // ✅
+                        Text(t.label(), color = colors.text)
                     }
                 }
+            }
+
+            LaunchedEffect(selected) {
+                // ha DPAD-ozással / új kijelöléssel is változik, kapjon egy tick-et
+                if (selected != null) onPickTick()
             }
         },
         confirmButton = {

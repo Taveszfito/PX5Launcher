@@ -2,6 +2,7 @@
 
 package com.dueboysenberry1226.px5launcher.ui.settings
 
+import com.dueboysenberry1226.px5launcher.ui.Haptics
 import android.app.Activity
 import androidx.compose.foundation.focusable
 import android.content.ComponentName
@@ -496,6 +497,22 @@ fun SettingsScreen(
         val nk = e.nativeKeyEvent
         if (nk.action != AndroidKeyEvent.ACTION_DOWN) return false
 
+        // ✅ HAPTIC CLICK (független a logikától)
+        if (vibrationEnabled) {
+            when (nk.keyCode) {
+                AndroidKeyEvent.KEYCODE_DPAD_UP,
+                AndroidKeyEvent.KEYCODE_DPAD_DOWN,
+                AndroidKeyEvent.KEYCODE_DPAD_LEFT,
+                AndroidKeyEvent.KEYCODE_DPAD_RIGHT,
+                AndroidKeyEvent.KEYCODE_DPAD_CENTER,
+                AndroidKeyEvent.KEYCODE_ENTER,
+                AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
+                AndroidKeyEvent.KEYCODE_BUTTON_A -> {
+                    Haptics.click(context)
+                }
+            }
+        }
+
         // back mindig Home
         when (nk.keyCode) {
             AndroidKeyEvent.KEYCODE_BACK,
@@ -521,7 +538,7 @@ fun SettingsScreen(
                     if (leftIndex == backIndexLeft) return true
                     focusZone = FocusZone.RIGHT
                     clampRowIndex()
-                    rightAutoScrollTick++ // ✅ belépéskor álljon rá
+                    rightAutoScrollTick++
                     return true
                 }
                 AndroidKeyEvent.KEYCODE_DPAD_CENTER,
@@ -533,7 +550,7 @@ fun SettingsScreen(
                     } else {
                         focusZone = FocusZone.RIGHT
                         clampRowIndex()
-                        rightAutoScrollTick++ // ✅ belépéskor álljon rá
+                        rightAutoScrollTick++
                     }
                     return true
                 }
@@ -553,13 +570,16 @@ fun SettingsScreen(
                         is SettingRow.Picker -> row.options.lastIndex
                         else -> 0
                     }
-                    expandedOptionIndex = (expandedOptionIndex - 1).coerceAtLeast(0).coerceIn(0, maxOpt)
+                    expandedOptionIndex =
+                        (expandedOptionIndex - 1).coerceAtLeast(0).coerceIn(0, maxOpt)
                     return true
                 }
 
                 val row = rowsForCategory.getOrNull(rowIndex)
                 if (row is SettingRow.SliderRow) {
-                    scope.launch { row.set((row.get() - row.step).coerceAtLeast(row.min)) }
+                    scope.launch {
+                        row.set((row.get() - row.step).coerceAtLeast(row.min))
+                    }
                     return true
                 }
 
@@ -576,13 +596,16 @@ fun SettingsScreen(
                         is SettingRow.Picker -> row.options.lastIndex
                         else -> 0
                     }
-                    expandedOptionIndex = (expandedOptionIndex + 1).coerceAtMost(maxOpt)
+                    expandedOptionIndex =
+                        (expandedOptionIndex + 1).coerceAtMost(maxOpt)
                     return true
                 }
 
                 val row = rowsForCategory.getOrNull(rowIndex)
                 if (row is SettingRow.SliderRow) {
-                    scope.launch { row.set((row.get() + row.step).coerceAtMost(row.max)) }
+                    scope.launch {
+                        row.set((row.get() + row.step).coerceAtMost(row.max))
+                    }
                     return true
                 }
 
@@ -592,14 +615,14 @@ fun SettingsScreen(
             AndroidKeyEvent.KEYCODE_DPAD_UP -> {
                 rowIndex = (rowIndex - 1).coerceAtLeast(0)
                 collapseExpanded()
-                rightAutoScrollTick++ // ✅ csak up/down-nál autoscroll
+                rightAutoScrollTick++
                 return true
             }
 
             AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
                 rowIndex = (rowIndex + 1).coerceAtMost(rowsForCategory.lastIndex)
                 collapseExpanded()
-                rightAutoScrollTick++ // ✅ csak up/down-nál autoscroll
+                rightAutoScrollTick++
                 return true
             }
 
@@ -621,7 +644,6 @@ fun SettingsScreen(
                     return true
                 }
 
-                // ✅ Enter nyitja a picker/toggle opciókat
                 expandRowIfPossible(rowIndex)
                 return true
             }

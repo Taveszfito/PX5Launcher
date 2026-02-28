@@ -21,8 +21,11 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,8 +50,23 @@ fun HomeTopStrip(
     modifier: Modifier = Modifier,
     onSelectIndex: (Int) -> Unit = {},
     onActivate: (TopItem) -> Unit = {},
-    onLongPress: (TopItem) -> Unit = {}
+    onLongPress: (TopItem) -> Unit = {},
+    onSelectionTick: () -> Unit = {} // ✅ új: haptic tick callback
 ) {
+    // ✅ tick csak akkor, ha tényleg változott a kijelölés (és ne az első rendernél)
+    var lastIndex by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(displayIndex, showSelection) {
+        if (!showSelection) return@LaunchedEffect
+        if (lastIndex == -1) {
+            lastIndex = displayIndex
+            return@LaunchedEffect
+        }
+        if (displayIndex != lastIndex) {
+            lastIndex = displayIndex
+            onSelectionTick()
+        }
+    }
+
     LazyRow(
         state = stripState,
         flingBehavior = fling,

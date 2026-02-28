@@ -6,6 +6,8 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,6 +22,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -46,10 +51,10 @@ fun CalendarPanelCard(
     focusRequester: FocusRequester? = null,
     cornerRadius: Dp = 22.dp,
 ) {
-    // Locale("hu","HU") itt oké, a deprecated warningot nyugodtan ignorálhatod
     val hu = remember { Locale("hu", "HU") }
     val scope = rememberCoroutineScope()
 
+    // ✅ “lapozó mód” (controller ENTER + touch tap)
     var pagingMode by remember { mutableStateOf(false) }
 
     val confirmCodes = remember {
@@ -92,7 +97,7 @@ fun CalendarPanelCard(
         scrollState.animateScrollTo(clamped)
     }
 
-    // ✅ key handler: pagingMode alatt fel/le animált scroll
+    // ✅ key handler: pagingMode alatt fel/le animált scroll + ENTER toggle
     LaunchedEffect(Unit) {
         registerKeyHandler { e ->
             val nk = e.nativeKeyEvent
@@ -183,6 +188,7 @@ fun CalendarPanelCard(
             today = today,
             currentMonth = YearMonth.from(today),
             pagingMode = pagingMode,
+            setPagingMode = { pagingMode = it },
             scrollState = scrollState,
             onRowStepPx = { rowStepPx = it },
             onAutoFollowTargetPx = { autoFollowTargetPx = it }
@@ -197,11 +203,11 @@ private fun CalendarGridMonthScrollable(
     today: LocalDate,
     currentMonth: YearMonth,
     pagingMode: Boolean,
+    setPagingMode: (Boolean) -> Unit,
     scrollState: ScrollState,
     onRowStepPx: (Float) -> Unit,
     onAutoFollowTargetPx: (Int) -> Unit
 ) {
-    // ✅ NINCS scope param! implicit receiver: maxWidth/maxHeight
     BoxWithConstraints(modifier = modifier) {
         val constraintsWidth = this@BoxWithConstraints.maxWidth
         val constraintsHeight = this@BoxWithConstraints.maxHeight
@@ -264,6 +270,9 @@ private fun CalendarGridMonthScrollable(
             onAutoFollowTargetPx(max(0, target))
         }
 
+        // ✅ touch: 1 tap -> pagingMode ON, pagingMode alatt drag->scroll, újabb tap -> OFF
+        val tapSlopPx = remember { with(density) { 10.dp.toPx() } }
+
         Column(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.Center
@@ -304,6 +313,57 @@ private fun CalendarGridMonthScrollable(
                     .size(gridW, scrollViewportH)
                     .align(Alignment.CenterHorizontally)
                     .clip(RoundedCornerShape(16.dp))
+                    .pointerInput(pagingMode) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+
+                            var totalDx = 0f
+                            var totalDy = 0f
+                            var isDragging = false
+
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Initial)
+                                val ch = event.changes.firstOrNull() ?: break
+                                if (!ch.pressed) break
+
+                                val delta = ch.positionChange()
+                                if (delta.x != 0f || delta.y != 0f) {
+                                    totalDx += delta.x
+                                    totalDy += delta.y
+                                }
+
+                                val dist = abs(totalDx) + abs(totalDy)
+
+                                if (!pagingMode) {
+                                    // pagingMode OFF: csak TAP-ra kapcsolunk be.
+                                    // Ha elindulna a drag (dist nagy), akkor átengedjük a szülőnek.
+                                    if (dist > tapSlopPx) {
+                                        return@awaitEachGesture
+                                    }
+                                } else {
+                                    // pagingMode ON: ha már "drag", akkor scroll + consume, hogy a PSHomeRoute ne vigye el
+                                    if (!isDragging && dist > tapSlopPx) {
+                                        isDragging = true
+                                    }
+
+                                    if (isDragging) {
+                                        ch.consume()
+                                        val scrollDelta = -delta.y
+                                        if (scrollDelta != 0f) {
+                                            scrollState.dispatchRawDelta(scrollDelta)
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Pointer felengedés után: ha NEM volt drag => TAP
+                            val wasTap = (abs(totalDx) + abs(totalDy)) <= tapSlopPx
+
+                            if (wasTap) {
+                                setPagingMode(!pagingMode)
+                            }
+                        }
+                    }
             ) {
                 Column(
                     modifier = Modifier
@@ -321,7 +381,6 @@ private fun CalendarGridMonthScrollable(
                                 val d = dates[idx]
                                 val isToday = d == today
 
-                                // ✅ múlt halványodás: 5 nap alatt minimum
                                 val daysDiff = d.toEpochDay() - today.toEpochDay()
                                 val pastDistance = if (daysDiff < 0) abs(daysDiff).toInt() else 0
                                 val baseAlpha = if (daysDiff < 0) {
@@ -329,7 +388,6 @@ private fun CalendarGridMonthScrollable(
                                     (0.85f - t * 0.55f).coerceAtLeast(0.28f)
                                 } else 0.85f
 
-                                // ✅ másik hónap: egységesen sötétebb (előző+következő)
                                 val isOtherMonth = YearMonth.from(d) != currentMonth
                                 val otherMonthMul = if (isOtherMonth) 0.55f else 1.0f
 

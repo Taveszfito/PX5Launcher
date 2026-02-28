@@ -6,6 +6,7 @@ import android.view.Window
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.addCallback
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -28,16 +29,19 @@ private enum class RootScreen { HOME, SETTINGS }
 class MainActivity : ComponentActivity() {
 
     override fun attachBaseContext(newBase: Context) {
-        // ✅ nyelv betöltése DataStore-ból, még a UI előtt
         val lang = runBlocking {
             SettingsRepository(newBase).languageCodeFlow.first()
         }
-        // ✅ locale-olt context az egész Activity-nek
         super.attachBaseContext(newBase.updateLocale(lang))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 🔒 ABSZOLÚT globális BACK blokkolás
+        onBackPressedDispatcher.addCallback(this) {
+            // Soha ne zárja be az appot
+        }
 
         enableImmersiveFullscreen(window)
 
@@ -47,7 +51,7 @@ class MainActivity : ComponentActivity() {
 
                     var rootScreen by rememberSaveable { mutableStateOf(RootScreen.HOME) }
 
-                    // extra safety: Settingsből back mindig Home
+                    // Settings → HOME vissza
                     BackHandler(enabled = rootScreen == RootScreen.SETTINGS) {
                         rootScreen = RootScreen.HOME
                     }
@@ -76,6 +80,7 @@ private fun enableImmersiveFullscreen(window: Window) {
     WindowCompat.setDecorFitsSystemWindows(window, false)
     WindowInsetsControllerCompat(window, window.decorView).apply {
         hide(WindowInsetsCompat.Type.systemBars())
-        systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
 }

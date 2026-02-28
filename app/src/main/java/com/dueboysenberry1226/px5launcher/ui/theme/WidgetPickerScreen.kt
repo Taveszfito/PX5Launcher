@@ -24,14 +24,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import com.dueboysenberry1226.px5launcher.ui.Haptics
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
@@ -52,7 +57,8 @@ class WidgetPickerState internal constructor(
     private val cellWidthDp: Dp,
     private val cellHeightDp: Dp,
     private val onPick: (AppWidgetProviderInfo, Int, Int) -> Unit,
-    private val onBack: () -> Unit
+    private val onBack: () -> Unit,
+    private val hapticClick: () -> Unit
 ) {
     var query by mutableStateOf("")
         private set
@@ -107,6 +113,8 @@ class WidgetPickerState internal constructor(
     }
 
     fun toggleExpanded(pkg: String) {
+        // ✅ haptic amikor kinyitsz/összecsuksz egy appot
+        hapticClick()
         expandedPkgs = if (expandedPkgs.contains(pkg)) expandedPkgs - pkg else expandedPkgs + pkg
     }
 
@@ -114,11 +122,21 @@ class WidgetPickerState internal constructor(
         selectedIndex = i.coerceIn(0, max(0, visibleItems.lastIndex))
     }
 
+    fun back() {
+        // ✅ haptic X / back
+        hapticClick()
+        onBack()
+    }
+
     fun activateAt(index: Int) {
         val item = visibleItems.getOrNull(index) ?: return
         when (item) {
             is VisibleItem.Header -> toggleExpanded(item.pkg)
-            is VisibleItem.Widget -> onPick(item.provider, item.spanX, item.spanY)
+            is VisibleItem.Widget -> {
+                // ✅ haptic widget kiválasztáskor
+                hapticClick()
+                onPick(item.provider, item.spanX, item.spanY)
+            }
         }
     }
 
@@ -132,7 +150,7 @@ class WidgetPickerState internal constructor(
 
         if (visibleItems.isEmpty()) {
             if (nk.keyCode == AndroidKeyEvent.KEYCODE_BACK || nk.keyCode == AndroidKeyEvent.KEYCODE_ESCAPE) {
-                onBack()
+                back()
                 return true
             }
             return false
@@ -159,7 +177,7 @@ class WidgetPickerState internal constructor(
 
             AndroidKeyEvent.KEYCODE_BACK,
             AndroidKeyEvent.KEYCODE_ESCAPE -> {
-                onBack()
+                back()
                 return true
             }
 
@@ -174,6 +192,8 @@ class WidgetPickerState internal constructor(
                     }
                 } else if (item is VisibleItem.Header) {
                     if (expandedPkgs.contains(item.pkg)) {
+                        // balra: összecsukás -> haptic
+                        hapticClick()
                         expandedPkgs = expandedPkgs - item.pkg
                         return true
                     }
@@ -184,6 +204,8 @@ class WidgetPickerState internal constructor(
                 val item = visibleItems.getOrNull(selectedIndex)
                 if (item is VisibleItem.Header) {
                     if (!expandedPkgs.contains(item.pkg)) {
+                        // jobbra: kinyitás -> haptic
+                        hapticClick()
                         expandedPkgs = expandedPkgs + item.pkg
                         return true
                     }
@@ -202,16 +224,24 @@ fun rememberWidgetPickerState(
     cellWidthDp: Dp,
     cellHeightDp: Dp,
     onPick: (provider: AppWidgetProviderInfo, spanX: Int, spanY: Int) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    vibrationEnabled: Boolean = true
 ): WidgetPickerState {
-    return remember(pm, appWidgetManager, cellWidthDp, cellHeightDp, onPick, onBack) {
+    val context = LocalContext.current
+
+    val hapticClick = remember(vibrationEnabled, context) {
+        { if (vibrationEnabled) Haptics.click(context) }
+    }
+
+    return remember(pm, appWidgetManager, cellWidthDp, cellHeightDp, onPick, onBack, hapticClick) {
         WidgetPickerState(
             pm = pm,
             appWidgetManager = appWidgetManager,
             cellWidthDp = cellWidthDp,
             cellHeightDp = cellHeightDp,
             onPick = onPick,
-            onBack = onBack
+            onBack = onBack,
+            hapticClick = hapticClick
         )
     }
 }
@@ -235,14 +265,44 @@ fun WidgetPickerScreen(
         modifier = modifier
             .fillMaxSize()
             .background(cs.background)
+            .onPreviewKeyEvent { state.handleKey(it) }
             .padding(16.dp)
     ) {
-        Text(
-            text = "Widgets",
-            style = MaterialTheme.typography.titleLarge,
-            color = cs.onBackground,
-            fontWeight = FontWeight.SemiBold
-        )
+        // ---- HEADER: cím + jobb felső "Vissza" gomb ----
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Widgets",
+                style = MaterialTheme.typography.titleLarge,
+                color = cs.onBackground,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f)
+            )
+
+            val interaction = remember { MutableInteractionSource() }
+
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(cs.surfaceVariant.copy(alpha = 0.6f))
+                    .combinedClickable(
+                        interactionSource = interaction,
+                        indication = null,
+                        onClick = { state.back() } // ✅ haptic benne van
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "✕",
+                    color = cs.onSurface,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
 
         Spacer(Modifier.height(12.dp))
 
@@ -278,7 +338,7 @@ fun WidgetPickerScreen(
                                 selected = selected,
                                 onClick = {
                                     state.selectIndex(index)
-                                    state.activateAt(index)
+                                    state.activateAt(index) // ✅ haptic header toggle
                                 }
                             )
                         }
@@ -292,7 +352,7 @@ fun WidgetPickerScreen(
                                 selected = selected,
                                 onClick = {
                                     state.selectIndex(index)
-                                    state.activateAt(index)
+                                    state.activateAt(index) // ✅ haptic pick
                                 }
                             )
                         }
