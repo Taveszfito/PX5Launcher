@@ -896,21 +896,27 @@ fun PSHomeRoute(
                     AndroidKeyEvent.KEYCODE_DPAD_UP -> true
 
                     AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
+                        // 0..2 tabok, 3=search, 4=settings
                         topBarIndex = (topBarIndex - 1).coerceAtLeast(0)
-                        tab = when (topBarIndex) {
-                            0 -> Tab.GAMES
-                            1 -> Tab.MEDIA
-                            else -> Tab.NOTIFICATIONS
+                        // tab csak akkor változzon, ha tab indexen állunk
+                        if (topBarIndex <= 2) {
+                            tab = when (topBarIndex) {
+                                0 -> Tab.GAMES
+                                1 -> Tab.MEDIA
+                                else -> Tab.NOTIFICATIONS
+                            }
                         }
                         true
                     }
 
                     AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
-                        topBarIndex = (topBarIndex + 1).coerceAtMost(2)
-                        tab = when (topBarIndex) {
-                            0 -> Tab.GAMES
-                            1 -> Tab.MEDIA
-                            else -> Tab.NOTIFICATIONS
+                        topBarIndex = (topBarIndex + 1).coerceAtMost(4)
+                        if (topBarIndex <= 2) {
+                            tab = when (topBarIndex) {
+                                0 -> Tab.GAMES
+                                1 -> Tab.MEDIA
+                                else -> Tab.NOTIFICATIONS
+                            }
                         }
                         true
                     }
@@ -919,10 +925,12 @@ fun PSHomeRoute(
                     AndroidKeyEvent.KEYCODE_DPAD_CENTER,
                     AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
                     AndroidKeyEvent.KEYCODE_BUTTON_A -> {
-                        tab = when (topBarIndex) {
-                            0 -> Tab.GAMES
-                            1 -> Tab.MEDIA
-                            else -> Tab.NOTIFICATIONS
+                        when (topBarIndex) {
+                            0 -> tab = Tab.GAMES
+                            1 -> tab = Tab.MEDIA
+                            2 -> tab = Tab.NOTIFICATIONS
+                            3 -> searchOpen = true
+                            4 -> onOpenSettings()
                         }
                         true
                     }

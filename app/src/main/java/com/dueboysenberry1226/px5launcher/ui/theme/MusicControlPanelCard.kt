@@ -25,6 +25,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,6 +41,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -267,7 +274,8 @@ fun MusicControlPanelCard(
             if (rawQueue.isNotEmpty() && curIdxInRaw < 0) {
                 val curNorm = normalizeTitle(controllerTitle)
                 val filtered = rawQueue.filter { normalizeTitle(it.title) != curNorm }
-                val prefixedNowPlaying = context.getString(R.string.music_now_playing_prefix, controllerTitle)
+                val prefixedNowPlaying =
+                    context.getString(R.string.music_now_playing_prefix, controllerTitle)
                 listOf(QueueItemUi(queueId = -1L, title = prefixedNowPlaying)) + filtered
             } else rawQueue
 
@@ -650,8 +658,10 @@ fun MusicControlPanelCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // ✅ egységes ikonok (nem emoji)
                 ControlChip(
-                    label = "◀◀",
+                    icon = Icons.Filled.SkipPrevious,
+                    contentDescription = "Previous",
                     selected = selected == Selected.PREV,
                     onClick = {
                         hClick()
@@ -661,7 +671,8 @@ fun MusicControlPanelCard(
                 )
 
                 ControlChip(
-                    label = if (isPlaying) "⏸" else "▶",
+                    icon = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    contentDescription = "Play/Pause",
                     selected = selected == Selected.PLAY_PAUSE,
                     onClick = {
                         hClick()
@@ -676,7 +687,8 @@ fun MusicControlPanelCard(
                 )
 
                 ControlChip(
-                    label = "▶▶",
+                    icon = Icons.Filled.SkipNext,
+                    contentDescription = "Next",
                     selected = selected == Selected.NEXT,
                     onClick = {
                         hClick()
@@ -687,6 +699,7 @@ fun MusicControlPanelCard(
 
                 Spacer(Modifier.weight(1f))
 
+                // marad szöveges, ez nem emoji
                 ControlChip(
                     label = "VOL−",
                     selected = selected == Selected.VOL_DOWN,
@@ -744,7 +757,6 @@ fun MusicControlPanelCard(
 
             Spacer(Modifier.height(10.dp))
 
-            // ✅ csak az aktuális pozíciót írjuk ki (a "ismeretlen hossz" eltűnik)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
                 Text(
                     text = formatMs(context, positionMs),
@@ -753,7 +765,6 @@ fun MusicControlPanelCard(
                     fontWeight = FontWeight.Medium
                 )
 
-                // ha van duration, akkor megmutatjuk, különben semmit (nincs "unknown")
                 if (durationMs > 0L) {
                     Spacer(Modifier.width(10.dp))
                     Text(
@@ -806,7 +817,13 @@ private enum class Selected {
 }
 
 @Composable
-private fun ControlChip(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun ControlChip(
+    label: String? = null,
+    icon: ImageVector? = null,
+    contentDescription: String? = null,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
     val shape = RoundedCornerShape(16.dp)
     val a = if (selected) 0.22f else 0.10f
     val b = if (selected) 0.55f else 0.18f
@@ -825,12 +842,24 @@ private fun ControlChip(label: String, selected: Boolean, onClick: () -> Unit) {
             .padding(horizontal = 14.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = label,
-            color = Color.White.copy(alpha = 0.88f),
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold
-        )
+        when {
+            icon != null -> {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = contentDescription,
+                    tint = Color.White.copy(alpha = 0.88f),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            !label.isNullOrBlank() -> {
+                Text(
+                    text = label,
+                    color = Color.White.copy(alpha = 0.88f),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
     }
 }
 
@@ -924,7 +953,6 @@ private fun QueuePanel(
                             .padding(horizontal = 10.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // ✅ csak cím – nincs "unknown duration"
                         Text(
                             text = item.title,
                             modifier = Modifier.weight(1f),
@@ -947,11 +975,12 @@ private fun QueuePanel(
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "⏭",
-                        color = Color.White.copy(alpha = 0.92f),
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.SemiBold
+                    // ✅ egységes ikon (nem emoji)
+                    Icon(
+                        imageVector = Icons.Filled.SkipNext,
+                        contentDescription = "Skipping",
+                        tint = Color.White.copy(alpha = 0.92f),
+                        modifier = Modifier.size(30.dp)
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
@@ -1000,7 +1029,6 @@ private fun SeekBar(
             .clip(shape)
             .background(Color.White.copy(alpha = bgA))
             .border(2.dp, Color.White.copy(alpha = borderA), shape)
-            // ✅ BUGFIX: 1 érintésre (touch-down) azonnal seekel oda
             .pointerInput(hasPermissionIssue, durationMs, selected) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)

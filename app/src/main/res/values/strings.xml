@@ -120,7 +120,7 @@
 
     <string name="homescreen_apps_title">Applications</string>
 
-    <string name="homescreen_action_play">Launch game</string>
+    <string name="homescreen_action_play">Launch app</string>
     <string name="homescreen_action_menu">⋯</string>
 
     <string name="homescreen_menu_pin">Pin</string>
@@ -278,7 +278,7 @@
     <string name="music_hint_enable_permission">A/Enter or click: enable permission</string>
     <string name="music_hint_skipping_cancel">Skipping… (B: cancel)</string>
     <string name="music_hint_seek_mode">Seek mode: DPAD ←/→ • Exit: B/Back</string>
-    <string name="music_hint_queue_autoskip">Right: next tracks (A: auto-skip)</string>
+    <string name="music_hint_queue_autoskip"> </string>
     <string name="music_hint_queue_next_songs">Right: next tracks</string>
     <string name="music_hint_strip_seek_mode">A on strip: seek mode</string>
 

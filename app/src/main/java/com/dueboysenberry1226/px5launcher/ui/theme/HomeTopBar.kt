@@ -1,17 +1,24 @@
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.dueboysenberry1226.px5launcher.ui
 
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -19,7 +26,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.data.Tab
-import com.dueboysenberry1226.px5launcher.ui.Haptics
 
 @Composable
 fun HomeTopBar(
@@ -28,9 +34,9 @@ fun HomeTopBar(
     onTabChange: (Tab) -> Unit,
     onSearch: () -> Unit,
     onSettings: () -> Unit,
-    onAccount: () -> Unit = {},
     vibrationEnabled: Boolean = true,
     topBarFocused: Boolean = false,
+    // 0..2 tabok, 3=search, 4=settings
     topBarIndex: Int = when (tab) {
         Tab.GAMES -> 0
         Tab.MEDIA -> 1
@@ -43,6 +49,9 @@ fun HomeTopBar(
     val mediaSelected = if (topBarFocused) topBarIndex == 1 else tab == Tab.MEDIA
     val notificationsSelected = if (topBarFocused) topBarIndex == 2 else tab == Tab.NOTIFICATIONS
 
+    val searchSelected = topBarFocused && topBarIndex == 3
+    val settingsSelected = topBarFocused && topBarIndex == 4
+
     val gamesUnderline = topBarFocused && topBarIndex == 0
     val mediaUnderline = topBarFocused && topBarIndex == 1
     val notificationsUnderline = topBarFocused && topBarIndex == 2
@@ -50,12 +59,11 @@ fun HomeTopBar(
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically // ✅ vissza a régi viselkedésre
     ) {
 
-        // LEFT SIDE (Tabs)
+        // LEFT SIDE (Tabs) - ✅ referencia magasság (szöveg ott marad ahol régen volt)
         Row(verticalAlignment = Alignment.CenterVertically) {
-
             PSTab(
                 text = stringResource(R.string.topbar_tab_apps),
                 selected = gamesSelected,
@@ -94,11 +102,16 @@ fun HomeTopBar(
             )
         }
 
-        // RIGHT SIDE (Icons + Clock)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-
+        // RIGHT SIDE (Icons + Clock) - ✅ mindet a tab szövegéhez igazítjuk
+        Row(
+            modifier = Modifier.padding(top = 0.dp), // 🔧 EZ AZ EGY CSAVAR: 0..3 dp között állítható
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             TopIcon(
-                symbol = "🔍",
+                icon = Icons.Filled.Search,
+                contentDescription = "Search",
+                selected = searchSelected,
+                topBarFocused = topBarFocused,
                 onClick = {
                     if (vibrationEnabled) Haptics.click(context)
                     onSearch()
@@ -108,20 +121,13 @@ fun HomeTopBar(
             Spacer(Modifier.width(10.dp))
 
             TopIcon(
-                symbol = "⚙️",
+                icon = Icons.Filled.Settings,
+                contentDescription = "Settings",
+                selected = settingsSelected,
+                topBarFocused = topBarFocused,
                 onClick = {
                     if (vibrationEnabled) Haptics.click(context)
                     onSettings()
-                }
-            )
-
-            Spacer(Modifier.width(10.dp))
-
-            TopIcon(
-                symbol = "🙂",
-                onClick = {
-                    if (vibrationEnabled) Haptics.click(context)
-                    onAccount()
                 }
             )
 
@@ -154,7 +160,7 @@ private fun PSTab(
         else -> 0.55f
     }
 
-    Box(
+    Column(
         modifier = Modifier
             .combinedClickable(
                 interactionSource = interactionSource,
@@ -162,49 +168,67 @@ private fun PSTab(
                 onClick = onClick,
                 onLongClick = { onLongPress?.invoke() }
             )
-            .padding(horizontal = 6.dp, vertical = 6.dp)
+            .padding(horizontal = 6.dp),
+        horizontalAlignment = Alignment.Start
     ) {
-        Column {
-            Text(
-                text = text,
-                color = Color.White.copy(alpha = textAlpha),
-                fontSize = 16.sp,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
-            )
+        Text(
+            text = text,
+            color = Color.White.copy(alpha = textAlpha),
+            fontSize = 16.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
+        )
 
-            Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(0.dp)) // kisebb mint volt
 
-            Box(
-                Modifier
-                    .height(2.dp)
-                    .width(if (underline) 46.dp else 0.dp)
-                    .background(if (underline) Color.White else Color.Transparent)
-            )
-        }
+        Box(
+            Modifier
+                .height(2.dp)
+                .width(if (underline) 46.dp else 0.dp)
+                .background(if (underline) Color.White else Color.Transparent)
+        )
     }
 }
 
+
 @Composable
 private fun TopIcon(
-    symbol: String,
+    icon: ImageVector,
+    contentDescription: String?,
+    selected: Boolean,
+    topBarFocused: Boolean,
     onClick: () -> Unit,
     onLongPress: (() -> Unit)? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    val shape = RoundedCornerShape(14.dp)
 
-    Text(
-        text = symbol,
-        fontSize = 16.sp,
-        color = Color.White.copy(alpha = 0.9f),
+    val bgA = if (selected) 0.18f else 0f
+    val borderA = if (selected) 0.55f else 0f
+    val iconA = when {
+        selected -> 0.92f
+        topBarFocused -> 0.55f
+        else -> 0.85f
+    }
+
+    Box(
         modifier = Modifier
-            .padding(horizontal = 8.dp, vertical = 6.dp)
-            .sizeIn(minWidth = 34.dp, minHeight = 34.dp)
-            .focusProperties { canFocus = false }
+            .padding(horizontal = 6.dp, vertical = 6.dp)
+            .clip(shape)
+            .background(Color.White.copy(alpha = bgA))
+            .border(2.dp, Color.White.copy(alpha = borderA), shape)
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
                 onLongClick = { onLongPress?.invoke() }
-            )
-    )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = Color.White.copy(alpha = iconA),
+            modifier = Modifier.size(18.dp)
+        )
+    }
 }

@@ -129,7 +129,7 @@
     <string name="homescreen_apps_title">Alkalmazások</string>
 
     <!-- Actions -->
-    <string name="homescreen_action_play">Játék indítása</string>
+    <string name="homescreen_action_play">App indítása</string>
     <string name="homescreen_action_menu">⋯</string>
 
     <!-- Menu -->
@@ -302,7 +302,7 @@
     <string name="music_hint_enable_permission">A/Enter vagy katt: engedély bekapcsolása</string>
     <string name="music_hint_skipping_cancel">Következőre lépés… (B: megszakít)</string>
     <string name="music_hint_seek_mode">Seek mód: DPAD ←/→ teker • Kilépés: B/Back</string>
-    <string name="music_hint_queue_autoskip">Jobbra: következők (A: auto-skip)</string>
+    <string name="music_hint_queue_autoskip"> </string>
     <string name="music_hint_queue_next_songs">Jobbra: következő számok</string>
     <string name="music_hint_strip_seek_mode">A a csíkon: seek mód</string>
 
