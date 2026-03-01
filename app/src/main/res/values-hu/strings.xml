@@ -368,5 +368,21 @@
     <string name="qs_tile_dnd">Ne zavarj</string>
     <string name="settings_vibration_strength_title">Vibráció erőssége</string>
     <string name="settings_vibration_strength_subtitle">0–5</string>
+    <string name="menu_pin">Kitűzés</string>
+    <string name="menu_unpin">Kitűzés eltávolítása</string>
+    <string name="menu_app_info">App infó</string>
+    <string name="menu_uninstall">Törlés</string>
+    <string name="menu_disable">Letiltás</string>
+
+    <string name="search_title">Keresés</string>
+    <string name="search_placeholder">Írd be az app nevét…</string>
+    <string name="search_no_results">Találatok itt fognak megjelenni.</string>
+
+    <string name="common_close">Bezár</string>
+    <string name="common_search">Keresés</string>
+    <string name="common_widget">Widget</string>
+
+    <string name="widget_picker_title">Widgetek</string>
+    <string name="widget_count">%1$d widget</string>
 
 </resources>

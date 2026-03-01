@@ -9,9 +9,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.data.LaunchableApp
 
 @Composable
@@ -19,60 +21,66 @@ fun HomeOverlays(
     searchOpen: Boolean,
     searchQuery: String,
     searchResults: List<LaunchableApp>,
-
     menuOpen: Boolean,
     isPinned: Boolean,
-
     canUninstall: Boolean,
     canDisable: Boolean,
-
     onSearchChange: (String) -> Unit,
     onSearchClose: () -> Unit,
     onSearchLaunch: (LaunchableApp) -> Unit,
-
     onTogglePin: () -> Unit,
     onAppInfo: () -> Unit,
     onUninstall: () -> Unit,
     onDisable: () -> Unit,
-
     onMenuClose: () -> Unit
 ) {
-    // ===== MENU =====
+
     DropdownMenu(
         expanded = menuOpen,
         onDismissRequest = onMenuClose
     ) {
         DropdownMenuItem(
-            text = { Text(if (isPinned) "Kitűzés eltávolítása" else "Kitűzés") },
-            onClick = { onTogglePin() } // ✅ NEM zárunk itt menüt!
+            text = {
+                Text(
+                    if (isPinned)
+                        stringResource(R.string.menu_unpin)
+                    else
+                        stringResource(R.string.menu_pin)
+                )
+            },
+            onClick = { onTogglePin() }
         )
 
         DropdownMenuItem(
-            text = { Text("App infó") },
-            onClick = { onAppInfo() } // ✅ NEM zárunk itt menüt!
+            text = { Text(stringResource(R.string.menu_app_info)) },
+            onClick = { onAppInfo() }
         )
 
         if (canUninstall) {
             DropdownMenuItem(
-                text = { Text("Törlés (uninstall)") },
-                onClick = { onUninstall() } // ✅ NEM zárunk itt menüt!
+                text = { Text(stringResource(R.string.menu_uninstall)) },
+                onClick = { onUninstall() }
             )
         } else if (canDisable) {
             DropdownMenuItem(
-                text = { Text("Letiltás") },
-                onClick = { onDisable() } // ✅ NEM zárunk itt menüt!
+                text = { Text(stringResource(R.string.menu_disable)) },
+                onClick = { onDisable() }
             )
         }
     }
 
-    // ===== SEARCH =====
     if (searchOpen) {
-        OverlayCard(title = "Keresés", onClose = onSearchClose) {
+        OverlayCard(
+            title = stringResource(R.string.search_title),
+            onClose = onSearchClose
+        ) {
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = onSearchChange,
                 singleLine = true,
-                placeholder = { Text("Írd be az app nevét…") },
+                placeholder = {
+                    Text(stringResource(R.string.search_placeholder))
+                },
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White,
@@ -89,7 +97,10 @@ fun HomeOverlays(
                     items(searchResults.size) { i ->
                         val a = searchResults[i]
                         AssistChip(
-                            onClick = { onSearchClose(); onSearchLaunch(a) },
+                            onClick = {
+                                onSearchClose()
+                                onSearchLaunch(a)
+                            },
                             label = { Text(a.label) },
                             colors = AssistChipDefaults.assistChipColors(
                                 containerColor = Color.White.copy(alpha = 0.10f),
@@ -100,7 +111,7 @@ fun HomeOverlays(
                 }
             } else {
                 Text(
-                    "Találatok itt fognak megjelenni.",
+                    stringResource(R.string.search_no_results),
                     color = Color.White.copy(alpha = 0.6f),
                     fontSize = 12.sp
                 )
@@ -134,9 +145,16 @@ private fun OverlayCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(title, color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        title,
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold
+                    )
                     TextButton(onClick = onClose) {
-                        Text("Bezár", color = Color.White.copy(alpha = 0.85f))
+                        Text(
+                            stringResource(R.string.common_close),
+                            color = Color.White.copy(alpha = 0.85f)
+                        )
                     }
                 }
                 Spacer(Modifier.height(10.dp))

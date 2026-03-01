@@ -339,5 +339,21 @@
     <string name="qs_tile_dnd">Do not disturb</string>
     <string name="settings_vibration_strength_title">Vibration strength</string>
     <string name="settings_vibration_strength_subtitle">0–5</string>
+    <string name="menu_pin">Pin</string>
+    <string name="menu_unpin">Unpin</string>
+    <string name="menu_app_info">App info</string>
+    <string name="menu_uninstall">Uninstall</string>
+    <string name="menu_disable">Disable</string>
+
+    <string name="search_title">Search</string>
+    <string name="search_placeholder">Type the app name…</string>
+    <string name="search_no_results">Results will appear here.</string>
+
+    <string name="common_close">Close</string>
+    <string name="common_search">Search</string>
+    <string name="common_widget">Widget</string>
+
+    <string name="widget_picker_title">Widgets</string>
+    <string name="widget_count">%1$d widget</string>
 
 </resources>

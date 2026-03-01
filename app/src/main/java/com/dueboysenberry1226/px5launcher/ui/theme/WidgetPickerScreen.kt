@@ -30,12 +30,14 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.ui.Haptics
 import kotlin.math.ceil
 import kotlin.math.max
@@ -58,7 +60,8 @@ class WidgetPickerState internal constructor(
     private val cellHeightDp: Dp,
     private val onPick: (AppWidgetProviderInfo, Int, Int) -> Unit,
     private val onBack: () -> Unit,
-    private val hapticClick: () -> Unit
+    private val hapticClick: () -> Unit,
+    private val widgetFallbackLabel: String
 ) {
     var query by mutableStateOf("")
         private set
@@ -86,7 +89,7 @@ class WidgetPickerState internal constructor(
         else grouped.mapNotNull { (pkg, list) ->
             val appLabel = safeAppLabel(pm, pkg).lowercase()
             val kept = list.filter { p ->
-                val wLabel = safeWidgetLabel(pm, p).lowercase()
+                val wLabel = safeWidgetLabel(pm, p, widgetFallbackLabel).lowercase()
                 appLabel.contains(q) || wLabel.contains(q) || pkg.lowercase().contains(q)
             }
             if (kept.isEmpty()) null else pkg to kept
@@ -98,7 +101,7 @@ class WidgetPickerState internal constructor(
             filtered.forEach { (pkg, list) ->
                 add(VisibleItem.Header(pkg = pkg, count = list.size))
                 if (expandedPkgs.contains(pkg)) {
-                    list.sortedBy { safeWidgetLabel(pm, it).lowercase() }.forEach { p ->
+                    list.sortedBy { safeWidgetLabel(pm, it, widgetFallbackLabel).lowercase() }.forEach { p ->
                         val (sx, sy) = inferSpan(p, cellWidthDp.value, cellHeightDp.value)
                         add(VisibleItem.Widget(pkg = pkg, provider = p, spanX = sx, spanY = sy))
                     }
@@ -228,12 +231,15 @@ fun rememberWidgetPickerState(
     vibrationEnabled: Boolean = true
 ): WidgetPickerState {
     val context = LocalContext.current
+    val widgetFallbackLabel = stringResource(R.string.common_widget)
 
     val hapticClick = remember(vibrationEnabled, context) {
         { if (vibrationEnabled) Haptics.click(context) }
     }
 
-    return remember(pm, appWidgetManager, cellWidthDp, cellHeightDp, onPick, onBack, hapticClick) {
+    return remember(
+        pm, appWidgetManager, cellWidthDp, cellHeightDp, onPick, onBack, hapticClick, widgetFallbackLabel
+    ) {
         WidgetPickerState(
             pm = pm,
             appWidgetManager = appWidgetManager,
@@ -241,7 +247,8 @@ fun rememberWidgetPickerState(
             cellHeightDp = cellHeightDp,
             onPick = onPick,
             onBack = onBack,
-            hapticClick = hapticClick
+            hapticClick = hapticClick,
+            widgetFallbackLabel = widgetFallbackLabel
         )
     }
 }
@@ -268,13 +275,13 @@ fun WidgetPickerScreen(
             .onPreviewKeyEvent { state.handleKey(it) }
             .padding(16.dp)
     ) {
-        // ---- HEADER: cím + jobb felső "Vissza" gomb ----
+        // ---- HEADER: cím + jobb felső X ----
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Widgets",
+                text = stringResource(R.string.widget_picker_title),
                 style = MaterialTheme.typography.titleLarge,
                 color = cs.onBackground,
                 fontWeight = FontWeight.SemiBold,
@@ -296,7 +303,7 @@ fun WidgetPickerScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "✕",
+                    text = "✕", // ez szimbólum, nem kell fordítani
                     color = cs.onSurface,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold
@@ -309,7 +316,7 @@ fun WidgetPickerScreen(
         SearchBarLike(
             value = state.query,
             onValueChange = state::updateQuery,
-            placeholder = "Search",
+            placeholder = stringResource(R.string.common_search),
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -378,7 +385,7 @@ private fun SearchBarLike(
         onValueChange = onValueChange,
         singleLine = true,
         placeholder = { Text(placeholder) },
-        leadingIcon = { Text("🔍") },
+        leadingIcon = { Text("🔍") }, // ikon, nem fordítandó
         shape = shape,
         colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = cs.surface,
@@ -432,7 +439,7 @@ private fun AppHeaderRow(
                     modifier = Modifier.size(24.dp)
                 )
             } else {
-                Text("□", color = cs.onSurfaceVariant)
+                Text("□", color = cs.onSurfaceVariant) // ikon, nem fordítandó
             }
         }
 
@@ -447,7 +454,7 @@ private fun AppHeaderRow(
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = "$count widget",
+                text = stringResource(R.string.widget_count, count),
                 style = MaterialTheme.typography.bodySmall,
                 color = cs.onSurface.copy(alpha = 0.75f)
             )
@@ -456,7 +463,7 @@ private fun AppHeaderRow(
         Spacer(Modifier.width(12.dp))
 
         Text(
-            text = if (expanded) "▴" else "▾",
+            text = if (expanded) "▴" else "▾", // ikon, nem fordítandó
             color = cs.onSurface.copy(alpha = 0.75f),
             style = MaterialTheme.typography.titleMedium
         )
@@ -476,7 +483,12 @@ private fun WidgetRow(
     val shape = RoundedCornerShape(14.dp)
     val interaction = remember { MutableInteractionSource() }
 
-    val label = remember(provider.provider) { safeWidgetLabel(pm, provider) }
+    val fallback = stringResource(R.string.common_widget)
+
+    val label = remember(provider.provider, fallback) {
+        safeWidgetLabel(pm, provider, fallback)
+    }
+
     val sizeText = remember(spanX, spanY) { "${spanX}×${spanY}" }
 
     val pkg = provider.provider.packageName
@@ -557,11 +569,16 @@ private fun safeAppLabel(pm: PackageManager, pkg: String): String {
     }.getOrDefault(pkg)
 }
 
-private fun safeWidgetLabel(pm: PackageManager, info: AppWidgetProviderInfo): String {
+private fun safeWidgetLabel(
+    pm: PackageManager,
+    info: AppWidgetProviderInfo,
+    widgetFallbackLabel: String
+): String {
     return runCatching {
         info.loadLabel(pm)?.toString()?.trim().orEmpty()
     }.getOrDefault("").ifBlank {
-        runCatching { info.provider.className.substringAfterLast('.') }.getOrDefault("Widget")
+        runCatching { info.provider.className.substringAfterLast('.') }.getOrDefault(widgetFallbackLabel)
+            .ifBlank { widgetFallbackLabel }
     }
 }
 
