@@ -384,5 +384,8 @@
 
     <string name="widget_picker_title">Widgetek</string>
     <string name="widget_count">%1$d widget</string>
+    <string name="settings_experimental_notice">
+        Teszt Verzió! Nagy része a beállításoknak és kapcsolóknak még nem működőképes.
+</string>
 
 </resources>

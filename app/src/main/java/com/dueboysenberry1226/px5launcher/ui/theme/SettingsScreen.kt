@@ -681,12 +681,25 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = stringResource(R.string.common_settings),
-                    color = Color.White,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.common_settings),
+                        color = Color.White,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    Spacer(Modifier.width(10.dp))
+
+                    Text(
+                        text = stringResource(R.string.settings_experimental_notice),
+                        color = Color.White.copy(alpha = 0.45f),
+                        fontSize = 13.sp
+                    )
+                }
+
                 Text(
                     text = stringResource(R.string.common_back_hint),
                     color = Color.White.copy(alpha = 0.65f),

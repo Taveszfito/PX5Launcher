@@ -355,5 +355,8 @@
 
     <string name="widget_picker_title">Widgets</string>
     <string name="widget_count">%1$d widget</string>
+    <string name="settings_experimental_notice">
+       Test Version! Most settings and switches are not fully functional yet.
+</string>
 
 </resources>
