@@ -41,6 +41,30 @@ object InputController {
                 nk.keyCode in RB_CODES
     }
 
+    fun isLeftDown(e: KeyEvent): Boolean {
+        val nk = e.nativeKeyEvent
+        return nk.action == AndroidKeyEvent.ACTION_DOWN &&
+                nk.keyCode == AndroidKeyEvent.KEYCODE_DPAD_LEFT
+    }
+
+    fun isUpDown(e: KeyEvent): Boolean {
+        val nk = e.nativeKeyEvent
+        return nk.action == AndroidKeyEvent.ACTION_DOWN &&
+                nk.keyCode == AndroidKeyEvent.KEYCODE_DPAD_UP
+    }
+
+    fun isRightDown(e: KeyEvent): Boolean {
+        val nk = e.nativeKeyEvent
+        return nk.action == AndroidKeyEvent.ACTION_DOWN &&
+                nk.keyCode == AndroidKeyEvent.KEYCODE_DPAD_RIGHT
+    }
+
+    fun isDownDown(e: KeyEvent): Boolean {
+        val nk = e.nativeKeyEvent
+        return nk.action == AndroidKeyEvent.ACTION_DOWN &&
+                nk.keyCode == AndroidKeyEvent.KEYCODE_DPAD_DOWN
+    }
+
     fun route(
         e: KeyEvent,
         state: State,

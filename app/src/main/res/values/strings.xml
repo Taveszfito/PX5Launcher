@@ -337,5 +337,7 @@
     <string name="qs_tile_airplane">Airplane</string>
     <string name="qs_tile_location">Location</string>
     <string name="qs_tile_dnd">Do not disturb</string>
+    <string name="settings_vibration_strength_title">Vibration strength</string>
+    <string name="settings_vibration_strength_subtitle">0–5</string>
 
 </resources>

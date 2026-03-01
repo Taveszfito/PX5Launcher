@@ -366,5 +366,7 @@
     <string name="qs_tile_airplane">Repülő</string>
     <string name="qs_tile_location">Hely</string>
     <string name="qs_tile_dnd">Ne zavarj</string>
+    <string name="settings_vibration_strength_title">Vibráció erőssége</string>
+    <string name="settings_vibration_strength_subtitle">0–5</string>
 
 </resources>

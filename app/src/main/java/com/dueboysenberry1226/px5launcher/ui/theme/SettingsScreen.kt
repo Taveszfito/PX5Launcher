@@ -40,7 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource // ✅ added
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -54,6 +54,7 @@ import kotlin.math.max
 private enum class FocusZone { LEFT, RIGHT }
 
 private sealed class SettingRow(val title: String, val subtitle: String? = null) {
+
     class Toggle(
         title: String,
         subtitle: String? = null,
@@ -61,7 +62,7 @@ private sealed class SettingRow(val title: String, val subtitle: String? = null)
         val set: suspend (Boolean) -> Unit
     ) : SettingRow(title, subtitle)
 
-    class SliderRow(
+    class ExpandableSliderRow(
         title: String,
         subtitle: String? = null,
         val min: Int,
@@ -86,6 +87,14 @@ private sealed class SettingRow(val title: String, val subtitle: String? = null)
     ) : SettingRow(title, subtitle)
 }
 
+private fun snapToStep(raw: Int, min: Int, max: Int, step: Int): Int {
+    if (step <= 1) return raw.coerceIn(min, max)
+    val clamped = raw.coerceIn(min, max)
+    val offset = clamped - min
+    val snapped = ((offset + step / 2) / step) * step + min
+    return snapped.coerceIn(min, max)
+}
+
 @Composable
 fun SettingsScreen(
     onBackToHome: () -> Unit,
@@ -100,7 +109,6 @@ fun SettingsScreen(
     val clock24h by settingsRepo.clock24hFlow.collectAsState(initial = true)
     val showBigName by settingsRepo.showBigAppNameFlow.collectAsState(initial = true)
     val accentFromIcon by settingsRepo.accentFromAppIconFlow.collectAsState(initial = true)
-    //val wallpaperUri by settingsRepo.wallpaperUriFlow.collectAsState(initial = null)
     val languageCode by settingsRepo.languageCodeFlow.collectAsState(initial = "system")
 
     val ambientEnabled by settingsRepo.ambientEnabledFlow.collectAsState(initial = false)
@@ -113,26 +121,22 @@ fun SettingsScreen(
 
     val buttonLayout by settingsRepo.buttonLayoutFlow.collectAsState(initial = ButtonLayout.PS)
     val vibrationEnabled by settingsRepo.vibrationEnabledFlow.collectAsState(initial = true)
+    val vibrationStrength by settingsRepo.vibrationStrengthFlow.collectAsState(initial = 1)
 
-    val allAppsColumns by settingsRepo.allAppsColumnsFlow.collectAsState(initial = 6)
+    val allAppsColumns by settingsRepo.allAppsColumnsFlow.collectAsState(initial = 4)
     val recentsMax by settingsRepo.recentsMaxFlow.collectAsState(initial = 30)
 
-    // ---- pickers ----
-    // val wallpaperPicker = rememberLauncherForActivityResult(
-//     ActivityResultContracts.OpenDocument()
-// ) { uri: Uri? ->
-//     if (uri != null) {
-//         runCatching {
-//             context.contentResolver.takePersistableUriPermission(
-//                 uri,
-//                 Intent.FLAG_GRANT_READ_URI_PERMISSION
-//             )
-//         }
-//         scope.launch {
-//             settingsRepo.setWallpaperUri(uri.toString())
-//         }
-//     }
-// }
+    fun hClick() {
+        if (vibrationEnabled) Haptics.click(context)
+    }
+    fun hTick() {
+        if (vibrationEnabled) Haptics.tick(context)
+    }
+
+    // ✅ Globális haptics erősség bekötés
+    LaunchedEffect(vibrationStrength) {
+        Haptics.setStrength(vibrationStrength)
+    }
 
     val ambientPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) {
@@ -155,29 +159,23 @@ fun SettingsScreen(
         stringResource(R.string.settings_category_permissions),
         stringResource(R.string.settings_category_about)
     )
-    val backIndexLeft = categories.size // külön “Vissza” elem
+    val backIndexLeft = categories.size
 
-    // bal oldali kijelölés (kategória + vissza)
     var leftIndex by remember { mutableIntStateOf(0) }
 
-    // jobb oldal
     var catIndex by remember { mutableIntStateOf(0) }
     var rowIndex by remember { mutableIntStateOf(0) }
     var focusZone by remember { mutableStateOf(FocusZone.LEFT) }
 
-    // expand state (csak toggle/picker)
     var expandedRowIndex by remember { mutableStateOf<Int?>(null) }
     var expandedOptionIndex by remember { mutableIntStateOf(0) }
 
-    // ✅ AUTO-SCROLL state
     val rightListState = rememberLazyListState()
     var rightAutoScrollTick by remember { mutableIntStateOf(0) }
+    val leftListState = rememberLazyListState()
 
-    // ✅ Root focus: hogy a DPAD/ENTER eventeket biztosan megkapd TV-n is
     val rootFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        rootFocusRequester.requestFocus()
-    }
+    LaunchedEffect(Unit) { rootFocusRequester.requestFocus() }
 
     val languageOptions = listOf(
         stringResource(R.string.common_system),
@@ -190,6 +188,7 @@ fun SettingsScreen(
         "en" -> 2
         else -> 0
     }
+
     fun codeFromLangIndex(i: Int): String = when (i) {
         1 -> "hu"
         2 -> "en"
@@ -230,11 +229,10 @@ fun SettingsScreen(
         return enabled.contains(target)
     }
 
-    // ---- row builders ----
     fun toggle(title: String, subtitle: String? = null, get: () -> Boolean, set: suspend (Boolean) -> Unit) =
         SettingRow.Toggle(title, subtitle, get, set)
 
-    fun slider(
+    fun expandableSlider(
         title: String,
         subtitle: String? = null,
         min: Int,
@@ -242,7 +240,7 @@ fun SettingsScreen(
         step: Int,
         get: () -> Int,
         set: suspend (Int) -> Unit
-    ) = SettingRow.SliderRow(title, subtitle, min, max, step, get, set)
+    ) = SettingRow.ExpandableSliderRow(title, subtitle, min, max, step, get, set)
 
     fun action(title: String, subtitle: String? = null, onClick: suspend () -> Unit) =
         SettingRow.Action(title, subtitle, onClick)
@@ -255,7 +253,6 @@ fun SettingsScreen(
         setIndex: suspend (Int) -> Unit
     ) = SettingRow.Picker(title, subtitle, options, getIndex, setIndex)
 
-    // ✅ mindig frissül kategóriaváltásra
     val rowsForCategory: List<SettingRow> = when (catIndex) {
         0 -> listOf(
             toggle(
@@ -276,14 +273,6 @@ fun SettingsScreen(
                 { accentFromIcon },
                 { settingsRepo.setAccentFromAppIcon(it) }
             ),
-            // action(
-//     stringResource(R.string.settings_wallpaper_title),
-//     wallpaperUri?.let {
-//         stringResource(R.string.common_selected)
-//     } ?: stringResource(R.string.common_not_selected)
-// ) {
-//     wallpaperPicker.launch(arrayOf("image/*"))
-// },
             picker(
                 stringResource(R.string.settings_language_title),
                 stringResource(R.string.settings_language_subtitle),
@@ -297,9 +286,7 @@ fun SettingsScreen(
             action(
                 stringResource(R.string.settings_widgets_reset_title),
                 stringResource(R.string.settings_widgets_reset_subtitle)
-            ) {
-                widgetsRepo.clearAll()
-            }
+            ) { widgetsRepo.clearAll() }
         )
 
         1 -> listOf(
@@ -315,7 +302,8 @@ fun SettingsScreen(
                 { ambientMuted },
                 { settingsRepo.setAmbientMuted(it) }
             ),
-            slider(
+            // ✅ MOST MÁR EXPANDABLE SLIDER
+            expandableSlider(
                 stringResource(R.string.settings_ambient_volume_title),
                 "0-100",
                 0, 100, 5,
@@ -325,16 +313,15 @@ fun SettingsScreen(
             action(
                 stringResource(R.string.settings_ambient_change_title),
                 ambientSoundUri?.let { stringResource(R.string.common_selected) } ?: stringResource(R.string.common_not_selected)
-            ) {
-                ambientPicker.launch(arrayOf("audio/*"))
-            },
+            ) { ambientPicker.launch(arrayOf("audio/*")) },
             toggle(
                 stringResource(R.string.settings_click_sound_title),
                 stringResource(R.string.settings_click_sound_subtitle),
                 { clickEnabled },
                 { settingsRepo.setClickEnabled(it) }
             ),
-            slider(
+            // ✅ MOST MÁR EXPANDABLE SLIDER
+            expandableSlider(
                 stringResource(R.string.settings_click_volume_title),
                 "0-100",
                 0, 100, 5,
@@ -373,18 +360,33 @@ fun SettingsScreen(
                 stringResource(R.string.settings_vibration_subtitle),
                 { vibrationEnabled },
                 { settingsRepo.setVibrationEnabled(it) }
+            ),
+            expandableSlider(
+                title = stringResource(R.string.settings_vibration_strength_title),
+                subtitle = stringResource(R.string.settings_vibration_strength_subtitle),
+                min = 0,
+                max = 5,
+                step = 1,
+                get = { vibrationStrength },
+                set = { newValue ->
+                    val v = newValue.coerceIn(0, 5)
+                    settingsRepo.setVibrationStrength(v)
+                    if (v == 0) settingsRepo.setVibrationEnabled(false) else settingsRepo.setVibrationEnabled(true)
+                }
             )
         )
 
         3 -> listOf(
-            slider(
+            // ✅ MOST MÁR EXPANDABLE SLIDER
+            expandableSlider(
                 stringResource(R.string.settings_allapps_columns_title),
-                "3 - 10",
-                3, 10, 1,
+                "2 - 5",
+                2, 5, 1,
                 { allAppsColumns },
                 { settingsRepo.setAllAppsColumns(it) }
             ),
-            slider(
+            // ✅ MOST MÁR EXPANDABLE SLIDER
+            expandableSlider(
                 stringResource(R.string.settings_recents_max_title),
                 stringResource(R.string.settings_recents_max_subtitle),
                 5, 200, 5,
@@ -424,21 +426,23 @@ fun SettingsScreen(
         }
     }
 
-    // kategóriaváltáskor: resetek
     fun selectCategory(newCat: Int) {
         catIndex = newCat.coerceIn(0, categories.lastIndex)
         rowIndex = 0
         expandedRowIndex = null
         expandedOptionIndex = 0
         clampRowIndex()
-        rightAutoScrollTick++ // ✅ kategória váltáskor scroll a kijelölt sorra
+        rightAutoScrollTick++
     }
 
-    LaunchedEffect(catIndex, rowsForCategory.size) {
-        clampRowIndex()
+    LaunchedEffect(catIndex, rowsForCategory.size) { clampRowIndex() }
+
+    LaunchedEffect(leftIndex, focusZone) {
+        if (focusZone == FocusZone.LEFT && leftIndex in 0..categories.lastIndex) {
+            leftListState.animateScrollToItem(leftIndex)
+        }
     }
 
-    // ✅ AUTO-SCROLL jobboldalon (csak tick-re, nem expandre)
     LaunchedEffect(catIndex, rightAutoScrollTick, focusZone) {
         if (focusZone == FocusZone.RIGHT) {
             val target = rowIndex.coerceIn(0, max(0, rowsForCategory.lastIndex))
@@ -451,11 +455,15 @@ fun SettingsScreen(
         when (row) {
             is SettingRow.Toggle -> {
                 expandedRowIndex = index
-                expandedOptionIndex = if (row.get()) 1 else 0 // 0=KI, 1=BE
+                expandedOptionIndex = if (row.get()) 1 else 0
             }
             is SettingRow.Picker -> {
                 expandedRowIndex = index
                 expandedOptionIndex = row.getIndex().coerceIn(0, row.options.lastIndex)
+            }
+            is SettingRow.ExpandableSliderRow -> {
+                expandedRowIndex = index
+                expandedOptionIndex = row.get().coerceIn(row.min, row.max)
             }
             else -> {
                 expandedRowIndex = null
@@ -469,9 +477,6 @@ fun SettingsScreen(
         expandedOptionIndex = 0
     }
 
-    /**
-     * ✅ FIX: paraméterből commit-olunk, nem a (még nem frissült) state-ből.
-     */
     fun commitExpandedSelection(forRowIndex: Int? = null, optionIndex: Int? = null) {
         val idx = forRowIndex ?: expandedRowIndex ?: return
         val row = rowsForCategory.getOrNull(idx) ?: return
@@ -479,17 +484,13 @@ fun SettingsScreen(
 
         scope.launch {
             when (row) {
-                is SettingRow.Toggle -> {
-                    val value = (opt == 1)
-                    row.set(value)
-                }
-                is SettingRow.Picker -> {
-                    val value = opt.coerceIn(0, row.options.lastIndex)
-                    row.setIndex(value)
-                }
+                is SettingRow.Toggle -> row.set(opt == 1)
+                is SettingRow.Picker -> row.setIndex(opt.coerceIn(0, row.options.lastIndex))
+                is SettingRow.ExpandableSliderRow -> row.set(opt.coerceIn(row.min, row.max))
                 else -> Unit
             }
         }
+        // Toggle/Picker esetén csukjuk, slider esetén maradhatna – de egységesen csukjuk Enterre.
         collapseExpanded()
     }
 
@@ -497,13 +498,24 @@ fun SettingsScreen(
         val nk = e.nativeKeyEvent
         if (nk.action != AndroidKeyEvent.ACTION_DOWN) return false
 
-        // ✅ HAPTIC CLICK (független a logikától)
+        val isExpanded = (expandedRowIndex == rowIndex)
+        val currentRow = rowsForCategory.getOrNull(rowIndex)
+
+        // ✅ Slider ütközőknél TICK, máshol CLICK
+        val isSliderStepKey =
+            focusZone == FocusZone.RIGHT &&
+                    (nk.keyCode == AndroidKeyEvent.KEYCODE_DPAD_LEFT || nk.keyCode == AndroidKeyEvent.KEYCODE_DPAD_RIGHT) &&
+                    (isExpanded && currentRow is SettingRow.ExpandableSliderRow)
+
         if (vibrationEnabled) {
             when (nk.keyCode) {
+                AndroidKeyEvent.KEYCODE_DPAD_LEFT,
+                AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    if (isSliderStepKey) Haptics.tick(context) else Haptics.click(context)
+                }
+
                 AndroidKeyEvent.KEYCODE_DPAD_UP,
                 AndroidKeyEvent.KEYCODE_DPAD_DOWN,
-                AndroidKeyEvent.KEYCODE_DPAD_LEFT,
-                AndroidKeyEvent.KEYCODE_DPAD_RIGHT,
                 AndroidKeyEvent.KEYCODE_DPAD_CENTER,
                 AndroidKeyEvent.KEYCODE_ENTER,
                 AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
@@ -513,10 +525,10 @@ fun SettingsScreen(
             }
         }
 
-        // back mindig Home
         when (nk.keyCode) {
             AndroidKeyEvent.KEYCODE_BACK,
             AndroidKeyEvent.KEYCODE_BUTTON_B -> {
+                hClick()
                 onBackToHome()
                 return true
             }
@@ -559,26 +571,23 @@ fun SettingsScreen(
         }
 
         // RIGHT zone
-        val isExpanded = (expandedRowIndex == rowIndex)
-
         when (nk.keyCode) {
+
             AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
                 if (isExpanded) {
-                    val row = rowsForCategory.getOrNull(rowIndex)
-                    val maxOpt = when (row) {
-                        is SettingRow.Toggle -> 1
-                        is SettingRow.Picker -> row.options.lastIndex
-                        else -> 0
-                    }
-                    expandedOptionIndex =
-                        (expandedOptionIndex - 1).coerceAtLeast(0).coerceIn(0, maxOpt)
-                    return true
-                }
+                    when (val row = currentRow) {
+                        is SettingRow.Toggle -> expandedOptionIndex =
+                            (expandedOptionIndex - 1).coerceAtLeast(0).coerceIn(0, 1)
 
-                val row = rowsForCategory.getOrNull(rowIndex)
-                if (row is SettingRow.SliderRow) {
-                    scope.launch {
-                        row.set((row.get() - row.step).coerceAtLeast(row.min))
+                        is SettingRow.Picker -> expandedOptionIndex =
+                            (expandedOptionIndex - 1).coerceAtLeast(0).coerceIn(0, row.options.lastIndex)
+
+                        is SettingRow.ExpandableSliderRow -> {
+                            expandedOptionIndex = (expandedOptionIndex - row.step).coerceIn(row.min, row.max)
+                            scope.launch { row.set(expandedOptionIndex) }
+                        }
+
+                        else -> {}
                     }
                     return true
                 }
@@ -590,25 +599,17 @@ fun SettingsScreen(
 
             AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
                 if (isExpanded) {
-                    val row = rowsForCategory.getOrNull(rowIndex)
-                    val maxOpt = when (row) {
-                        is SettingRow.Toggle -> 1
-                        is SettingRow.Picker -> row.options.lastIndex
-                        else -> 0
-                    }
-                    expandedOptionIndex =
-                        (expandedOptionIndex + 1).coerceAtMost(maxOpt)
-                    return true
-                }
-
-                val row = rowsForCategory.getOrNull(rowIndex)
-                if (row is SettingRow.SliderRow) {
-                    scope.launch {
-                        row.set((row.get() + row.step).coerceAtMost(row.max))
+                    when (val row = currentRow) {
+                        is SettingRow.Toggle -> expandedOptionIndex = (expandedOptionIndex + 1).coerceAtMost(1)
+                        is SettingRow.Picker -> expandedOptionIndex = (expandedOptionIndex + 1).coerceAtMost(row.options.lastIndex)
+                        is SettingRow.ExpandableSliderRow -> {
+                            expandedOptionIndex = (expandedOptionIndex + row.step).coerceIn(row.min, row.max)
+                            scope.launch { row.set(expandedOptionIndex) }
+                        }
+                        else -> {}
                     }
                     return true
                 }
-
                 return true
             }
 
@@ -637,14 +638,17 @@ fun SettingsScreen(
                     return true
                 }
 
-                if (row is SettingRow.SliderRow) return true
-
                 if (row is SettingRow.Action) {
                     scope.launch { row.onClick() }
                     return true
                 }
 
-                expandRowIfPossible(rowIndex)
+                // ✅ minden slider is ide esik: Enter -> nyit/zár
+                if (row is SettingRow.Toggle || row is SettingRow.Picker || row is SettingRow.ExpandableSliderRow) {
+                    if (expandedRowIndex == rowIndex) collapseExpanded() else expandRowIfPossible(rowIndex)
+                    return true
+                }
+
                 return true
             }
         }
@@ -666,7 +670,6 @@ fun SettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(bg)
-            // ✅ TV/DPAD: legyen fókuszolható, különben néha nem jönnek a key eventek
             .focusRequester(rootFocusRequester)
             .focusable()
             .onPreviewKeyEvent { onKey(it) }
@@ -705,8 +708,9 @@ fun SettingsScreen(
                 ) {
                     Column(Modifier.fillMaxSize().padding(10.dp)) {
                         LazyColumn(
+                            state = leftListState,
                             modifier = Modifier.weight(1f),
-                            userScrollEnabled = false
+                            userScrollEnabled = true
                         ) {
                             itemsIndexed(categories) { i, title ->
                                 val selected = (i == leftIndex)
@@ -721,11 +725,11 @@ fun SettingsScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = 10.dp, horizontal = 10.dp)
-                                        // ✅ RIPPLE OFF (TV/DPAD bugok elkerülése)
                                         .clickable(
                                             interactionSource = remember { MutableInteractionSource() },
                                             indication = null
                                         ) {
+                                            hClick()
                                             leftIndex = i
                                             selectCategory(i)
                                             focusZone = FocusZone.RIGHT
@@ -736,7 +740,6 @@ fun SettingsScreen(
 
                         Spacer(Modifier.height(10.dp))
 
-                        // ✅ dedikált Vissza bal alul (NEM NYÚLIK)
                         val backSelected = (leftIndex == backIndexLeft && focusZone == FocusZone.LEFT)
                         val backBg = if (backSelected) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.08f)
 
@@ -746,11 +749,13 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(56.dp)
-                                // ✅ RIPPLE OFF
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = null
-                                ) { onBackToHome() }
+                                ) {
+                                    hClick()
+                                    onBackToHome()
+                                }
                         ) {
                             Box(
                                 Modifier
@@ -788,28 +793,35 @@ fun SettingsScreen(
                             val expanded = (expandedRowIndex == i)
 
                             SettingRowCard(
+                                context = context,
+                                vibrationEnabled = vibrationEnabled,
                                 row = row,
                                 selected = selected,
                                 expanded = expanded,
                                 expandedOptionIndex = expandedOptionIndex,
                                 onClickRow = {
+                                    hClick()
                                     focusZone = FocusZone.RIGHT
                                     rowIndex = i
 
                                     when (row) {
                                         is SettingRow.Action -> scope.launch { row.onClick() }
-                                        is SettingRow.SliderRow -> Unit
                                         is SettingRow.Toggle,
-                                        is SettingRow.Picker -> {
+                                        is SettingRow.Picker,
+                                        is SettingRow.ExpandableSliderRow -> {
                                             if (expanded) collapseExpanded() else expandRowIfPossible(i)
                                         }
                                     }
                                 },
-                                onSliderChange = { v ->
-                                    if (row is SettingRow.SliderRow) scope.launch { row.set(v) }
+                                onExpandableSliderChange = { v ->
+                                    if (row is SettingRow.ExpandableSliderRow) {
+                                        expandedRowIndex = i
+                                        expandedOptionIndex = v.coerceIn(row.min, row.max)
+                                        scope.launch { row.set(expandedOptionIndex) }
+                                    }
                                 },
                                 onPickOption = { opt ->
-                                    // ✅ FIX: közvetlen commit paraméterrel (nem state race)
+                                    hClick()
                                     expandedRowIndex = i
                                     expandedOptionIndex = opt
                                     commitExpandedSelection(forRowIndex = i, optionIndex = opt)
@@ -827,14 +839,20 @@ fun SettingsScreen(
 
 @Composable
 private fun SettingRowCard(
+    context: Context,
+    vibrationEnabled: Boolean,
     row: SettingRow,
     selected: Boolean,
     expanded: Boolean,
     expandedOptionIndex: Int,
     onClickRow: () -> Unit,
-    onSliderChange: (Int) -> Unit,
+    onExpandableSliderChange: (Int) -> Unit,
     onPickOption: (Int) -> Unit
 ) {
+    fun hTick() {
+        if (vibrationEnabled) Haptics.tick(context)
+    }
+
     val baseBg = if (selected) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.08f)
 
     Card(
@@ -842,7 +860,6 @@ private fun SettingRowCard(
         shape = RoundedCornerShape(18.dp),
         modifier = Modifier
             .fillMaxWidth()
-            // ✅ RIPPLE OFF (TV/DPAD)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
@@ -903,66 +920,99 @@ private fun SettingRowCard(
                         )
                     }
 
-                    is SettingRow.SliderRow -> {
+                    is SettingRow.ExpandableSliderRow -> {
                         val v = row.get().coerceIn(row.min, row.max)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = v.toString(),
-                                color = Color.White.copy(alpha = 0.9f),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.width(36.dp)
-                            )
-                            Spacer(Modifier.width(10.dp))
-                            Slider(
-                                value = v.toFloat(),
-                                onValueChange = { onSliderChange(it.toInt()) },
-                                valueRange = row.min.toFloat()..row.max.toFloat(),
-                                steps = (((row.max - row.min) / row.step).coerceAtLeast(1)) - 1,
-                                modifier = Modifier.width(280.dp)
-                            )
-                        }
+                        Text(
+                            text = v.toString(),
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
                 }
             }
 
             AnimatedVisibility(
-                visible = expanded && (row is SettingRow.Toggle || row is SettingRow.Picker),
+                visible = expanded && (row is SettingRow.Toggle || row is SettingRow.Picker || row is SettingRow.ExpandableSliderRow),
                 enter = fadeIn(tween(120)),
                 exit = fadeOut(tween(120))
             ) {
                 Column(Modifier.fillMaxWidth()) {
                     Spacer(Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        when (row) {
-                            is SettingRow.Toggle -> {
+
+                    when (row) {
+                        is SettingRow.Toggle -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
                                 OptionButton(
+                                    context = context,
+                                    vibrationEnabled = vibrationEnabled,
                                     text = stringResource(R.string.common_off),
                                     selected = expandedOptionIndex == 0,
                                     onClick = { onPickOption(0) }
                                 )
                                 OptionButton(
+                                    context = context,
+                                    vibrationEnabled = vibrationEnabled,
                                     text = stringResource(R.string.common_on),
                                     selected = expandedOptionIndex == 1,
                                     onClick = { onPickOption(1) }
                                 )
                             }
+                        }
 
-                            is SettingRow.Picker -> {
+                        is SettingRow.Picker -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
                                 row.options.forEachIndexed { idx, label ->
                                     OptionButton(
+                                        context = context,
+                                        vibrationEnabled = vibrationEnabled,
                                         text = label,
                                         selected = expandedOptionIndex == idx,
                                         onClick = { onPickOption(idx) }
                                     )
                                 }
                             }
-
-                            else -> Unit
                         }
+
+                        is SettingRow.ExpandableSliderRow -> {
+                            val v = expandedOptionIndex.coerceIn(row.min, row.max)
+                            var lastTickValue by remember(row.title) { mutableIntStateOf(v) }
+                            LaunchedEffect(v) { lastTickValue = v }
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = v.toString(),
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.width(36.dp)
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Slider(
+                                    value = v.toFloat(),
+                                    onValueChange = {
+                                        val raw = it.toInt()
+                                        val snapped = snapToStep(raw, row.min, row.max, row.step)
+                                        if (snapped != lastTickValue) {
+                                            lastTickValue = snapped
+                                            hTick() // ✅ ütközőnél tick
+                                        }
+                                        onExpandableSliderChange(snapped)
+                                    },
+                                    valueRange = row.min.toFloat()..row.max.toFloat(),
+                                    steps = (((row.max - row.min) / row.step).coerceAtLeast(1)) - 1,
+                                    modifier = Modifier.width(320.dp)
+                                )
+                            }
+                        }
+
+                        else -> Unit
                     }
                 }
             }
@@ -972,21 +1022,29 @@ private fun SettingRowCard(
 
 @Composable
 private fun OptionButton(
+    context: Context,
+    vibrationEnabled: Boolean,
     text: String,
     selected: Boolean,
     onClick: () -> Unit
 ) {
+    fun hClick() {
+        if (vibrationEnabled) Haptics.click(context)
+    }
+
     val bg = if (selected) Color.White.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.08f)
     Card(
         colors = CardDefaults.cardColors(containerColor = bg),
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier
             .heightIn(min = 44.dp)
-            // ✅ RIPPLE OFF (beragadós bug elkerülése)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
-            ) { onClick() }
+            ) {
+                hClick()
+                onClick()
+            }
     ) {
         Box(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),

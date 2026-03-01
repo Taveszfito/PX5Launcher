@@ -25,6 +25,7 @@ import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -50,9 +51,15 @@ fun CalendarPanelCard(
     registerKeyHandler: (handler: (KeyEvent) -> Boolean) -> Unit,
     focusRequester: FocusRequester? = null,
     cornerRadius: Dp = 22.dp,
+    vibrationEnabled: Boolean = true,
 ) {
+    val context = LocalContext.current
     val hu = remember { Locale("hu", "HU") }
     val scope = rememberCoroutineScope()
+
+    fun hClick() {
+        if (vibrationEnabled) Haptics.click(context)
+    }
 
     // ✅ “lapozó mód” (controller ENTER + touch tap)
     var pagingMode by remember { mutableStateOf(false) }
@@ -105,12 +112,16 @@ fun CalendarPanelCard(
             val code = nk.keyCode
 
             if (code in confirmCodes) {
+                // ✅ haptics: belépés / kilépés pagingMode-ba
+                hClick()
                 pagingMode = !pagingMode
                 return@registerKeyHandler true
             }
 
             if (code in backCodes) {
                 if (pagingMode) {
+                    // ✅ haptics: pagingMode-ból kilépés
+                    hClick()
                     pagingMode = false
                     return@registerKeyHandler true
                 }
@@ -188,7 +199,11 @@ fun CalendarPanelCard(
             today = today,
             currentMonth = YearMonth.from(today),
             pagingMode = pagingMode,
-            setPagingMode = { pagingMode = it },
+            setPagingMode = { newValue ->
+                // ✅ haptics: touch tap belépés/kilépésnél
+                if (newValue != pagingMode) hClick()
+                pagingMode = newValue
+            },
             scrollState = scrollState,
             onRowStepPx = { rowStepPx = it },
             onAutoFollowTargetPx = { autoFollowTargetPx = it }
@@ -360,6 +375,7 @@ private fun CalendarGridMonthScrollable(
                             val wasTap = (abs(totalDx) + abs(totalDy)) <= tapSlopPx
 
                             if (wasTap) {
+                                // ✅ haptics itt a setPagingMode-ben történik (fent)
                                 setPagingMode(!pagingMode)
                             }
                         }

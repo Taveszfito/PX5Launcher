@@ -25,6 +25,9 @@ private val PREF_CLICK_VOLUME = intPreferencesKey("settings_click_volume")
 private val PREF_BUTTON_LAYOUT = stringPreferencesKey("settings_button_layout") // PS / XBOX / TV
 private val PREF_VIBRATION_ENABLED = booleanPreferencesKey("settings_vibration_enabled")
 
+// ✅ NEW
+private val PREF_VIBRATION_STRENGTH = intPreferencesKey("settings_vibration_strength") // 0..5
+
 private val PREF_ALLAPPS_COLUMNS = intPreferencesKey("settings_allapps_columns")
 private val PREF_RECENTS_MAX = intPreferencesKey("settings_recents_max")
 
@@ -77,8 +80,13 @@ class SettingsRepository(private val context: Context) {
     val vibrationEnabledFlow: Flow<Boolean> =
         context.px5DataStore.data.map { it[PREF_VIBRATION_ENABLED] ?: true }
 
+    // ✅ NEW: 0..5, default 1 (a mostani, legkisebb)
+    val vibrationStrengthFlow: Flow<Int> =
+        context.px5DataStore.data.map { (it[PREF_VIBRATION_STRENGTH] ?: 1).coerceIn(0, 5) }
+
+    // ✅ All Apps oszlopszám: 2..5 (régi 6/10 értékek automatikusan visszajönnek 5-re)
     val allAppsColumnsFlow: Flow<Int> =
-        context.px5DataStore.data.map { it[PREF_ALLAPPS_COLUMNS] ?: 6 }
+        context.px5DataStore.data.map { (it[PREF_ALLAPPS_COLUMNS] ?: 4).coerceIn(2, 5) }
 
     val recentsMaxFlow: Flow<Int> =
         context.px5DataStore.data.map { it[PREF_RECENTS_MAX] ?: 30 }
@@ -101,22 +109,41 @@ class SettingsRepository(private val context: Context) {
     suspend fun setButtonLayout(value: ButtonLayout) = setString(PREF_BUTTON_LAYOUT, value.name)
     suspend fun setVibrationEnabled(value: Boolean) = setBool(PREF_VIBRATION_ENABLED, value)
 
-    suspend fun setAllAppsColumns(value: Int) = setInt(PREF_ALLAPPS_COLUMNS, value.coerceIn(3, 10))
+    // ✅ NEW
+    suspend fun setVibrationStrength(value: Int) =
+        setInt(PREF_VIBRATION_STRENGTH, value.coerceIn(0, 5))
+
+    // ✅ NEW: 2..5
+    suspend fun setAllAppsColumns(value: Int) =
+        setInt(PREF_ALLAPPS_COLUMNS, value.coerceIn(2, 5))
+
     suspend fun setRecentsMax(value: Int) = setInt(PREF_RECENTS_MAX, value.coerceIn(5, 200))
 
-    private suspend fun setBool(key: androidx.datastore.preferences.core.Preferences.Key<Boolean>, value: Boolean) {
+    private suspend fun setBool(
+        key: androidx.datastore.preferences.core.Preferences.Key<Boolean>,
+        value: Boolean
+    ) {
         context.px5DataStore.edit { it[key] = value }
     }
 
-    private suspend fun setInt(key: androidx.datastore.preferences.core.Preferences.Key<Int>, value: Int) {
+    private suspend fun setInt(
+        key: androidx.datastore.preferences.core.Preferences.Key<Int>,
+        value: Int
+    ) {
         context.px5DataStore.edit { it[key] = value }
     }
 
-    private suspend fun setString(key: androidx.datastore.preferences.core.Preferences.Key<String>, value: String) {
+    private suspend fun setString(
+        key: androidx.datastore.preferences.core.Preferences.Key<String>,
+        value: String
+    ) {
         context.px5DataStore.edit { it[key] = value }
     }
 
-    private suspend fun setStringNullable(key: androidx.datastore.preferences.core.Preferences.Key<String>, value: String?) {
+    private suspend fun setStringNullable(
+        key: androidx.datastore.preferences.core.Preferences.Key<String>,
+        value: String?
+    ) {
         context.px5DataStore.edit { prefs ->
             if (value.isNullOrBlank()) prefs.remove(key) else prefs[key] = value
         }

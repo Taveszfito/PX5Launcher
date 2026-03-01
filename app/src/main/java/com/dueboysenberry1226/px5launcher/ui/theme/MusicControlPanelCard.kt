@@ -17,7 +17,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -52,8 +53,7 @@ import kotlin.math.abs
 
 private data class QueueItemUi(
     val queueId: Long,
-    val title: String,
-    val durationMs: Long? = null
+    val title: String
 )
 
 @Composable
@@ -61,7 +61,8 @@ fun MusicControlPanelCard(
     modifier: Modifier = Modifier,
     registerKeyHandler: (handler: (KeyEvent) -> Boolean) -> Unit,
     focusRequester: FocusRequester? = null,
-    cornerRadius: Dp = 22.dp
+    cornerRadius: Dp = 22.dp,
+    vibrationEnabled: Boolean = true
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -97,6 +98,13 @@ fun MusicControlPanelCard(
     var autoSkipSavedVolume by remember { mutableStateOf<Int?>(null) }
 
     val noRipple = remember { MutableInteractionSource() }
+
+    fun hClick() {
+        if (vibrationEnabled) Haptics.click(context)
+    }
+    fun hTick() {
+        if (vibrationEnabled) Haptics.tick(context)
+    }
 
     fun refreshVolume() {
         volNow = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
@@ -614,7 +622,10 @@ fun MusicControlPanelCard(
                         .combinedClickable(
                             interactionSource = noRipple,
                             indication = null,
-                            onClick = { openNotificationListenerSettings(context) }
+                            onClick = {
+                                hClick()
+                                openNotificationListenerSettings(context)
+                            }
                         )
                         .padding(6.dp)
                 } else Modifier
@@ -643,6 +654,7 @@ fun MusicControlPanelCard(
                     label = "◀◀",
                     selected = selected == Selected.PREV,
                     onClick = {
+                        hClick()
                         if (hasPermissionIssue) openNotificationListenerSettings(context)
                         else controller?.transportControls?.skipToPrevious()
                     }
@@ -652,6 +664,7 @@ fun MusicControlPanelCard(
                     label = if (isPlaying) "⏸" else "▶",
                     selected = selected == Selected.PLAY_PAUSE,
                     onClick = {
+                        hClick()
                         if (hasPermissionIssue) openNotificationListenerSettings(context)
                         else {
                             val c = controller
@@ -666,6 +679,7 @@ fun MusicControlPanelCard(
                     label = "▶▶",
                     selected = selected == Selected.NEXT,
                     onClick = {
+                        hClick()
                         if (hasPermissionIssue) openNotificationListenerSettings(context)
                         else controller?.transportControls?.skipToNext()
                     }
@@ -676,7 +690,10 @@ fun MusicControlPanelCard(
                 ControlChip(
                     label = "VOL−",
                     selected = selected == Selected.VOL_DOWN,
-                    onClick = { adjustVolume(-1) }
+                    onClick = {
+                        hTick()
+                        adjustVolume(-1)
+                    }
                 )
 
                 Text(
@@ -690,7 +707,10 @@ fun MusicControlPanelCard(
                 ControlChip(
                     label = "VOL+",
                     selected = selected == Selected.VOL_UP,
-                    onClick = { adjustVolume(+1) }
+                    onClick = {
+                        hTick()
+                        adjustVolume(+1)
+                    }
                 )
             }
 
@@ -703,8 +723,12 @@ fun MusicControlPanelCard(
                 hasPermissionIssue = hasPermissionIssue,
                 positionMs = positionMs,
                 durationMs = durationMs,
-                onRequestPermission = { openNotificationListenerSettings(context) },
+                onRequestPermission = {
+                    hClick()
+                    openNotificationListenerSettings(context)
+                },
                 onSeekToFraction = { frac ->
+                    hTick()
                     val c = controller ?: return@SeekBar
                     val d = durationMs
                     if (d <= 0L) return@SeekBar
@@ -712,24 +736,33 @@ fun MusicControlPanelCard(
                     c.transportControls.seekTo(target)
                     positionMs = target
                 },
-                onToggleSeekMode = { seekMode = !seekMode }
+                onToggleSeekMode = {
+                    hClick()
+                    seekMode = !seekMode
+                }
             )
 
             Spacer(Modifier.height(10.dp))
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            // ✅ csak az aktuális pozíciót írjuk ki (a "ismeretlen hossz" eltűnik)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
                 Text(
                     text = formatMs(context, positionMs),
                     color = Color.White.copy(alpha = 0.55f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
                 )
-                Text(
-                    text = if (durationMs > 0) formatMs(context, durationMs) else stringResource(R.string.music_time_unknown),
-                    color = Color.White.copy(alpha = 0.55f),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
-                )
+
+                // ha van duration, akkor megmutatjuk, különben semmit (nincs "unknown")
+                if (durationMs > 0L) {
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "• " + formatMs(context, durationMs),
+                        color = Color.White.copy(alpha = 0.55f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         }
 
@@ -746,6 +779,7 @@ fun MusicControlPanelCard(
                 canJump = canSkipToQueueItem,
                 listState = listState,
                 onClickItem = { i ->
+                    hClick()
                     selected = Selected.LIST
                     listIndex = i.coerceIn(0, queueItems.lastIndex)
                     playQueueItemOrAutoSkip(listIndex)
@@ -890,6 +924,7 @@ private fun QueuePanel(
                             .padding(horizontal = 10.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // ✅ csak cím – nincs "unknown duration"
                         Text(
                             text = item.title,
                             modifier = Modifier.weight(1f),
@@ -898,13 +933,6 @@ private fun QueuePanel(
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = item.durationMs?.let { formatMs(LocalContext.current, it) } ?: stringResource(R.string.music_time_unknown),
-                            color = Color.White.copy(alpha = 0.55f),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
@@ -972,29 +1000,26 @@ private fun SeekBar(
             .clip(shape)
             .background(Color.White.copy(alpha = bgA))
             .border(2.dp, Color.White.copy(alpha = borderA), shape)
-            .pointerInput(hasPermissionIssue, durationMs) {
-                detectTapGestures { offset ->
+            // ✅ BUGFIX: 1 érintésre (touch-down) azonnal seekel oda
+            .pointerInput(hasPermissionIssue, durationMs, selected) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+
                     if (hasPermissionIssue) {
                         onRequestPermission()
-                        return@detectTapGestures
+                        return@awaitEachGesture
                     }
+
                     if (durationMs <= 0L) {
                         if (selected) onToggleSeekMode()
-                        return@detectTapGestures
+                        return@awaitEachGesture
                     }
+
                     val w = size.width.coerceAtLeast(1)
-                    val f = (offset.x.coerceIn(0f, w.toFloat())) / w.toFloat()
+                    val f = (down.position.x.coerceIn(0f, w.toFloat())) / w.toFloat()
                     onSeekToFraction(f)
                 }
             }
-            .combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = {
-                    if (hasPermissionIssue) onRequestPermission()
-                    else if (selected) onToggleSeekMode()
-                }
-            )
             .padding(horizontal = 12.dp),
         contentAlignment = Alignment.CenterStart
     ) {

@@ -115,6 +115,7 @@ fun PSHomeRoute(
     val quickTileClick = rememberQuickTileClickHandler(context)
     val accentFromIcon by settingsRepo.accentFromAppIconFlow.collectAsState(initial = true)
     val vibrationEnabled by settingsRepo.vibrationEnabledFlow.collectAsState(initial = true)
+    val allAppsColumns by settingsRepo.allAppsColumnsFlow.collectAsState(initial = 4)
 
     LaunchedEffect(Unit) {
         NotificationsRepository.init(context)
@@ -459,7 +460,10 @@ fun PSHomeRoute(
     LaunchedEffect(allAppsOpen) {
         if (allAppsOpen) {
             appsRefreshTick++
-            allAppsSelectedIndex = allAppsSelectedIndex.coerceIn(0, allAppsLastIndex.coerceAtLeast(0))
+            // -2 = none, -1 = back, 0.. = app
+            allAppsSelectedIndex = allAppsSelectedIndex.coerceIn(-2, (allApps.size - 1).coerceAtLeast(0))
+            // ha véletlen none-ban nyitna: induljunk 0-ról
+            if (allAppsSelectedIndex == -2) allAppsSelectedIndex = 0
         }
     }
 
@@ -674,6 +678,7 @@ fun PSHomeRoute(
     var showWidgetPicker by rememberSaveable { mutableStateOf(false) }
     var pendingPickCellX by remember { mutableIntStateOf(0) }
     var pendingPickCellY by remember { mutableIntStateOf(0) }
+    var allAppsLastAppIndex by remember { mutableIntStateOf(0) }
 
     val cellDp = remember(cellPx) {
         if (cellPx > 0f) with(density) { cellPx.toDp() } else 90.dp
@@ -772,7 +777,6 @@ fun PSHomeRoute(
         scope.launch { widgetsRepo.upsert(p.copy(cellX = nx, cellY = ny)) }
     }
 
-
     // ✅ GLOBAL BACK: soha ne zárja be az Activity-t + overlay-ket zárjon
     BackHandler(enabled = true) {
         when {
@@ -809,7 +813,7 @@ fun PSHomeRoute(
         topIndex = next
     }
 
-    val columns = 6
+    val columns = allAppsColumns.coerceIn(2, 5)
 
     val keyHandler: (KeyEvent) -> Boolean = { e ->
         val nk = e.nativeKeyEvent
@@ -868,34 +872,18 @@ fun PSHomeRoute(
                     if (tab != nextTab) tab = nextTab
                     true
                 }
-            } else if (allAppsOpen) {
+            } else if (homeSection == HomeSection.TOPBAR) {
                 when (code) {
-                    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> { if (allAppsSelectedIndex > 0) allAppsSelectedIndex--; true }
-                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> { if (allAppsSelectedIndex < allAppsLastIndex) allAppsSelectedIndex++; true }
-                    AndroidKeyEvent.KEYCODE_DPAD_UP -> { val next = allAppsSelectedIndex - columns; if (next >= 0) allAppsSelectedIndex = next; true }
-                    AndroidKeyEvent.KEYCODE_DPAD_DOWN -> { val next = allAppsSelectedIndex + columns; if (next <= allAppsLastIndex) allAppsSelectedIndex = next; true }
 
-                    AndroidKeyEvent.KEYCODE_DPAD_CENTER,
-                    AndroidKeyEvent.KEYCODE_ENTER,
-                    AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
-                    AndroidKeyEvent.KEYCODE_BUTTON_A -> {
-                        when (val item = allAppsGrid.getOrNull(allAppsSelectedIndex)) {
-                            is AllAppsGridItem.Back -> allAppsOpen = false
-                            is AllAppsGridItem.App -> { allAppsOpen = false; launchApp(item.app) }
-                            null -> Unit
-                        }
-                        true
-                    }
-
-                    AndroidKeyEvent.KEYCODE_BUTTON_B,
-                    AndroidKeyEvent.KEYCODE_BACK -> { allAppsOpen = false; true }
-                    else -> false
-                }
-            } else {
-                when (homeSection) {
-                    HomeSection.TOPBAR -> when (code) {
-
-                        AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
+                    AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
+                        if (allAppsOpen) {
+                            // ✅ TOPBAR-ról LE: vissza az AllApps első app tile-ra
+                            allAppsSelectedIndex = 0
+                            homeSection = HomeSection.TOP
+                            focusManager.clearFocus(force = true)
+                            true
+                        } else {
+                            // normál működés (amikor nincs AllApps)
                             when (tab) {
                                 Tab.GAMES -> homeSection = HomeSection.TOP
                                 Tab.MEDIA -> homeSection = HomeSection.TOP
@@ -903,37 +891,159 @@ fun PSHomeRoute(
                             }
                             true
                         }
-
-                        AndroidKeyEvent.KEYCODE_DPAD_UP -> true
-
-                        AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
-                            topBarIndex = (topBarIndex - 1).coerceAtLeast(0)
-                            tab = when (topBarIndex) {
-                                0 -> Tab.GAMES
-                                1 -> Tab.MEDIA
-                                else -> Tab.NOTIFICATIONS
-                            }
-                            true
-                        }
-
-                        AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
-                            topBarIndex = (topBarIndex + 1).coerceAtMost(2)
-                            tab = when (topBarIndex) {
-                                0 -> Tab.GAMES
-                                1 -> Tab.MEDIA
-                                else -> Tab.NOTIFICATIONS
-                            }
-                            true
-                        }
-
-                        AndroidKeyEvent.KEYCODE_ENTER,
-                        AndroidKeyEvent.KEYCODE_DPAD_CENTER -> true
-
-                        AndroidKeyEvent.KEYCODE_BACK -> true
-
-                        else -> false
                     }
 
+                    AndroidKeyEvent.KEYCODE_DPAD_UP -> true
+
+                    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
+                        topBarIndex = (topBarIndex - 1).coerceAtLeast(0)
+                        tab = when (topBarIndex) {
+                            0 -> Tab.GAMES
+                            1 -> Tab.MEDIA
+                            else -> Tab.NOTIFICATIONS
+                        }
+                        true
+                    }
+
+                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        topBarIndex = (topBarIndex + 1).coerceAtMost(2)
+                        tab = when (topBarIndex) {
+                            0 -> Tab.GAMES
+                            1 -> Tab.MEDIA
+                            else -> Tab.NOTIFICATIONS
+                        }
+                        true
+                    }
+
+                    AndroidKeyEvent.KEYCODE_ENTER,
+                    AndroidKeyEvent.KEYCODE_DPAD_CENTER,
+                    AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
+                    AndroidKeyEvent.KEYCODE_BUTTON_A -> {
+                        tab = when (topBarIndex) {
+                            0 -> Tab.GAMES
+                            1 -> Tab.MEDIA
+                            else -> Tab.NOTIFICATIONS
+                        }
+                        true
+                    }
+
+                    AndroidKeyEvent.KEYCODE_BACK -> true
+
+                    else -> false
+                }
+            } else if (allAppsOpen) {
+                val lastApp = (allApps.size - 1).coerceAtLeast(0)
+
+                when (code) {
+                    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
+                        when {
+                            allAppsSelectedIndex == -1 -> true
+                            allAppsSelectedIndex % columns == 0 -> { allAppsSelectedIndex = -1; true }
+                            allAppsSelectedIndex > 0 -> { allAppsSelectedIndex--; true }
+                            else -> true
+                        }
+                    }
+
+                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        when {
+                            allAppsSelectedIndex == -1 -> { allAppsSelectedIndex = 0; true }
+                            allAppsSelectedIndex < lastApp -> { allAppsSelectedIndex++; true }
+                            else -> true
+                        }
+                    }
+
+                    AndroidKeyEvent.KEYCODE_DPAD_UP -> {
+                        when {
+                            // Back selected esetén: fel -> TOPBAR, és maradjon Back selected (OK)
+                            allAppsSelectedIndex == -1 -> {
+                                homeSection = HomeSection.TOPBAR
+                                topBarIndex = when (tab) {
+                                    Tab.GAMES -> 0
+                                    Tab.MEDIA -> 1
+                                    Tab.NOTIFICATIONS -> 2
+                                }
+                                focusManager.clearFocus(force = true)
+                                true
+                            }
+
+                            // ✅ FELSŐ SORBÓL: fel -> TOPBAR, DE NEM állítjuk -1-re
+                            allAppsSelectedIndex < columns -> {
+                                // jegyezzük meg, melyik app volt kijelölve
+                                allAppsLastAppIndex = allAppsSelectedIndex.coerceAtLeast(0)
+
+                                // topbar
+                                homeSection = HomeSection.TOPBAR
+                                topBarIndex = when (tab) {
+                                    Tab.GAMES -> 0
+                                    Tab.MEDIA -> 1
+                                    Tab.NOTIFICATIONS -> 2
+                                }
+
+                                // ✅ vedd le a selected-et az appról
+                                allAppsSelectedIndex = -2
+
+                                focusManager.clearFocus(force = true)
+                                true
+                            }
+
+                            else -> {
+                                allAppsSelectedIndex = (allAppsSelectedIndex - columns).coerceAtLeast(0)
+                                true
+                            }
+                        }
+                    }
+
+                    AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
+                        when {
+                            // NONE állapotból ne csináljon semmit
+                            allAppsSelectedIndex == -2 -> true
+
+                            // Back-ről lefelé: első app
+                            allAppsSelectedIndex == -1 -> {
+                                allAppsSelectedIndex = 0
+                                true
+                            }
+
+                            else -> {
+                                val next = allAppsSelectedIndex + columns
+                                if (next <= lastApp) {
+                                    allAppsSelectedIndex = next
+                                }
+                                true
+                            }
+                        }
+                    }
+
+                    AndroidKeyEvent.KEYCODE_DPAD_CENTER,
+                    AndroidKeyEvent.KEYCODE_ENTER,
+                    AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
+                    AndroidKeyEvent.KEYCODE_BUTTON_A -> {
+                        if (allAppsSelectedIndex == -1) {
+                            allAppsOpen = false
+                            true
+                        } else if (allAppsSelectedIndex == -2) {
+                            // NONE: a TOPBAR irányít, itt ne történjen semmi
+                            true
+                        } else {
+                            val app = allApps.getOrNull(allAppsSelectedIndex)
+                            if (app != null) {
+                                allAppsOpen = false
+                                launchApp(app)
+                            }
+                            true
+                        }
+                    }
+
+                    AndroidKeyEvent.KEYCODE_BUTTON_B,
+                    AndroidKeyEvent.KEYCODE_BACK -> {
+                        allAppsOpen = false
+                        true
+                    }
+
+                    else -> false
+                }
+            } else {
+                when (homeSection) {
                     HomeSection.NOTIFS -> when (code) {
 
                         AndroidKeyEvent.KEYCODE_DPAD_UP -> {
@@ -1078,6 +1188,7 @@ fun PSHomeRoute(
                             else -> false
                         }
                     }
+                    HomeSection.TOPBAR -> false
                 }
             }
         }
@@ -1254,17 +1365,33 @@ fun PSHomeRoute(
                     return@onPreviewKeyEvent false
                 }
 
-                // 4️⃣ Normal routing
-                val isTopbar = homeSection == HomeSection.TOPBAR
-                val state = InputController.State(
-                    zone = if (isTopbar) InputController.Zone.TOPBAR else InputController.Zone.CONTENT
-                )
+                // 4️⃣ ALL APPS: ilyenkor a KEYHANDLER irányít mindent (nincs fókusz-mix)
+                if (allAppsOpen) {
+                    val nk = e.nativeKeyEvent
 
+                    if (nk.action == AndroidKeyEvent.ACTION_DOWN &&
+                        (nk.keyCode == AndroidKeyEvent.KEYCODE_BACK ||
+                                nk.keyCode == AndroidKeyEvent.KEYCODE_BUTTON_B)
+                    ) {
+                        allAppsOpen = false
+                        return@onPreviewKeyEvent true
+                    }
+
+                    // ✅ AllApps alatt MINDEN gomb a keyHandler-hez megy
+                    return@onPreviewKeyEvent keyHandler(e)
+                }
+
+// 5️⃣ Normal routing
                 InputController.route(
                     e = e,
-                    state = state,
+                    state = InputController.State(
+                        if (homeSection == HomeSection.TOPBAR)
+                            InputController.Zone.TOPBAR
+                        else
+                            InputController.Zone.CONTENT
+                    ),
                     topBarHandler = { ev -> keyHandler(ev) },
-                    contentHandler = { ev -> keyHandler(ev) }
+                    contentHandler = { keyHandler(it) }
                 )
             }
             .background(bg)
@@ -1569,6 +1696,7 @@ fun PSHomeRoute(
                                         BottomPanel.CALENDAR -> {
                                             CalendarPanelCard(
                                                 modifier = Modifier.fillMaxSize(),
+                                                vibrationEnabled = vibrationEnabled,
                                                 registerKeyHandler = { handler -> calendarKeyHandler = handler }
                                             )
                                         }
