@@ -140,7 +140,7 @@ fun PhoneHomeRoute(
     suspend fun setAmbientFromApp(app: AppItem?) {
         if (app == null) return
         val bmp = drawableToBitmap(app.icon) ?: return
-        val c: Color = computeDominantColor(bmp) // nálad Color-t ad vissza
+        val c: Color = computeDominantColor(bmp)
         ambientColor = if (c.alpha <= 0.01f) Color(0xFF101826) else c
     }
 
@@ -151,7 +151,7 @@ fun PhoneHomeRoute(
         setAmbientFromApp(app)
     }
 
-    // --- Home slots (saveable 28) ---
+    // --- Home slots (saveable) ---
     val slotsSaver: Saver<MutableList<String?>, List<String?>> = Saver(
         save = { it.toList() },
         restore = { it.toMutableList() }
@@ -232,7 +232,7 @@ fun PhoneHomeRoute(
         }
     }
 
-    // Drawer entries: Header(A) + App rows; így a "betűs" dolog együtt scrolloz
+    // Drawer entries: Header(A) + App rows
     val drawerEntries = remember(filteredApps) {
         val out = mutableListOf<DrawerEntry>()
         var last: String? = null
@@ -247,18 +247,15 @@ fun PhoneHomeRoute(
         out
     }
 
-    // Drawer list state + aktív betű
     val drawerListState = rememberLazyListState()
     var activeLetter by remember { mutableStateOf<String?>(null) }
 
-    // aktív betű frissítés az első látható APP alapján (csak UI kiemeléshez)
     LaunchedEffect(drawerEntries, drawerListState.firstVisibleItemIndex) {
         val start = drawerListState.firstVisibleItemIndex.coerceIn(0, (drawerEntries.size - 1).coerceAtLeast(0))
         val appEntry = drawerEntries.drop(start).firstOrNull { it is DrawerEntry.App } as? DrawerEntry.App
         activeLetter = appEntry?.letter
     }
 
-    // search változásnál lista elejére
     LaunchedEffect(search.text) {
         if (drawerEntries.isNotEmpty()) drawerListState.scrollToItem(0)
     }
@@ -269,7 +266,6 @@ fun PhoneHomeRoute(
 
     // --- grid méretek state: hogy az App lista gomb szélessége passzoljon ---
     var gridUsedWidth by remember { mutableStateOf(0.dp) }
-    var appListButtonHeight by remember { mutableStateOf(58.dp) }
 
     // ====== LAYOUT ======
     Box(
@@ -283,6 +279,10 @@ fun PhoneHomeRoute(
                 .background(ambientOverlay)
         )
 
+        val btnH = 58.dp
+        val bottomGap = 10.dp
+        val bottomReserved = btnH + bottomGap
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -290,86 +290,92 @@ fun PhoneHomeRoute(
                 .navigationBarsPadding()
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
-            // Holding hint — kisebb spacer alatta
+            // ✅ showEmptySlots csak a placeholder/lerakás mód miatt
             val showEmptySlots = (holdingMode != HoldingMode.NONE && holdingId != null)
 
-            if (showEmptySlots) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.08f)),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+            // ✅ a hint helye FIX (nem ugrál a grid)
+            val hintAreaHeight = 52.dp
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(hintAreaHeight)
+            ) {
+                if (showEmptySlots) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.08f)),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxSize()
                     ) {
-                        Text(
-                            text = "Tedd le egy slotba",
-                            color = Color.White.copy(alpha = 0.85f),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(Modifier.weight(1f))
-                        Text(
-                            text = "Mégse",
-                            color = Color.White.copy(alpha = 0.72f),
-                            fontSize = 13.sp,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .combinedClickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                    onClick = { cancelHolding() },
-                                    onLongClick = { cancelHolding() }
-                                )
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
-                        )
+                        Row(
+                            Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Tedd le egy slotba",
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(Modifier.weight(1f))
+                            Text(
+                                text = "Mégse",
+                                color = Color.White.copy(alpha = 0.72f),
+                                fontSize = 13.sp,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .combinedClickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                        onClick = { cancelHolding() },
+                                        onLongClick = { cancelHolding() }
+                                    )
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
                     }
                 }
-
-                Spacer(Modifier.height(10.dp))
-            } else {
-                Spacer(Modifier.height(4.dp))
             }
 
-            // ====== GRID ======
+            Spacer(Modifier.height(10.dp))
+
+            // ====== GRID (mindig ugyanakkora logika, nem függ a hint-től) ======
             @Suppress("UnusedBoxWithConstraintsScope")
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
+                    .weight(1f)
+                    .padding(bottom = bottomReserved),
                 contentAlignment = Alignment.Center
             ) {
-                // EZEKET használd, mert már Dp-ben vannak:
-                val maxWidth = this.maxWidth
-                val maxHeight = this.maxHeight
-
                 val padX = 6.dp
                 val padY = 2.dp
-
-                val availableW = maxWidth - padX * 2
-                val availableH = maxHeight - padY * 2 - appListButtonHeight - 10.dp
-
-                val cellW = availableW / COLS
-                val cellH = availableH / MAX_ROWS
-
-                val cellSize = if (cellW < cellH) cellW else cellH
 
                 val minGapH = 10.dp
                 val minGapV = 12.dp
 
+                val availableW = maxWidth - padX * 2
+                val availableH = maxHeight - padY * 2
+
+// ✅ 1) ELŐSZÖR szélesség alapján számoljuk ki a cellát úgy, hogy 4 db + 3 gap pont kiférjen
+                val cellSizeFromWidth = (availableW - minGapH * (COLS - 1)) / COLS
+
+// ✅ Biztonság: legalább 1 sor férjen el magasságban is (különben túl nagy lenne a cella)
+                val cellSize = if (cellSizeFromWidth > availableH) availableH else cellSizeFromWidth
+
                 val usedW = cellSize * COLS + minGapH * (COLS - 1)
-                val usedH = cellSize * MAX_ROWS + minGapV * (MAX_ROWS - 1)
+                SideEffect { gridUsedWidth = usedW }
 
-                SideEffect {
-                    gridUsedWidth = usedW
-                }
-
+// ✅ 2) Utána számoljuk ki, felfelé hány sor fér el ebből a cellából
                 val fitsRowsFloat = (availableH.value + minGapV.value) / (cellSize.value + minGapV.value)
                 val rowsToShow = floor(fitsRowsFloat).toInt().coerceIn(1, MAX_ROWS)
 
                 val visibleSlots = rowsToShow * COLS
-                val hiddenOccupied = slots.drop(visibleSlots).withIndex().filter { it.value != null }.map { it.index to it.value }
+                val hiddenOccupied = slots
+                    .drop(visibleSlots)
+                    .withIndex()
+                    .filter { it.value != null }
+                    .map { it.index to it.value }
 
                 // ha a rejtett részben van app, próbáljuk felhúzni üres helyre
                 LaunchedEffect(visibleSlots, hiddenOccupied.size) {
@@ -389,65 +395,63 @@ fun PhoneHomeRoute(
                     verticalArrangement = Arrangement.spacedBy(minGapV)
                 ) {
                     for (r in 0 until rowsToShow) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(minGapH)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(minGapH, Alignment.CenterHorizontally)
+                        ) {
                             for (c in 0 until COLS) {
                                 val idx = r * COLS + c
                                 val id = slots.getOrNull(idx)
                                 val isEmpty = (id == null)
 
-                                val shouldRenderCard =
-                                    (!isEmpty) || showEmptySlots
-
-                                if (shouldRenderCard) {
-                                    HomeSlot(
-                                        id = id,
-                                        label = resolveLabelForSlot(id),
-                                        icon = resolveIconForSlot(id),
-                                        isEmpty = isEmpty,
-                                        showPlaceholder = showEmptySlots,
-                                        modifier = Modifier.size(cellSize),
-                                        onClick = {
-                                            if (showEmptySlots && holdingId != null) {
-                                                placeHeldInto(idx, visibleSlots)
-                                                return@HomeSlot
-                                            }
-                                            if (id != null) launch(id)
-                                        },
-                                        onLongPress = {
-                                            if (id == null) return@HomeSlot
-                                            menuSlotId = id
+                                HomeSlot(
+                                    id = id,
+                                    label = resolveLabelForSlot(id),
+                                    icon = resolveIconForSlot(id),
+                                    isEmpty = isEmpty,
+                                    showPlaceholder = showEmptySlots,
+                                    modifier = Modifier.size(cellSize),
+                                    onClick = {
+                                        if (showEmptySlots && holdingId != null) {
+                                            placeHeldInto(idx, visibleSlots)
+                                            return@HomeSlot
                                         }
-                                    )
-                                } else {
-                                    Box(modifier = Modifier.size(cellSize))
-                                }
+                                        if (id != null) launch(id)
+                                    },
+                                    onLongPress = {
+                                        if (id == null) return@HomeSlot
+                                        menuSlotId = id
+                                    }
+                                )
                             }
                         }
                     }
                 }
             }
+        }
 
-            Spacer(Modifier.height(10.dp))
-
-            // ===== App lista gomb: fix blokk, soha nem ér össze a griddel =====
-            val btnH = 58.dp
-            SideEffect { appListButtonHeight = btnH }
-
+        // ===== FIX App lista gomb: mindig alul, fix helyen =====
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .navigationBarsPadding()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            contentAlignment = Alignment.BottomCenter
+        ) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.10f)),
                 shape = RoundedCornerShape(20.dp),
                 modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .width(if (gridUsedWidth.value > 0f) gridUsedWidth else Modifier.fillMaxWidth().let { 0.dp })
                     .then(
-                        if (gridUsedWidth.value > 0f) Modifier else Modifier.fillMaxWidth()
+                        if (gridUsedWidth.value > 0f) Modifier.width(gridUsedWidth)
+                        else Modifier.fillMaxWidth()
                     )
                     .height(btnH)
                     .combinedClickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = { drawerOpen = true },
-                        onLongClick = { drawerOpen = true } // nem törölhető, nem mozgatható
+                        onLongClick = { drawerOpen = true }
                     )
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -616,24 +620,34 @@ private fun HomeSlot(
     onClick: () -> Unit,
     onLongPress: () -> Unit
 ) {
+    // 1) van app -> normál kártya
+    // 2) üres + holding -> placeholder kártya
+    // 3) üres + nincs holding -> átlátszó (foglalja a helyet, de “nem látszik”)
+    val isInvisibleEmpty = isEmpty && !showPlaceholder
+
     val bg = when {
+        isInvisibleEmpty -> Color.Transparent
         isEmpty && showPlaceholder -> Color.White.copy(alpha = 0.06f)
         else -> Color.White.copy(alpha = 0.08f)
     }
 
-    Card(
-        colors = CardDefaults.cardColors(containerColor = bg),
-        shape = RoundedCornerShape(22.dp),
-        modifier = modifier.combinedClickable(
+    val cardModifier =
+        if (isInvisibleEmpty) modifier
+        else modifier.combinedClickable(
             interactionSource = remember { MutableInteractionSource() },
             indication = null,
             onClick = onClick,
             onLongClick = onLongPress
         )
-    ) {
-        Box(Modifier.fillMaxSize()) {
 
-            // ICON középen, picit fentebb
+    Card(
+        colors = CardDefaults.cardColors(containerColor = bg),
+        shape = RoundedCornerShape(22.dp),
+        modifier = cardModifier
+    ) {
+        if (isInvisibleEmpty) return@Card
+
+        Box(Modifier.fillMaxSize()) {
             if (!isEmpty && icon != null) {
                 val bmp = remember(icon) { drawableToBitmap(icon) }
                 if (bmp != null) {
@@ -648,7 +662,6 @@ private fun HomeSlot(
                 }
             }
 
-            // LABEL alul (csak ha van app)
             if (!isEmpty) {
                 Text(
                     text = label,
@@ -740,7 +753,6 @@ private fun DrawerRow(
                 modifier = Modifier.weight(1f)
             )
 
-            // ✅ betű az app mellett (így együtt scrolloz)
             Text(
                 text = letter,
                 color = Color.White.copy(alpha = 0.55f),
