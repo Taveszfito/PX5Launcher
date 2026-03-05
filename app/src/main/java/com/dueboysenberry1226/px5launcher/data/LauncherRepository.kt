@@ -8,12 +8,17 @@ import android.content.pm.ResolveInfo
 import android.graphics.Bitmap
 import androidx.core.graphics.drawable.toBitmap
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 private val PREF_PINNED = stringSetPreferencesKey("pinned_pkgs")
 private val PREF_RECENTS = stringSetPreferencesKey("recents_ordered")
+
+// ✅ Phone UI layout mentés
+private val PREF_PHONE_HOME_SLOTS = stringPreferencesKey("phone_home_slots_v1")
+private val PREF_PHONE_HOME_CARDS = stringPreferencesKey("phone_home_cards_v1")
 
 data class LaunchableApp(
     val label: String,
@@ -23,7 +28,7 @@ data class LaunchableApp(
 
 enum class Tab { GAMES, MEDIA, NOTIFICATIONS }
 
-// Top strip elemei: 9 app + 1 all-apps (+ spacerek a fix kijelöléshez)
+// Top strip elemei: 9 app + 1 all-apps (+ spacerek)
 sealed class TopItem {
     data class App(val app: LaunchableApp) : TopItem()
     data object AllApps : TopItem()
@@ -46,6 +51,39 @@ class LauncherRepository(
             }.sortedBy { it.first }.map { it.second }
         }
 
+    // =========================
+    // ✅ PHONE HOME: slots
+    // =========================
+    val phoneHomeSlotsFlow: Flow<List<String?>> =
+        context.px5DataStore.data.map { prefs ->
+            PhoneHomeCodec.decodeSlots(prefs[PREF_PHONE_HOME_SLOTS])
+        }
+
+    suspend fun savePhoneHomeSlots(slots: List<String?>) {
+        val encoded = PhoneHomeCodec.encodeSlots(slots)
+        context.px5DataStore.edit { prefs ->
+            prefs[PREF_PHONE_HOME_SLOTS] = encoded
+        }
+    }
+
+    // =========================
+    // ✅ PHONE HOME: cards
+    // =========================
+    val phoneHomeCardsFlow: Flow<List<PhoneCardPlacement>> =
+        context.px5DataStore.data.map { prefs ->
+            PhoneHomeCodec.decodeCards(prefs[PREF_PHONE_HOME_CARDS])
+        }
+
+    suspend fun savePhoneHomeCards(cards: List<PhoneCardPlacement>) {
+        val encoded = PhoneHomeCodec.encodeCards(cards)
+        context.px5DataStore.edit { prefs ->
+            prefs[PREF_PHONE_HOME_CARDS] = encoded
+        }
+    }
+
+    // =========================
+    // pinned / recents
+    // =========================
     suspend fun setPinned(pkg: String, value: Boolean) {
         context.px5DataStore.edit { prefs ->
             val cur = (prefs[PREF_PINNED] ?: emptySet()).toMutableSet()
