@@ -1,5 +1,6 @@
 package com.dueboysenberry1226.px5launcher.ui
 
+import com.dueboysenberry1226.px5launcher.data.WidgetLayoutMode
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -43,6 +44,7 @@ import kotlin.math.min
 fun WidgetsPanel(
     placements: List<WidgetPlacement>,
     grid: WidgetGridSpec,
+    layoutMode: WidgetLayoutMode,
     focusRequester: FocusRequester,
     registerKeyHandler: (handler: (KeyEvent) -> Boolean) -> Unit,
     renderWidget: @Composable (placement: WidgetPlacement, modifier: Modifier) -> Unit,
@@ -78,12 +80,15 @@ fun WidgetsPanel(
     val slotCount = slotColsLogical * slotRowsLogical
 
     var visualCols by remember { mutableIntStateOf(slotColsLogical.coerceAtLeast(1)) }
-
-    val topLeft: Map<Pair<Int, Int>, WidgetPlacement> = remember(placements, grid.cols, grid.rows) {
-        placements.associateBy { it.cellX to it.cellY }
+    val visiblePlacements = remember(placements, layoutMode) {
+        placements.filter { it.layoutMode == layoutMode }
     }
 
-    val coverMap: Map<Pair<Int, Int>, WidgetPlacement> = remember(placements, grid.cols, grid.rows) {
+    val topLeft: Map<Pair<Int, Int>, WidgetPlacement> = remember(visiblePlacements, grid.cols, grid.rows) {
+        visiblePlacements.associateBy { it.cellX to it.cellY }
+    }
+
+    val coverMap: Map<Pair<Int, Int>, WidgetPlacement> = remember(visiblePlacements, grid.cols, grid.rows) {
         buildMap {
             for (p in placements) {
                 for (dy in 0 until p.spanY) for (dx in 0 until p.spanX) {
@@ -133,7 +138,7 @@ fun WidgetsPanel(
         return p.cellX == bx && p.cellY == by && p.spanX >= 2 && p.spanY >= 2
     }
 
-    LaunchedEffect(Unit, grid.cols, grid.rows, placements, visualCols, slotCount) {
+    LaunchedEffect(Unit, grid.cols, grid.rows, visiblePlacements, visualCols, slotCount) {
         registerKeyHandler { e ->
             val nk = e.nativeKeyEvent
             val code = nk.keyCode
@@ -563,7 +568,7 @@ fun WidgetsPanel(
                         )
                     }
 
-                    for (p in placements) {
+                    for (p in visiblePlacements) {
                         val pSc = (p.cellX / 2).coerceIn(0, slotColsLogical - 1)
                         val pSr = (p.cellY / 2).coerceIn(0, slotRowsLogical - 1)
                         if (pSc != sc || pSr != sr) continue

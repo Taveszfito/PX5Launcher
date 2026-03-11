@@ -6,17 +6,34 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-private val PREF_WIDGETS = stringSetPreferencesKey("widgets_placements_v1")
+private val PREF_WIDGETS = stringSetPreferencesKey("widgets_placements_v2")
 
 class WidgetsRepository(private val context: Context) {
 
+    /**
+     * Az összes widget placement, minden layoutból.
+     */
     val widgetsFlow: Flow<List<WidgetPlacement>> =
         context.px5DataStore.data.map { prefs ->
             val raw = prefs[PREF_WIDGETS] ?: emptySet()
             raw.mapNotNull(::decode).sortedWith(
-                compareBy<WidgetPlacement>({ it.cellY }, { it.cellX }, { it.appWidgetId })
+                compareBy<WidgetPlacement>(
+                    { it.layoutMode.name },
+                    { it.cellY },
+                    { it.cellX },
+                    { it.appWidgetId }
+                )
             )
         }
+
+    /**
+     * Csak az adott layouthoz tartozó widgetek.
+     */
+    fun widgetsFlow(layoutMode: WidgetLayoutMode): Flow<List<WidgetPlacement>> {
+        return widgetsFlow.map { list ->
+            list.filter { it.layoutMode == layoutMode }
+        }
+    }
 
     suspend fun upsert(p: WidgetPlacement) {
         context.px5DataStore.edit { prefs ->
@@ -50,8 +67,7 @@ class WidgetsRepository(private val context: Context) {
         }
     }
 
-    // ---- encode/decode ----
-    // format: id|provider|x|y|sx|sy
+    // format v2: id|provider|x|y|sx|sy|layoutMode
     private fun encode(p: WidgetPlacement): String {
         return buildString {
             append(p.appWidgetId); append("|")
@@ -59,7 +75,8 @@ class WidgetsRepository(private val context: Context) {
             append(p.cellX); append("|")
             append(p.cellY); append("|")
             append(p.spanX); append("|")
-            append(p.spanY)
+            append(p.spanY); append("|")
+            append(p.layoutMode.name)
         }
     }
 
@@ -76,13 +93,22 @@ class WidgetsRepository(private val context: Context) {
 
         if (sx <= 0 || sy <= 0) return null
 
+        val layoutMode = if (parts.size >= 7) {
+            runCatching { WidgetLayoutMode.valueOf(parts[6]) }
+                .getOrDefault(WidgetLayoutMode.LANDSCAPE)
+        } else {
+            // régi mentések fallbackje
+            WidgetLayoutMode.LANDSCAPE
+        }
+
         return WidgetPlacement(
             appWidgetId = id,
             provider = provider,
             cellX = x,
             cellY = y,
             spanX = sx,
-            spanY = sy
+            spanY = sy,
+            layoutMode = layoutMode
         )
     }
 }

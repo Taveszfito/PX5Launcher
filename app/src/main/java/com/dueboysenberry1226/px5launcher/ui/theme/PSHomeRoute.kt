@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.dueboysenberry1226.px5launcher.ui
 
+import com.dueboysenberry1226.px5launcher.data.WidgetLayoutMode
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -168,6 +169,9 @@ fun PSHomeRoute(
     val pinned by repo.pinnedFlow.collectAsState(initial = emptySet())
     val recents by repo.recentsFlow.collectAsState(initial = emptyList())
     val placements by widgetsRepo.widgetsFlow.collectAsState(initial = emptyList())
+    val landscapePlacements = remember(placements) {
+        placements.filter { it.layoutMode == WidgetLayoutMode.LANDSCAPE }
+    }
 
     val cfg = LocalConfiguration.current
     val gridSpec = remember(cfg.screenWidthDp) {
@@ -501,7 +505,7 @@ fun PSHomeRoute(
         if (cellY + spanY > gridSpec.rows) return false
 
         val occ = Array(gridSpec.rows) { BooleanArray(gridSpec.cols) }
-        for (p in placements) {
+        for (p in landscapePlacements) {
             if (ignoreAppWidgetId != null && p.appWidgetId == ignoreAppWidgetId) continue
             for (dy in 0 until p.spanY) for (dx in 0 until p.spanX) {
                 val x = p.cellX + dx
@@ -589,7 +593,8 @@ fun PSHomeRoute(
                     cellX = cellX,
                     cellY = cellY,
                     spanX = sx,
-                    spanY = sy
+                    spanY = sy,
+                    layoutMode = WidgetLayoutMode.LANDSCAPE
                 )
             )
         }
@@ -689,6 +694,14 @@ fun PSHomeRoute(
         appWidgetManager = widgetManager,
         cellWidthDp = cellDp,
         cellHeightDp = cellDp,
+        cellGapXDp = 12.dp,
+        cellGapYDp = 12.dp,
+
+        // ✅ ÚJ: PSHome (landscape) marad 2×2, és szűrje is ki a nagyobbakat
+        maxSpanX = 2,
+        maxSpanY = 2,
+        filterOutOversize = true,
+
         onPick = { providerInfo, sx, sy ->
 
             if (vibrationEnabled) Haptics.click(context)
@@ -742,7 +755,8 @@ fun PSHomeRoute(
         },
         onBack = {
             if (vibrationEnabled) Haptics.click(context)
-            showWidgetPicker = false }
+            showWidgetPicker = false
+        }
     )
 
     fun requestAddAt(cellX: Int, cellY: Int) {
@@ -1649,6 +1663,7 @@ fun PSHomeRoute(
                                             WidgetsPanel(
                                                 placements = placements,
                                                 grid = gridSpec,
+                                                layoutMode = WidgetLayoutMode.LANDSCAPE,
                                                 focusRequester = widgetsFR,
                                                 registerKeyHandler = { handler -> widgetsKeyHandler = handler },
                                                 onRequestAddAt = { x, y -> requestAddAt(x, y) },

@@ -23,4 +23,13 @@ internal sealed class DrawerEntry {
 internal sealed class DragPayload {
     data class App(val pkg: String, val fromIndex: Int) : DragPayload()
     data class Card(val placement: PhoneCardPlacement) : DragPayload()
+
+    // ✅ ÚJ: Widget drag payload (grid cell alapon)
+    data class Widget(
+        val widgetId: Int,
+        val spanX: Int,
+        val spanY: Int,
+        val fromCellX: Int,
+        val fromCellY: Int
+    ) : DragPayload()
 }

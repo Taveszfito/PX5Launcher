@@ -115,6 +115,14 @@ internal fun AddStuffPopup(
         appWidgetManager = widgetManager,
         cellWidthDp = cellDp,
         cellHeightDp = cellDp,
+        cellGapXDp = 12.dp,
+        cellGapYDp = 12.dp,
+
+        // ✅ ÚJ: portrait home-on engedjük a nagyobb spanokat is
+        maxSpanX = 4,
+        maxSpanY = 5,
+        filterOutOversize = false,
+
         onPick = { provider, sx, sy -> onPickWidget(provider, sx, sy) },
         onBack = { onCancel() },
         vibrationEnabled = true

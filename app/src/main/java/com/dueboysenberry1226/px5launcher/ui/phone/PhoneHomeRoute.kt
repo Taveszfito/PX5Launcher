@@ -2,8 +2,12 @@
 
 package com.dueboysenberry1226.px5launcher.ui.phone
 
+import com.dueboysenberry1226.px5launcher.data.WidgetLayoutMode
+import android.appwidget.AppWidgetHost
+import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -26,6 +30,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -34,10 +39,14 @@ import androidx.compose.ui.zIndex
 import com.dueboysenberry1226.px5launcher.data.LauncherRepository
 import com.dueboysenberry1226.px5launcher.data.PhoneCardPlacement
 import com.dueboysenberry1226.px5launcher.data.PhoneCardType
+import com.dueboysenberry1226.px5launcher.data.WidgetsRepository
+import com.dueboysenberry1226.px5launcher.data.WidgetPlacement
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
+
+private const val WIDGET_HOST_ID = 1024
 
 @Composable
 fun PhoneHomeRoute(
@@ -45,11 +54,27 @@ fun PhoneHomeRoute(
     onOpenSettings: () -> Unit
 ) {
     val context = LocalContext.current
+    val config = LocalConfiguration.current
+    val isPortrait = config.orientation == Configuration.ORIENTATION_PORTRAIT
+
     val scopeLocale = remember { Locale.getDefault() }
     val scope = rememberCoroutineScope()
 
     val repo = remember(pm, context) { LauncherRepository(context, pm) }
     val recents by repo.recentsFlow.collectAsState(initial = emptyList())
+
+    // ✅ Widgets repo + flow
+    val widgetsRepo = remember(context) { WidgetsRepository(context) }
+    val widgets by widgetsRepo.widgetsFlow.collectAsState(initial = emptyList())
+
+    // ✅ AppWidget host/manager
+    val appWidgetManager = remember(context) { AppWidgetManager.getInstance(context) }
+    val appWidgetHost = remember(context) { AppWidgetHost(context, WIDGET_HOST_ID) }
+
+    DisposableEffect(Unit) {
+        appWidgetHost.startListening()
+        onDispose { appWidgetHost.stopListening() }
+    }
 
     // ===== Ambient light =====
     val ambientColor = remember { mutableStateOf(Color(0xFF101826)) }
@@ -181,7 +206,10 @@ fun PhoneHomeRoute(
     var suppressBackgroundLongPress by remember { mutableStateOf(false) }
 
     var editMode by rememberSaveable { mutableStateOf(false) }
-    fun exitEditMode() { editMode = false; clearPlaceError() }
+    fun exitEditMode() {
+        editMode = false
+        clearPlaceError()
+    }
 
     // ===== Drag state =====
     var dragging by remember { mutableStateOf<DragPayload?>(null) }
@@ -201,6 +229,7 @@ fun PhoneHomeRoute(
         hasDragPointer = false
     }
 
+
     fun slotIndexFromPointer(pointerPx: Offset): Int? {
         val localX = pointerPx.x - gridTopLeftPx.x
         val localY = pointerPx.y - gridTopLeftPx.y
@@ -218,6 +247,23 @@ fun PhoneHomeRoute(
         return row * COLS + col
     }
 
+    fun cellFromPointer(pointerPx: Offset): Pair<Int, Int>? {
+        val localX = pointerPx.x - gridTopLeftPx.x
+        val localY = pointerPx.y - gridTopLeftPx.y
+        if (localX < 0f || localY < 0f) return null
+
+        val stepX = cellSizePx + gapHPx
+        val stepY = cellSizePx + gapVPx
+
+        val col = (localX / stepX).toInt()
+        val row = (localY / stepY).toInt()
+
+        if (col !in 0 until COLS) return null
+        if (row !in 0 until rowsToShowState) return null
+
+        return col to row
+    }
+
     fun moveAppToIndex(pkg: String, toIndex: Int, visibleSlots: Int) {
         if (toIndex !in 0 until visibleSlots) return
 
@@ -229,6 +275,112 @@ fun PhoneHomeRoute(
 
         slots[toIndex] = pkg
         persistSlots()
+    }
+
+    suspend fun deleteWidget(widgetId: Int) {
+        widgetsRepo.remove(widgetId)
+        runCatching { appWidgetHost.deleteAppWidgetId(widgetId) }
+    }
+
+    suspend fun upsertWidget(p: WidgetPlacement) {
+        widgetsRepo.upsert(p)
+    }
+
+    fun finishDragAt(pointerPx: Offset) {
+        dragPointerPx = pointerPx
+        hasDragPointer = true
+
+        val payload = dragging
+        when (payload) {
+            is DragPayload.App -> {
+                val visibleSlots = rowsToShowState * COLS
+                val targetIdx = slotIndexFromPointer(pointerPx)
+                val best = if (targetIdx != null) {
+                    nearestFreeSlot(slots, targetIdx, visibleSlots)
+                } else {
+                    null
+                }
+
+                if (best != null) {
+                    moveAppToIndex(payload.pkg, best, visibleSlots)
+                    clearPlaceError()
+                } else {
+                    placeError = "Nincs szabad slot."
+                }
+            }
+
+            is DragPayload.Widget -> {
+                val targetCell = cellFromPointer(pointerPx)
+                val startX = targetCell?.first ?: payload.fromCellX
+                val startY = targetCell?.second ?: payload.fromCellY
+
+                val best = nearestFreeWidgetCell(
+                    slots = slots,
+                    cards = cards,
+                    widgets = widgets,
+                    startCellX = startX,
+                    startCellY = startY,
+                    spanX = payload.spanX,
+                    spanY = payload.spanY,
+                    rowsToShow = rowsToShowState,
+                    ignoreWidgetId = payload.widgetId
+                )
+
+                if (best != null) {
+                    val (bx, by) = best
+                    scope.launch {
+                        upsertWidget(
+                            WidgetPlacement(
+                                appWidgetId = payload.widgetId,
+                                provider = widgets.firstOrNull { it.appWidgetId == payload.widgetId }?.provider ?: "",
+                                cellX = bx,
+                                cellY = by,
+                                spanX = payload.spanX,
+                                spanY = payload.spanY,
+                                layoutMode = if (isPortrait) {
+                                    WidgetLayoutMode.PORTRAIT
+                                } else {
+                                    WidgetLayoutMode.LANDSCAPE
+                                }
+                            )
+                        )
+                    }
+                    clearPlaceError()
+                } else {
+                    placeError = "Nincs elég szabad hely a widgetnek."
+                }
+            }
+
+            is DragPayload.Card -> {
+                val targetCell = cellFromPointer(pointerPx)
+                val targetRow = targetCell?.second ?: payload.placement.row
+
+                val bestRow = nearestFreeCardRow(
+                    slots = slots,
+                    cards = cards,
+                    targetRow = targetRow,
+                    rowsToShow = rowsToShowState,
+                    ignore = payload.placement
+                )
+
+                if (bestRow != null) {
+                    val idx = cards.indexOfFirst { it == payload.placement }
+                    if (idx != -1) {
+                        cards[idx] = payload.placement.copy(row = bestRow, col = 0)
+                        persistCards()
+                        clearPlaceError()
+                    }
+                } else {
+                    placeError = "Nincs elég szabad hely a kártyának."
+                }
+            }
+
+            else -> Unit
+        }
+
+        stopDrag()
+        dragPointerId = null
+        suppressBackgroundLongPress = false
     }
 
     // grid used sizes
@@ -279,28 +431,7 @@ fun PhoneHomeRoute(
                                 } ?: event.changes.firstOrNull { it.changedToUp() }
 
                                 if (upChange != null) {
-                                    dragPointerPx = upChange.position
-                                    hasDragPointer = true
-
-                                    val payload = dragging
-                                    if (payload is DragPayload.App) {
-                                        val visibleSlots = rowsToShowState * COLS
-                                        val targetIdx = slotIndexFromPointer(dragPointerPx)
-                                        val best = if (targetIdx != null) {
-                                            nearestFreeSlot(slots, targetIdx, visibleSlots)
-                                        } else null
-
-                                        if (best != null) {
-                                            moveAppToIndex(payload.pkg, best, visibleSlots)
-                                            clearPlaceError()
-                                        } else {
-                                            placeError = "Nincs szabad slot."
-                                        }
-                                    }
-
-                                    stopDrag()
-                                    dragPointerId = null
-                                    suppressBackgroundLongPress = false
+                                    finishDragAt(upChange.position)
                                     break
                                 }
                             }
@@ -376,21 +507,31 @@ fun PhoneHomeRoute(
 
             Spacer(Modifier.height(10.dp))
 
-            // ✅ itt legyen a weight, mert EZ ColumnScope
             PhoneHomeGrid(
                 modifier = Modifier.weight(1f),
 
                 slots = slots,
                 cards = cards,
+                widgets = widgets,
+
+                appWidgetHost = appWidgetHost,
+                appWidgetManager = appWidgetManager,
+
                 editMode = editMode,
                 resolveLabelForSlot = { resolveLabelForSlot(it) },
                 resolveIconForSlot = { resolveIconForSlot(it) },
                 onRemoveFromHome = { removeFromHome(it) },
                 onLaunch = { launch(it) },
 
+                onDeleteWidget = { widgetId ->
+                    scope.launch {
+                        deleteWidget(widgetId)
+                    }
+                },
+
                 dragging = dragging,
                 setDragging = { payload ->
-                    if (payload is DragPayload.App) {
+                    if (payload is DragPayload.App || payload is DragPayload.Widget) {
                         homeQuickMenuOpen = false
                         addStuffOpen = false
                         drawerOpen = false
@@ -403,6 +544,10 @@ fun PhoneHomeRoute(
                 dragPointerPx = dragPointerPx,
                 hasDragPointer = hasDragPointer,
                 setHasDragPointer = { hasDragPointer = it },
+
+
+                setDragPointer = { dragPointerPx = it },
+                finishDragAt = { finishDragAt(it) },
 
                 setGridTopLeftPx = { gridTopLeftPx = it },
                 setCellSizePx = { cellSizePx = it },
@@ -471,8 +616,72 @@ fun PhoneHomeRoute(
                         },
                         pm = pm,
                         cellDp = cellDp,
-                        onPickWidget = { _, _, _ ->
-                            addStuffOpen = false
+
+                        // ✅ Widget pick: allocate + bind + place
+                        onPickWidget = { providerInfo, rawSpanX, rawSpanY ->
+                            scope.launch {
+                                val maxX = if (isPortrait) 4 else 2
+                                val maxY = if (isPortrait) 5 else 2
+                                val spanX = rawSpanX.coerceIn(1, maxX)
+                                val spanY = rawSpanY.coerceIn(1, maxY)
+
+                                val widgetId = appWidgetHost.allocateAppWidgetId()
+                                val provider = providerInfo.provider ?: run {
+                                    placeError = "Widget provider hiba."
+                                    return@launch
+                                }
+
+                                val bound = runCatching {
+                                    appWidgetManager.bindAppWidgetIdIfAllowed(widgetId, provider)
+                                }.getOrDefault(false)
+
+                                if (!bound) {
+                                    runCatching { appWidgetHost.deleteAppWidgetId(widgetId) }
+                                    placeError = "A widget nem köthető (engedély kellhet)."
+                                    return@launch
+                                }
+
+                                val best = nearestFreeWidgetCell(
+                                    slots = slots,
+                                    cards = cards,
+                                    widgets = widgets,
+                                    startCellX = 0,
+                                    startCellY = 0,
+                                    spanX = spanX,
+                                    spanY = spanY,
+                                    rowsToShow = rowsToShowState,
+                                    ignoreWidgetId = null
+                                )
+
+                                if (best == null) {
+                                    runCatching { appWidgetHost.deleteAppWidgetId(widgetId) }
+                                    placeError = "Nincs elég szabad hely a widgetnek."
+                                    return@launch
+                                }
+
+                                val (bx, by) = best
+                                upsertWidget(
+                                    WidgetPlacement(
+                                        appWidgetId = widgetId,
+                                        provider = provider.flattenToString(),
+                                        cellX = bx,
+                                        cellY = by,
+                                        spanX = spanX,
+                                        spanY = spanY,
+                                        layoutMode = if (isPortrait) {
+                                            WidgetLayoutMode.PORTRAIT
+                                        } else {
+                                            WidgetLayoutMode.LANDSCAPE
+                                        }
+                                    )
+                                )
+
+                                addStuffOpen = false
+                                selectedCard = null
+                                addError = null
+                                clearPlaceError()
+                                editMode = true
+                            }
                         }
                     )
                 }
@@ -580,7 +789,8 @@ fun PhoneHomeRoute(
             moveAppToIndex = { pkg, idx, vis -> moveAppToIndex(pkg, idx, vis) },
 
             placeErrorSet = { placeError = it },
-            clearPlaceError = { clearPlaceError() }
+            clearPlaceError = { clearPlaceError() },
+            finishDragAt = { finishDragAt(it) }
         )
     }
 }

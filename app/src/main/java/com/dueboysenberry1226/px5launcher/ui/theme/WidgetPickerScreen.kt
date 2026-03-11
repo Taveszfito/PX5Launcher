@@ -1,6 +1,9 @@
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.dueboysenberry1226.px5launcher.ui.widgets
 
+import android.appwidget.AppWidgetHostView
+import android.content.Context
+import kotlin.math.ceil
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.pm.PackageManager
@@ -39,9 +42,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.ui.Haptics
-import kotlin.math.ceil
 import kotlin.math.max
-import kotlin.math.min
 
 sealed class VisibleItem {
     data class Header(val pkg: String, val count: Int) : VisibleItem()
@@ -54,10 +55,21 @@ sealed class VisibleItem {
 }
 
 class WidgetPickerState internal constructor(
+    private val context: Context,
     val pm: PackageManager,
     private val appWidgetManager: AppWidgetManager,
     private val cellWidthDp: Dp,
     private val cellHeightDp: Dp,
+    private val cellGapXDp: Dp,
+    private val cellGapYDp: Dp,
+
+    // ✅ új: mennyi a maximum engedett span (külön portrait/landscape)
+    private val maxSpanX: Int,
+    private val maxSpanY: Int,
+
+    // ✅ új: landscape-ban kiszűrjük a túl nagy widgeteket (portraitban nem)
+    private val filterOutOversize: Boolean,
+
     private val onPick: (AppWidgetProviderInfo, Int, Int) -> Unit,
     private val onBack: () -> Unit,
     private val hapticClick: () -> Unit,
@@ -99,12 +111,35 @@ class WidgetPickerState internal constructor(
     val visibleItems: List<VisibleItem> by derivedStateOf {
         buildList {
             filtered.forEach { (pkg, list) ->
-                add(VisibleItem.Header(pkg = pkg, count = list.size))
+                // a header count-ot úgy számoljuk, hogy a ténylegesen listázott widgetek száma legyen
+                val eligible = list.map { p ->
+                    val (sx, sy) = inferSpan(
+                        context = context,
+                        info = p,
+                        cellW = cellWidthDp.value,
+                        cellH = cellHeightDp.value,
+                        gapX = cellGapXDp.value,
+                        gapY = cellGapYDp.value,
+                        maxSpanX = maxSpanX,
+                        maxSpanY = maxSpanY
+                    )
+                    Triple(p, sx, sy)
+                }.filter { (_, sx, sy) ->
+                    if (!filterOutOversize) true
+                    else (sx <= maxSpanX && sy <= maxSpanY) // itt igazából mindig igaz, mert clamp-elt, de hagyjuk érthetően
+                }
+
+                add(VisibleItem.Header(pkg = pkg, count = eligible.size))
+
                 if (expandedPkgs.contains(pkg)) {
-                    list.sortedBy { safeWidgetLabel(pm, it, widgetFallbackLabel).lowercase() }.forEach { p ->
-                        val (sx, sy) = inferSpan(p, cellWidthDp.value, cellHeightDp.value)
-                        add(VisibleItem.Widget(pkg = pkg, provider = p, spanX = sx, spanY = sy))
-                    }
+                    eligible
+                        .sortedBy { (p, _, _) -> safeWidgetLabel(pm, p, widgetFallbackLabel).lowercase() }
+                        .forEach { (p, sx, sy) ->
+                            // ✅ ha landscape filterOutOversize = true és valamiért mégis túl nagy lenne,
+                            // akkor itt vágjuk ki (biztonsági)
+                            if (filterOutOversize && (sx > maxSpanX || sy > maxSpanY)) return@forEach
+                            add(VisibleItem.Widget(pkg = pkg, provider = p, spanX = sx, spanY = sy))
+                        }
                 }
             }
         }
@@ -226,6 +261,16 @@ fun rememberWidgetPickerState(
     appWidgetManager: AppWidgetManager,
     cellWidthDp: Dp,
     cellHeightDp: Dp,
+    cellGapXDp: Dp,
+    cellGapYDp: Dp,
+
+    // ✅ új paraméterek:
+    // - landscape: maxSpanX=2, maxSpanY=2, filterOutOversize=true
+    // - portrait : maxSpanX=4, maxSpanY=5, filterOutOversize=false
+    maxSpanX: Int,
+    maxSpanY: Int,
+    filterOutOversize: Boolean,
+
     onPick: (provider: AppWidgetProviderInfo, spanX: Int, spanY: Int) -> Unit,
     onBack: () -> Unit,
     vibrationEnabled: Boolean = true
@@ -238,13 +283,31 @@ fun rememberWidgetPickerState(
     }
 
     return remember(
-        pm, appWidgetManager, cellWidthDp, cellHeightDp, onPick, onBack, hapticClick, widgetFallbackLabel
+        pm,
+        appWidgetManager,
+        cellWidthDp,
+        cellHeightDp,
+        cellGapXDp,
+        cellGapYDp,
+        maxSpanX,
+        maxSpanY,
+        filterOutOversize,
+        onPick,
+        onBack,
+        hapticClick,
+        widgetFallbackLabel
     ) {
         WidgetPickerState(
+            context = context,
             pm = pm,
             appWidgetManager = appWidgetManager,
             cellWidthDp = cellWidthDp,
             cellHeightDp = cellHeightDp,
+            cellGapXDp = cellGapXDp,
+            cellGapYDp = cellGapYDp,
+            maxSpanX = maxSpanX.coerceAtLeast(1),
+            maxSpanY = maxSpanY.coerceAtLeast(1),
+            filterOutOversize = filterOutOversize,
             onPick = onPick,
             onBack = onBack,
             hapticClick = hapticClick,
@@ -545,21 +608,85 @@ private fun WidgetRow(
     }
 }
 
+/**
+ * span becslés a provider minWidth/minHeight alapján, a cella dp-hez képest.
+ * ✅ NEM vágjuk le 2×2-re, hanem clamp maxSpanX/maxSpanY-ig.
+ */
 private fun inferSpan(
+    context: Context,
     info: AppWidgetProviderInfo,
     cellW: Float,
-    cellH: Float
+    cellH: Float,
+    gapX: Float,
+    gapY: Float,
+    maxSpanX: Int,
+    maxSpanY: Int
 ): Pair<Int, Int> {
-    val w = (if (info.minResizeWidth > 0) info.minResizeWidth else info.minWidth).toFloat()
-    val h = (if (info.minResizeHeight > 0) info.minResizeHeight else info.minHeight).toFloat()
 
-    val cw = max(1f, cellW)
-    val ch = max(1f, cellH)
+    val safeMaxX = maxSpanX.coerceAtLeast(1)
+    val safeMaxY = maxSpanY.coerceAtLeast(1)
 
-    val sx = ceil(w / cw).toInt().coerceIn(1, 6)
-    val sy = ceil(h / ch).toInt().coerceIn(1, 6)
+    val density = context.resources.displayMetrics.density
 
-    return min(sx, 2) to min(sy, 2)
+    val defaultPadding = AppWidgetHostView.getDefaultPaddingForWidget(
+        context,
+        info.provider,
+        null
+    )
+
+    // px → dp konverzió
+    val horizontalPadding =
+        (defaultPadding.left + defaultPadding.right) / density
+
+    val verticalPadding =
+        (defaultPadding.top + defaultPadding.bottom) / density
+
+
+    val rawMinWidth = when {
+        info.minResizeWidth > 0 -> info.minResizeWidth / density
+        info.minWidth > 0 -> info.minWidth / density
+        else -> cellW
+    }
+
+    val rawMinHeight = when {
+        info.minResizeHeight > 0 -> info.minResizeHeight / density
+        info.minHeight > 0 -> info.minHeight / density
+        else -> cellH
+    }
+
+    val contentWidth = (rawMinWidth - horizontalPadding).coerceAtLeast(1f)
+    val contentHeight = (rawMinHeight - verticalPadding).coerceAtLeast(1f)
+
+    val cw = cellW.coerceAtLeast(1f)
+    val ch = cellH.coerceAtLeast(1f)
+    val gx = gapX.coerceAtLeast(0f)
+    val gy = gapY.coerceAtLeast(0f)
+
+    fun spanFor(required: Float, cell: Float, gap: Float, maxSpan: Int): Int {
+        var span = 1
+        while (span < maxSpan) {
+            val available = span * cell + (span - 1) * gap
+            if (required <= available + 4f) break
+            span++
+        }
+        return span.coerceIn(1, maxSpan)
+    }
+
+    val spanX = spanFor(
+        required = contentWidth,
+        cell = cw,
+        gap = gx,
+        maxSpan = safeMaxX
+    )
+
+    val spanY = spanFor(
+        required = contentHeight,
+        cell = ch,
+        gap = gy,
+        maxSpan = safeMaxY
+    )
+
+    return spanX to spanY
 }
 
 private fun safeAppLabel(pm: PackageManager, pkg: String): String {

@@ -2,6 +2,10 @@
 
 package com.dueboysenberry1226.px5launcher.ui.phone
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.ui.input.pointer.pointerInput
 import android.graphics.drawable.Drawable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
@@ -16,12 +20,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.consumeAllChanges
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.font.FontWeight
@@ -116,12 +118,16 @@ internal fun HomeSlot(
     onDelete: () -> Unit,
 
     canDrag: Boolean,
-    onStartDrag: () -> Unit,
+    onStartDrag: (rootPointer: Offset) -> Unit,
+    onDragMove: (rootPointer: Offset) -> Unit,
+    onEndDrag: (rootPointer: Offset) -> Unit,
 
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val isInvisibleEmpty = isEmpty && !showPlaceholder
+    var slotTopLeftPx by remember { mutableStateOf(Offset.Zero) }
+    var lastRootPointer by remember { mutableStateOf(Offset.Zero) }
 
     val bg = when {
         isInvisibleEmpty -> Color.Transparent
@@ -129,25 +135,48 @@ internal fun HomeSlot(
         else -> Color.White.copy(alpha = 0.08f)
     }
 
-    val base = if (isInvisibleEmpty) modifier else modifier.then(
-        if (id != null && canDrag) {
-            Modifier.pointerInput(id) {
-                detectDragGesturesAfterLongPress(
-                    onDragStart = { onStartDrag() },
-                    onDrag = { change, _ -> change.consumeAllChanges() },
-                    onDragEnd = { /* drop-ot a GLOBAL overlay intézi */ },
-                    onDragCancel = { /* drop-ot a GLOBAL overlay intézi */ }
-                )
+    val base = if (isInvisibleEmpty) {
+        modifier
+    } else {
+        modifier
+            .onGloballyPositioned { coords ->
+                val pos = coords.positionInRoot()
+                slotTopLeftPx = Offset(pos.x, pos.y)
             }
-        } else {
-            Modifier.combinedClickable(
+            .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onClick,
                 onLongClick = { }
             )
-        }
-    )
+            .then(
+                if (id != null && canDrag) {
+                    Modifier.pointerInput(id) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = { local ->
+                                val root = slotTopLeftPx + local
+                                lastRootPointer = root
+                                onStartDrag(root)
+                            },
+                            onDrag = { change, _ ->
+                                change.consumeAllChanges()
+                                val root = slotTopLeftPx + change.position
+                                lastRootPointer = root
+                                onDragMove(root)
+                            },
+                            onDragEnd = {
+                                onEndDrag(lastRootPointer)
+                            },
+                            onDragCancel = {
+                                onEndDrag(lastRootPointer)
+                            }
+                        )
+                    }
+                } else {
+                    Modifier
+                }
+            )
+    }
 
     Card(
         colors = CardDefaults.cardColors(containerColor = bg),
@@ -159,7 +188,9 @@ internal fun HomeSlot(
         Box(Modifier.fillMaxSize()) {
             if (showDelete && id != null) {
                 DeleteBadge(
-                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp),
                     onClick = onDelete
                 )
             }
@@ -193,6 +224,59 @@ internal fun HomeSlot(
             }
         }
     }
+}
+
+/**
+ * ✅ Helper: Widget doboz long-press drag felület.
+ * (A drop-ot a global overlay intézi, ugyanúgy mint az appoknál.)
+ */
+@Composable
+internal fun WidgetDragSurface(
+    enabled: Boolean,
+    key: Any,
+    onStartDrag: (rootPointer: Offset) -> Unit,
+    onDragMove: (rootPointer: Offset) -> Unit,
+    onEndDrag: (rootPointer: Offset) -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit
+) {
+    var topLeftPx by remember { mutableStateOf(Offset.Zero) }
+    var lastRootPointer by remember { mutableStateOf(Offset.Zero) }
+
+    val m = modifier
+        .onGloballyPositioned { coords ->
+            val pos = coords.positionInRoot()
+            topLeftPx = Offset(pos.x, pos.y)
+        }
+        .then(
+            if (!enabled) {
+                Modifier
+            } else {
+                Modifier.pointerInput(key) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { local ->
+                            val root = topLeftPx + local
+                            lastRootPointer = root
+                            onStartDrag(root)
+                        },
+                        onDrag = { change, _ ->
+                            change.consumeAllChanges()
+                            val root = topLeftPx + change.position
+                            lastRootPointer = root
+                            onDragMove(root)
+                        },
+                        onDragEnd = {
+                            onEndDrag(lastRootPointer)
+                        },
+                        onDragCancel = {
+                            onEndDrag(lastRootPointer)
+                        }
+                    )
+                }
+            }
+        )
+
+    Box(modifier = m, content = content)
 }
 
 @Composable
@@ -235,7 +319,11 @@ internal fun DrawerRow(
 
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = if (drawerDragActive) Color.Transparent else Color.White.copy(alpha = 0.08f)
+            containerColor = if (drawerDragActive) {
+                Color.Transparent
+            } else {
+                Color.White.copy(alpha = 0.08f)
+            }
         ),
         shape = RoundedCornerShape(18.dp),
         modifier = Modifier
@@ -246,27 +334,67 @@ internal fun DrawerRow(
                 rowTopLeftPx = Offset(pos.x, pos.y)
             }
             .pointerInput(app.packageName) {
-                detectDragGesturesAfterLongPress(
-                    onDragStart = { local ->
-                        val root = rowTopLeftPx + local
+                val moveSlop = 18.dp.toPx()
+
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var dragStarted = false
+                    var longPressReached = false
+                    var pointerId = down.id
+                    var currentPos = down.position
+                    lastRootPointer = rowTopLeftPx + currentPos
+
+                    val longPress = awaitLongPressOrCancellation(down.id)
+
+                    if (longPress != null) {
+                        longPressReached = true
+                        currentPos = longPress.position
+                        lastRootPointer = rowTopLeftPx + currentPos
+                    }
+
+                    if (!longPressReached) {
+                        return@awaitEachGesture
+                    }
+
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == pointerId } ?: break
+
+                        if (!change.pressed) {
+                            if (dragStarted) {
+                                onEndDrag(lastRootPointer)
+                            }
+                            break
+                        }
+
+                        currentPos = change.position
+                        val root = rowTopLeftPx + currentPos
                         lastRootPointer = root
-                        onStartDrag(root)
-                    },
-                    onDrag = { change, _ ->
-                        change.consumeAllChanges()
-                        val root = rowTopLeftPx + change.position
-                        lastRootPointer = root
-                        onDragMove(root)
-                    },
-                    onDragEnd = { onEndDrag(lastRootPointer) },
-                    onDragCancel = { onEndDrag(lastRootPointer) }
-                )
+
+                        val moved = currentPos - down.position
+                        val movedDistance = kotlin.math.hypot(
+                            moved.x.toDouble(),
+                            moved.y.toDouble()
+                        ).toFloat()
+
+                        if (!dragStarted) {
+                            if (movedDistance >= moveSlop) {
+                                dragStarted = true
+                                onStartDrag(root)
+                                change.consume()
+                            }
+                        } else {
+                            onDragMove(root)
+                            change.consume()
+                        }
+                    }
+                }
             }
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = { if (!drawerDragActive) onClick() },
-                onLongClick = { /* pointerInput kezeli */ }
+                onLongClick = { /* a pointerInput kezeli */ }
             )
     ) {
         if (drawerDragActive) return@Card
@@ -278,6 +406,7 @@ internal fun DrawerRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             val bmp = remember(app.icon) { drawableToBitmap(app.icon) }
+
             if (bmp != null) {
                 Image(
                     bitmap = bmp.asImageBitmap(),
@@ -285,7 +414,11 @@ internal fun DrawerRow(
                     modifier = Modifier.size(32.dp)
                 )
             } else {
-                Text("•", color = Color.White.copy(alpha = 0.35f), fontSize = 18.sp)
+                Text(
+                    text = "•",
+                    color = Color.White.copy(alpha = 0.35f),
+                    fontSize = 18.sp
+                )
             }
 
             Spacer(Modifier.width(12.dp))

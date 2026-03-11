@@ -50,6 +50,7 @@ internal fun PhoneHomeDrawer(
 
     setDragPointer: (Offset) -> Unit,
     setHasDragPointer: (Boolean) -> Unit,
+    finishDragAt: (Offset) -> Unit,
 
     onBeginEditDrag: () -> Unit,
     onEndEditDrag: () -> Unit,
@@ -63,12 +64,19 @@ internal fun PhoneHomeDrawer(
     placeErrorSet: (String?) -> Unit,
     clearPlaceError: () -> Unit
 ) {
-    var search by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
+    var search by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(""))
+    }
+
     val scopeLocale = remember { Locale.getDefault() }
 
     val filteredApps = remember(allApps, search.text) {
         val q = search.text.trim().lowercase(scopeLocale)
-        if (q.isEmpty()) allApps else allApps.filter { it.label.lowercase(scopeLocale).contains(q) }
+        if (q.isEmpty()) {
+            allApps
+        } else {
+            allApps.filter { it.label.lowercase(scopeLocale).contains(q) }
+        }
     }
 
     fun letterOf(app: AppItem): String {
@@ -83,6 +91,7 @@ internal fun PhoneHomeDrawer(
     val drawerEntries = remember(filteredApps) {
         val out = mutableListOf<DrawerEntry>()
         var last: String? = null
+
         filteredApps.forEach { app ->
             val l = letterOf(app)
             if (l != last) {
@@ -91,20 +100,28 @@ internal fun PhoneHomeDrawer(
             }
             out += DrawerEntry.App(app, l)
         }
+
         out
     }
 
     val drawerListState = rememberLazyListState()
-    var activeLetter by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(drawerEntries, drawerListState.firstVisibleItemIndex) {
-        val start = drawerListState.firstVisibleItemIndex.coerceIn(0, (drawerEntries.size - 1).coerceAtLeast(0))
-        val appEntry = drawerEntries.drop(start).firstOrNull { it is DrawerEntry.App } as? DrawerEntry.App
-        activeLetter = appEntry?.letter
+    val activeLetter by remember(drawerEntries, drawerListState) {
+        derivedStateOf {
+            val visibleIndex = drawerListState.layoutInfo.visibleItemsInfo.firstOrNull()?.index ?: 0
+            val start = visibleIndex.coerceIn(0, (drawerEntries.size - 1).coerceAtLeast(0))
+            val appEntry = drawerEntries
+                .asSequence()
+                .drop(start)
+                .firstOrNull { it is DrawerEntry.App } as? DrawerEntry.App
+            appEntry?.letter
+        }
     }
 
     LaunchedEffect(search.text) {
-        if (drawerEntries.isNotEmpty()) drawerListState.scrollToItem(0)
+        if (drawerEntries.isNotEmpty()) {
+            drawerListState.scrollToItem(0)
+        }
     }
 
     AnimatedVisibility(
@@ -125,30 +142,46 @@ internal fun PhoneHomeDrawer(
         )
 
         Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = if (dragActive) 0f else 0.45f))
-                .combinedClickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = { if (!dragActive) onOpenChange(false) },
-                    onLongClick = { if (!dragActive) onOpenChange(false) }
-                )
+            modifier = Modifier.fillMaxSize()
         ) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(Color.Black.copy(alpha = if (dragActive) 0f else 0.45f))
+                    .combinedClickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { if (!dragActive) onOpenChange(false) },
+                        onLongClick = { }
+                    )
+            )
+
             Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF0B1020).copy(alpha = 0.96f)),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFF0B1020).copy(alpha = 0.96f)
+                ),
                 shape = RoundedCornerShape(24.dp),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .graphicsLayer(alpha = drawerAlpha)
-                    .offset(y = (drawerSlide).dp)
+                    .offset(y = drawerSlide.dp)
                     .fillMaxWidth()
                     .statusBarsPadding()
                     .navigationBarsPadding()
                     .padding(top = 10.dp)
                     .heightIn(min = 420.dp)
+                    .combinedClickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { },
+                        onLongClick = { }
+                    )
             ) {
-                Column(Modifier.fillMaxSize().padding(14.dp)) {
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(14.dp)
+                ) {
                     Row(
                         Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
@@ -159,7 +192,9 @@ internal fun PhoneHomeDrawer(
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold
                         )
+
                         Spacer(modifier = Modifier.weight(1f))
+
                         Text(
                             text = "Bezár",
                             color = Color.White.copy(alpha = 0.75f),
@@ -182,7 +217,12 @@ internal fun PhoneHomeDrawer(
                         value = search,
                         onValueChange = { search = it },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Keresés…", color = Color.White.copy(alpha = 0.45f)) },
+                        placeholder = {
+                            Text(
+                                text = "Keresés…",
+                                color = Color.White.copy(alpha = 0.45f)
+                            )
+                        },
                         singleLine = true,
                         colors = TextFieldDefaults.colors(
                             focusedTextColor = Color.White,
@@ -205,16 +245,23 @@ internal fun PhoneHomeDrawer(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         contentPadding = PaddingValues(bottom = 16.dp)
                     ) {
-                        itemsIndexed(drawerEntries, key = { idx, e ->
-                            when (e) {
-                                is DrawerEntry.Header -> "H:${e.letter}:$idx"
-                                is DrawerEntry.App -> "A:${e.app.packageName}"
+                        itemsIndexed(
+                            drawerEntries,
+                            key = { idx, e ->
+                                when (e) {
+                                    is DrawerEntry.Header -> "H:${e.letter}:$idx"
+                                    is DrawerEntry.App -> "A:${e.app.packageName}"
+                                }
                             }
-                        }) { _, entry ->
+                        ) { _, entry ->
                             when (entry) {
                                 is DrawerEntry.Header -> {
-                                    DrawerHeader(letter = entry.letter, selected = (entry.letter == activeLetter))
+                                    DrawerHeader(
+                                        letter = entry.letter,
+                                        selected = entry.letter == activeLetter
+                                    )
                                 }
+
                                 is DrawerEntry.App -> {
                                     DrawerRow(
                                         app = entry.app,
@@ -228,11 +275,15 @@ internal fun PhoneHomeDrawer(
                                         onStartDrag = { rootPointer ->
                                             onBeginEditDrag()
 
-                                            setDragging(DragPayload.App(pkg = entry.app.packageName, fromIndex = -1))
+                                            setDragging(
+                                                DragPayload.App(
+                                                    pkg = entry.app.packageName,
+                                                    fromIndex = -1
+                                                )
+                                            )
                                             setHasDragPointer(true)
                                             setDragPointer(rootPointer)
 
-                                            // drawer marad "nyitva", csak elrejtjük
                                             onDragActiveChange(true)
                                         },
                                         onDragMove = { rootPointer ->
@@ -243,22 +294,10 @@ internal fun PhoneHomeDrawer(
                                             setHasDragPointer(true)
                                             setDragPointer(rootPointer)
 
-                                            val payload = dragging as? DragPayload.App
-                                            if (payload != null) {
-                                                val visibleSlots = rowsToShowState * COLS
-                                                val targetIdx = slotIndexFromPointer(rootPointer)
-                                                val best = if (targetIdx != null) nearestFreeSlot(targetIdx, visibleSlots) else null
-                                                if (best != null) {
-                                                    moveAppToIndex(payload.pkg, best, visibleSlots)
-                                                    clearPlaceError()
-                                                } else {
-                                                    placeErrorSet("Nincs szabad slot.")
-                                                }
-                                            }
+                                            finishDragAt(rootPointer)
 
                                             setDragging(null)
                                             onEndEditDrag()
-
                                             onDragActiveChange(false)
                                             onOpenChange(false)
                                         }
