@@ -90,12 +90,14 @@ fun WidgetsPanel(
 
     val coverMap: Map<Pair<Int, Int>, WidgetPlacement> = remember(visiblePlacements, grid.cols, grid.rows) {
         buildMap {
-            for (p in placements) {
-                for (dy in 0 until p.spanY) for (dx in 0 until p.spanX) {
-                    val x = p.cellX + dx
-                    val y = p.cellY + dy
-                    if (x in 0 until grid.cols && y in 0 until grid.rows) {
-                        put(x to y, p)
+            for (p in visiblePlacements) {
+                for (dy in 0 until p.spanY) {
+                    for (dx in 0 until p.spanX) {
+                        val x = p.cellX + dx
+                        val y = p.cellY + dy
+                        if (x in 0 until grid.cols && y in 0 until grid.rows) {
+                            put(x to y, p)
+                        }
                     }
                 }
             }
@@ -573,41 +575,43 @@ fun WidgetsPanel(
                         val pSr = (p.cellY / 2).coerceIn(0, slotRowsLogical - 1)
                         if (pSc != sc || pSr != sr) continue
 
-                        val localCx = (p.cellX - cellX).coerceIn(0, 1)
-                        val localCy = (p.cellY - cellY).coerceIn(0, 1)
+                        key(p.appWidgetId, p.cellX, p.cellY, p.provider) {
+                            val localCx = (p.cellX - cellX).coerceIn(0, 1)
+                            val localCy = (p.cellY - cellY).coerceIn(0, 1)
 
-                        val isSel = (selectedPlacement?.appWidgetId == p.appWidgetId)
+                            val isSel = (selectedPlacement?.appWidgetId == p.appWidgetId)
 
-                        val scale by animateFloatAsState(
-                            targetValue = if (isSel) 1.02f else 1.0f,
-                            label = "widgetScale"
-                        )
+                            val scale by animateFloatAsState(
+                                targetValue = if (isSel) 1.02f else 1.0f,
+                                label = "widgetScale"
+                            )
 
-                        Box(
-                            modifier = Modifier
-                                .offset(
-                                    x = cardX(c) + innerPad + localOffset(localCx),
-                                    y = cardY() + innerPad + localOffset(localCy)
-                                )
-                                .size(spanSize(p.spanX), spanSize(p.spanY))
-                                .scale(scale)
-                                .border(
-                                    2.dp,
-                                    Color.White.copy(alpha = if (isSel) 0.95f else 0.18f),
-                                    cellShape
-                                )
-                                .combinedClickable(
-                                    interactionSource = remember { noRipple },
-                                    indication = null,
-                                    onClick = {
-                                        selectedX = p.cellX
-                                        selectedY = p.cellY
-                                        clampSel()
-                                    },
-                                    onLongClick = { openMenuFor(p) }
-                                )
-                        ) {
-                            renderWidget(p, Modifier.fillMaxSize())
+                            Box(
+                                modifier = Modifier
+                                    .offset(
+                                        x = cardX(c) + innerPad + localOffset(localCx),
+                                        y = cardY() + innerPad + localOffset(localCy)
+                                    )
+                                    .size(spanSize(p.spanX), spanSize(p.spanY))
+                                    .scale(scale)
+                                    .border(
+                                        2.dp,
+                                        Color.White.copy(alpha = if (isSel) 0.95f else 0.18f),
+                                        cellShape
+                                    )
+                                    .combinedClickable(
+                                        interactionSource = remember { noRipple },
+                                        indication = null,
+                                        onClick = {
+                                            selectedX = p.cellX
+                                            selectedY = p.cellY
+                                            clampSel()
+                                        },
+                                        onLongClick = { openMenuFor(p) }
+                                    )
+                            ) {
+                                renderWidget(p, Modifier.fillMaxSize())
+                            }
                         }
                     }
                 }

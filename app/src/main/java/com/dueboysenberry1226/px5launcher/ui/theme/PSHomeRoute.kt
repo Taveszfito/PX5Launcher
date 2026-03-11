@@ -168,10 +168,11 @@ fun PSHomeRoute(
 
     val pinned by repo.pinnedFlow.collectAsState(initial = emptySet())
     val recents by repo.recentsFlow.collectAsState(initial = emptyList())
-    val placements by widgetsRepo.widgetsFlow.collectAsState(initial = emptyList())
-    val landscapePlacements = remember(placements) {
-        placements.filter { it.layoutMode == WidgetLayoutMode.LANDSCAPE }
-    }
+    val placements by widgetsRepo
+        .widgetsFlow(WidgetLayoutMode.LANDSCAPE)
+        .collectAsState(initial = emptyList())
+
+    val landscapePlacements = placements
 
     val cfg = LocalConfiguration.current
     val gridSpec = remember(cfg.screenWidthDp) {
@@ -1671,45 +1672,48 @@ fun PSHomeRoute(
                                                 onDelete = { placement -> deleteWidget(placement) },
                                                 onCellPxKnown = { px -> cellPx = px },
                                                 renderWidget = { placement, modifier ->
-                                                    val info = widgetManager.getAppWidgetInfo(placement.appWidgetId)
-                                                    if (info == null) {
-                                                        Box(modifier, contentAlignment = Alignment.Center) {
-                                                            Text(
-                                                                context.getString(R.string.homescreen_widget_error_title),
-                                                                color = Color.White.copy(alpha = 0.65f)
+                                                    key(placement.appWidgetId, placement.provider, placement.cellX, placement.cellY) {
+                                                        val info = widgetManager.getAppWidgetInfo(placement.appWidgetId)
+
+                                                        if (info == null) {
+                                                            Box(modifier, contentAlignment = Alignment.Center) {
+                                                                Text(
+                                                                    context.getString(R.string.homescreen_widget_error_title),
+                                                                    color = Color.White.copy(alpha = 0.65f)
+                                                                )
+                                                            }
+                                                        } else {
+                                                            AndroidView(
+                                                                factory = { ctx ->
+                                                                    try {
+                                                                        widgetHost.createView(ctx, placement.appWidgetId, info).apply {
+                                                                            setAppWidget(placement.appWidgetId, info)
+                                                                            setPadding(0, 0, 0, 0)
+                                                                            layoutParams = FrameLayout.LayoutParams(
+                                                                                FrameLayout.LayoutParams.MATCH_PARENT,
+                                                                                FrameLayout.LayoutParams.MATCH_PARENT
+                                                                            )
+                                                                        }
+                                                                    } catch (_: Throwable) {
+                                                                        FrameLayout(ctx).apply {
+                                                                            addView(
+                                                                                TextView(ctx).apply {
+                                                                                    text = context.getString(R.string.homescreen_widget_error_title)
+                                                                                }
+                                                                            )
+                                                                        }
+                                                                    }
+                                                                },
+                                                                update = { view ->
+                                                                    view.setPadding(0, 0, 0, 0)
+                                                                    view.layoutParams = FrameLayout.LayoutParams(
+                                                                        FrameLayout.LayoutParams.MATCH_PARENT,
+                                                                        FrameLayout.LayoutParams.MATCH_PARENT
+                                                                    )
+                                                                },
+                                                                modifier = modifier
                                                             )
                                                         }
-                                                    } else {
-                                                        AndroidView(
-                                                            factory = { ctx ->
-                                                                try {
-                                                                    widgetHost.createView(ctx, placement.appWidgetId, info).apply {
-                                                                        setAppWidget(placement.appWidgetId, info)
-                                                                        setPadding(0, 0, 0, 0)
-                                                                        layoutParams = FrameLayout.LayoutParams(
-                                                                            FrameLayout.LayoutParams.MATCH_PARENT,
-                                                                            FrameLayout.LayoutParams.MATCH_PARENT
-                                                                        )
-                                                                    }
-                                                                } catch (_: Throwable) {
-                                                                    FrameLayout(ctx).apply {
-                                                                        addView(
-                                                                            TextView(ctx).apply {
-                                                                                text = context.getString(R.string.homescreen_widget_error_title)
-                                                                            }
-                                                                        )
-                                                                    }
-                                                                }
-                                                            },
-                                                            update = { view ->
-                                                                view.setPadding(0, 0, 0, 0)
-                                                                view.layoutParams = FrameLayout.LayoutParams(
-                                                                    FrameLayout.LayoutParams.MATCH_PARENT,
-                                                                    FrameLayout.LayoutParams.MATCH_PARENT
-                                                                )
-                                                            },
-                                                            modifier = modifier
-                                                        )
                                                     }
                                                 },
                                                 modifier = Modifier.fillMaxSize()

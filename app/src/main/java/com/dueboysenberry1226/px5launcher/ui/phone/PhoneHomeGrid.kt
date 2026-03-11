@@ -3,6 +3,8 @@
 
 package com.dueboysenberry1226.px5launcher.ui.phone
 
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
@@ -56,8 +58,10 @@ internal fun PhoneHomeGrid(
 
     // drag state + helpers
     dragging: DragPayload?,
+    dropPreview: DropPreview?,
     setDragging: (DragPayload?) -> Unit,
     setDragPointer: (Offset) -> Unit,
+    updateDropPreview: (Offset) -> Unit,
     finishDragAt: (Offset) -> Unit,
     dragPointerPx: Offset,
     hasDragPointer: Boolean,
@@ -208,15 +212,18 @@ internal fun PhoneHomeGrid(
                                     setDragging(DragPayload.App(pkg = id, fromIndex = idx))
                                     setDragPointer(rootPointer)
                                     setHasDragPointer(true)
+                                    updateDropPreview(rootPointer)
                                 },
                                 onDragMove = { rootPointer ->
                                     setDragPointer(rootPointer)
                                     setHasDragPointer(true)
+                                    updateDropPreview(rootPointer)
                                 },
                                 onEndDrag = { rootPointer ->
                                     setDragPointer(rootPointer)
                                     setHasDragPointer(true)
                                     finishDragAt(rootPointer)
+                                    updateDropPreview(rootPointer)
                                 },
 
                                 onClick = {
@@ -237,75 +244,84 @@ internal fun PhoneHomeGrid(
                 if (w.cellX + w.spanX > COLS) return@forEach
                 if (w.cellY + w.spanY > rowsToShow) return@forEach
 
-                val ox = cellOffsetX(w.cellX).roundToInt()
-                val oy = cellOffsetY(w.cellY).roundToInt()
+                key(w.appWidgetId, w.provider, w.cellX, w.cellY, w.spanX, w.spanY) {
+                    val ox = cellOffsetX(w.cellX).roundToInt()
+                    val oy = cellOffsetY(w.cellY).roundToInt()
 
-                val ww = (cellSize * w.spanX + minGapH * (w.spanX - 1))
-                val hh = (cellSize * w.spanY + minGapV * (w.spanY - 1))
+                    val ww = (cellSize * w.spanX + minGapH * (w.spanX - 1))
+                    val hh = (cellSize * w.spanY + minGapV * (w.spanY - 1))
 
-                WidgetDragSurface(
-                    enabled = editMode,
-                    key = w.appWidgetId,
-                    onStartDrag = { rootPointer ->
-                        clearPlaceError()
-                        setDragging(
-                            DragPayload.Widget(
-                                widgetId = w.appWidgetId,
-                                spanX = w.spanX,
-                                spanY = w.spanY,
-                                fromCellX = w.cellX,
-                                fromCellY = w.cellY
-                            )
-                        )
-                        setDragPointer(rootPointer)
-                        setHasDragPointer(true)
-                    },
-                    onDragMove = { rootPointer ->
-                        setDragPointer(rootPointer)
-                        setHasDragPointer(true)
-                    },
-                    onEndDrag = { rootPointer ->
-                        setDragPointer(rootPointer)
-                        setHasDragPointer(true)
-                        finishDragAt(rootPointer)
-                    },
-                    modifier = Modifier
-                        .offset { IntOffset(ox, oy) }
-                        .width(ww)
-                        .height(hh)
-                        .zIndex(0.75f)
-                ) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.10f)),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        AndroidView(
-                            factory = { ctx ->
-                                val info = appWidgetManager.getAppWidgetInfo(w.appWidgetId)
-                                val hostView = appWidgetHost.createView(ctx, w.appWidgetId, info)
-                                hostView.setAppWidget(w.appWidgetId, info)
-                                hostView.layoutParams = ViewGroup.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.MATCH_PARENT
+                    WidgetDragSurface(
+                        enabled = editMode,
+                        key = w.appWidgetId,
+                        onStartDrag = { rootPointer ->
+                            clearPlaceError()
+                            setDragging(
+                                DragPayload.Widget(
+                                    widgetId = w.appWidgetId,
+                                    spanX = w.spanX,
+                                    spanY = w.spanY,
+                                    fromCellX = w.cellX,
+                                    fromCellY = w.cellY
                                 )
-                                hostView
-                            },
-                            update = { hostView ->
-                                val info = appWidgetManager.getAppWidgetInfo(w.appWidgetId)
-                                hostView.setAppWidget(w.appWidgetId, info)
-                            },
+                            )
+                            setDragPointer(rootPointer)
+                            setHasDragPointer(true)
+                            updateDropPreview(rootPointer)
+                        },
+                        onDragMove = { rootPointer ->
+                            setDragPointer(rootPointer)
+                            setHasDragPointer(true)
+                            updateDropPreview(rootPointer)
+                        },
+                        onEndDrag = { rootPointer ->
+                            setDragPointer(rootPointer)
+                            setHasDragPointer(true)
+                            finishDragAt(rootPointer)
+                            updateDropPreview(rootPointer)
+                        },
+                        modifier = Modifier
+                            .offset { IntOffset(ox, oy) }
+                            .width(ww)
+                            .height(hh)
+                            .zIndex(0.75f)
+                    ) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.10f)),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
                             modifier = Modifier.fillMaxSize()
-                        )
-                    }
+                        ) {
+                            AndroidView(
+                                factory = { ctx ->
+                                    val info = appWidgetManager.getAppWidgetInfo(w.appWidgetId)
+                                    val hostView = appWidgetHost.createView(ctx, w.appWidgetId, info)
+                                    hostView.setAppWidget(w.appWidgetId, info)
+                                    hostView.layoutParams = ViewGroup.LayoutParams(
+                                        ViewGroup.LayoutParams.MATCH_PARENT,
+                                        ViewGroup.LayoutParams.MATCH_PARENT
+                                    )
+                                    hostView
+                                },
+                                update = { hostView ->
+                                    val info = appWidgetManager.getAppWidgetInfo(w.appWidgetId)
+                                    hostView.setAppWidget(w.appWidgetId, info)
+                                    hostView.layoutParams = ViewGroup.LayoutParams(
+                                        ViewGroup.LayoutParams.MATCH_PARENT,
+                                        ViewGroup.LayoutParams.MATCH_PARENT
+                                    )
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
 
-                    if (editMode) {
-                        DeleteBadge(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(8.dp),
-                            onClick = { onDeleteWidget(w.appWidgetId) }
-                        )
+                        if (editMode) {
+                            DeleteBadge(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(8.dp),
+                                onClick = { onDeleteWidget(w.appWidgetId) }
+                            )
+                        }
                     }
                 }
             }
@@ -362,6 +378,8 @@ internal fun PhoneHomeGrid(
                                         setDragging(DragPayload.Card(card))
                                         setDragPointer(lastRootPointer)
                                         setHasDragPointer(true)
+                                        updateDropPreview(lastRootPointer)
+                                        updateDropPreview(lastRootPointer)
                                         dragStarted = true
 
                                         while (true) {
@@ -372,6 +390,7 @@ internal fun PhoneHomeGrid(
                                                 if (dragStarted) {
                                                     setDragPointer(lastRootPointer)
                                                     setHasDragPointer(true)
+                                                    updateDropPreview(lastRootPointer)
                                                     finishDragAt(lastRootPointer)
                                                 }
                                                 break
@@ -380,6 +399,7 @@ internal fun PhoneHomeGrid(
                                             lastRootPointer = cardTopLeftPx + change.position
                                             setDragPointer(lastRootPointer)
                                             setHasDragPointer(true)
+                                            updateDropPreview(lastRootPointer)
                                             change.consume()
                                         }
                                     }
@@ -397,31 +417,45 @@ internal fun PhoneHomeGrid(
                 }
             }
 
-            // 4) DRAG PREVIEW
-            val drag = dragging
-            if ((drag is DragPayload.App || drag is DragPayload.Widget) && hasDragPointer) {
-                val localX = (dragPointerPx.x - gridTopLeftPx.x).roundToInt()
-                val localY = (dragPointerPx.y - gridTopLeftPx.y).roundToInt()
+            // 4) DROP GHOST PREVIEW
+            val preview = dropPreview
+            if (preview != null && hasDragPointer) {
+                val px = cellOffsetX(preview.cellX).roundToInt()
+                val py = cellOffsetY(preview.cellY).roundToInt()
+
+                val pw = (cellSize * preview.spanX + minGapH * (preview.spanX - 1))
+                val ph = (cellSize * preview.spanY + minGapV * (preview.spanY - 1))
+
+                val ghostBorder = if (preview.isValid) {
+                    Color.LightGray.copy(alpha = 0.95f)
+                } else {
+                    Color(0xFFFF5A5A).copy(alpha = 0.98f)
+                }
+
+                val ghostFill = if (preview.isValid) {
+                    Color.LightGray.copy(alpha = 0.18f)
+                } else {
+                    Color(0xFFFF5A5A).copy(alpha = 0.18f)
+                }
 
                 Box(
                     modifier = Modifier
-                        .offset { IntOffset(localX - 24, localY - 24) }
-                        .size(48.dp)
-                        .zIndex(999f)
+                        .offset { IntOffset(px, py) }
+                        .width(pw)
+                        .height(ph)
+                        .zIndex(9999f)
+                        .border(
+                            width = 2.dp,
+                            color = ghostBorder,
+                            shape = RoundedCornerShape(22.dp)
+                        )
+                        .padding(2.dp)
                 ) {
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.18f)),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = ghostFill),
+                        shape = RoundedCornerShape(20.dp),
                         modifier = Modifier.fillMaxSize()
                     ) { }
-
-                    Text(
-                        text = "⠿",
-                        color = Color.White.copy(alpha = 0.85f),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Black,
-                        modifier = Modifier.align(Alignment.Center)
-                    )
                 }
             }
         }

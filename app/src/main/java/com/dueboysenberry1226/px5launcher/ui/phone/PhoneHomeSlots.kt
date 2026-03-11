@@ -167,6 +167,7 @@ internal fun nearestFreeWidgetCell(
 internal fun isAreaFreeForCard(
     slots: List<String?>,
     cards: List<PhoneCardPlacement>,
+    widgets: List<WidgetPlacement>,
     targetRow: Int,
     rowsToShow: Int,
     ignore: PhoneCardPlacement? = null
@@ -177,10 +178,12 @@ internal fun isAreaFreeForCard(
     val visibleSlots = rowsToShow * COLS
     val occ = BooleanArray(visibleSlots) { false }
 
+    // appok
     for (i in 0 until visibleSlots) {
         if (slots.getOrNull(i) != null) occ[i] = true
     }
 
+    // kártyák
     cards.forEach { c ->
         if (ignore != null && c == ignore) return@forEach
         if (c.col != 0) return@forEach
@@ -196,6 +199,21 @@ internal fun isAreaFreeForCard(
         }
     }
 
+    // widgetek
+    widgets.forEach { w ->
+        for (dy in 0 until w.spanY) {
+            for (dx in 0 until w.spanX) {
+                val rr = w.cellY + dy
+                val cc = w.cellX + dx
+                if (rr in 0 until rowsToShow && cc in 0 until COLS) {
+                    val idx = rr * COLS + cc
+                    if (idx in 0 until visibleSlots) occ[idx] = true
+                }
+            }
+        }
+    }
+
+    // célterület
     for (dy in 0 until CARD_SPAN_Y) {
         for (dx in 0 until CARD_SPAN_X) {
             val idx = (targetRow + dy) * COLS + dx
@@ -209,6 +227,7 @@ internal fun isAreaFreeForCard(
 internal fun nearestFreeCardRow(
     slots: List<String?>,
     cards: List<PhoneCardPlacement>,
+    widgets: List<WidgetPlacement>,
     targetRow: Int,
     rowsToShow: Int,
     ignore: PhoneCardPlacement
@@ -217,13 +236,13 @@ internal fun nearestFreeCardRow(
     val maxRow = rowsToShow - CARD_SPAN_Y
     val clamped = targetRow.coerceIn(minRow, maxRow)
 
-    if (isAreaFreeForCard(slots, cards, clamped, rowsToShow, ignore)) return clamped
+    if (isAreaFreeForCard(slots, cards, widgets, clamped, rowsToShow, ignore)) return clamped
 
     for (delta in 1..maxRow) {
         val up = clamped - delta
         val down = clamped + delta
-        if (up >= minRow && isAreaFreeForCard(slots, cards, up, rowsToShow, ignore)) return up
-        if (down <= maxRow && isAreaFreeForCard(slots, cards, down, rowsToShow, ignore)) return down
+        if (up >= minRow && isAreaFreeForCard(slots, cards, widgets, up, rowsToShow, ignore)) return up
+        if (down <= maxRow && isAreaFreeForCard(slots, cards, widgets, down, rowsToShow, ignore)) return down
     }
     return null
 }

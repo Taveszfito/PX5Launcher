@@ -24,6 +24,14 @@ internal sealed class DragPayload {
     data class App(val pkg: String, val fromIndex: Int) : DragPayload()
     data class Card(val placement: PhoneCardPlacement) : DragPayload()
 
+    internal data class DropPreview(
+        val cellX: Int,
+        val cellY: Int,
+        val spanX: Int,
+        val spanY: Int,
+        val isValid: Boolean
+    )
+
     // ✅ ÚJ: Widget drag payload (grid cell alapon)
     data class Widget(
         val widgetId: Int,
@@ -33,3 +41,11 @@ internal sealed class DragPayload {
         val fromCellY: Int
     ) : DragPayload()
 }
+
+data class DropPreview(
+    val cellX: Int,
+    val cellY: Int,
+    val spanX: Int,
+    val spanY: Int,
+    val isValid: Boolean
+)
