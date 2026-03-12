@@ -174,10 +174,8 @@ fun PSHomeRoute(
 
     val landscapePlacements = placements
 
-    val cfg = LocalConfiguration.current
-    val gridSpec = remember(cfg.screenWidthDp) {
-        val cols = if (cfg.screenWidthDp >= 900) 4 else 3
-        WidgetGridSpec(cols = cols, rows = 4)
+    val gridSpec = remember {
+        WidgetGridSpec(cols = 8, rows = 2)
     }
 
     var tab by rememberSaveable { mutableStateOf(Tab.GAMES) }
@@ -1739,7 +1737,7 @@ fun PSHomeRoute(
                                 }
                             }
 
-                            Spacer(Modifier.height(28.dp))
+                            Spacer(Modifier.height(5.dp))
                         }
                     }
                 }

@@ -1,6 +1,7 @@
+@file:Suppress("UnusedBoxWithConstraintsScope")
+
 package com.dueboysenberry1226.px5launcher.ui
 
-import com.dueboysenberry1226.px5launcher.data.WidgetLayoutMode
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -19,9 +20,17 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -35,9 +44,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.data.WidgetGridSpec
+import com.dueboysenberry1226.px5launcher.data.WidgetLayoutMode
 import com.dueboysenberry1226.px5launcher.data.WidgetPlacement
 import kotlin.math.ceil
 import kotlin.math.min
+
+private data class PortraitSlot(
+    val baseX: Int,
+    val baseY: Int
+)
+
+private data class LandscapeSlotDef(
+    val index: Int,
+    val baseX: Int,
+    val baseY: Int
+)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -75,22 +96,60 @@ fun WidgetsPanel(
         selectedY = selectedY.coerceIn(0, grid.rows - 1)
     }
 
-    val slotColsLogical = ceil(grid.cols / 2f).toInt().coerceAtLeast(1)
-    val slotRowsLogical = ceil(grid.rows / 2f).toInt().coerceAtLeast(1)
-    val slotCount = slotColsLogical * slotRowsLogical
+    val isLandscape = layoutMode == WidgetLayoutMode.LANDSCAPE
 
-    var visualCols by remember { mutableIntStateOf(slotColsLogical.coerceAtLeast(1)) }
     val visiblePlacements = remember(placements, layoutMode) {
         placements.filter { it.layoutMode == layoutMode }
     }
 
-    val topLeft: Map<Pair<Int, Int>, WidgetPlacement> = remember(visiblePlacements, grid.cols, grid.rows) {
-        visiblePlacements.associateBy { it.cellX to it.cellY }
+    // =========================================================
+    // LANDSCAPE: FIX 4 SLOT, TELJESEN ELKÜLÖNÍTETT LOGIKA
+    // =========================================================
+
+    // Slot1
+    val slot1 = remember { LandscapeSlotDef(index = 0, baseX = 0, baseY = 0) }
+
+    // Slot2
+    val slot2 = remember { LandscapeSlotDef(index = 1, baseX = 2, baseY = 0) }
+
+    // Slot3
+    val slot3 = remember { LandscapeSlotDef(index = 2, baseX = 4, baseY = 0) }
+
+    // Slot4
+    val slot4 = remember { LandscapeSlotDef(index = 3, baseX = 6, baseY = 0) }
+
+    val landscapeSlots = remember {
+        listOf(slot1, slot2, slot3, slot4)
     }
 
-    val coverMap: Map<Pair<Int, Int>, WidgetPlacement> = remember(visiblePlacements, grid.cols, grid.rows) {
-        buildMap {
-            for (p in visiblePlacements) {
+    fun placementBelongsToLandscapeSlot(
+        p: WidgetPlacement,
+        slot: LandscapeSlotDef
+    ): Boolean {
+        return p.cellX in slot.baseX..(slot.baseX + 1) &&
+                p.cellY in slot.baseY..(slot.baseY + 1)
+    }
+
+    val slot1Placements = remember(visiblePlacements) {
+        visiblePlacements.filter { placementBelongsToLandscapeSlot(it, slot1) }
+    }
+    val slot2Placements = remember(visiblePlacements) {
+        visiblePlacements.filter { placementBelongsToLandscapeSlot(it, slot2) }
+    }
+    val slot3Placements = remember(visiblePlacements) {
+        visiblePlacements.filter { placementBelongsToLandscapeSlot(it, slot3) }
+    }
+    val slot4Placements = remember(visiblePlacements) {
+        visiblePlacements.filter { placementBelongsToLandscapeSlot(it, slot4) }
+    }
+
+    fun buildTopLeftMap(list: List<WidgetPlacement>): Map<Pair<Int, Int>, WidgetPlacement> {
+        return list.associateBy { it.cellX to it.cellY }
+    }
+
+    fun buildCoverMap(list: List<WidgetPlacement>): Map<Pair<Int, Int>, WidgetPlacement> {
+        return buildMap {
+            for (p in list) {
                 for (dy in 0 until p.spanY) {
                     for (dx in 0 until p.spanX) {
                         val x = p.cellX + dx
@@ -104,43 +163,199 @@ fun WidgetsPanel(
         }
     }
 
-    fun placementAtTopLeft(x: Int, y: Int): WidgetPlacement? = topLeft[x to y]
-    fun placementCovering(x: Int, y: Int): WidgetPlacement? = coverMap[x to y]
-    fun isCovered(x: Int, y: Int): Boolean = coverMap.containsKey(x to y)
+    val slot1TopLeft = remember(slot1Placements, grid.cols, grid.rows) { buildTopLeftMap(slot1Placements) }
+    val slot2TopLeft = remember(slot2Placements, grid.cols, grid.rows) { buildTopLeftMap(slot2Placements) }
+    val slot3TopLeft = remember(slot3Placements, grid.cols, grid.rows) { buildTopLeftMap(slot3Placements) }
+    val slot4TopLeft = remember(slot4Placements, grid.cols, grid.rows) { buildTopLeftMap(slot4Placements) }
 
-    fun slotTopLeftCellX(sc: Int): Int = (sc * 2).coerceIn(0, grid.cols - 1)
-    fun slotTopLeftCellY(sr: Int): Int = (sr * 2).coerceIn(0, grid.rows - 1)
+    val slot1Cover = remember(slot1Placements, grid.cols, grid.rows) { buildCoverMap(slot1Placements) }
+    val slot2Cover = remember(slot2Placements, grid.cols, grid.rows) { buildCoverMap(slot2Placements) }
+    val slot3Cover = remember(slot3Placements, grid.cols, grid.rows) { buildCoverMap(slot3Placements) }
+    val slot4Cover = remember(slot4Placements, grid.cols, grid.rows) { buildCoverMap(slot4Placements) }
 
-    fun slotHasAnything(sc: Int, sr: Int): Boolean {
-        val bx = slotTopLeftCellX(sc)
-        val by = slotTopLeftCellY(sr)
-        return isCovered(bx, by) ||
-                isCovered(bx + 1, by) ||
-                isCovered(bx, by + 1) ||
-                isCovered(bx + 1, by + 1)
+    fun landscapeSlotIndexForCell(x: Int, y: Int): Int {
+        return when {
+            x in slot1.baseX..(slot1.baseX + 1) && y in slot1.baseY..(slot1.baseY + 1) -> 0
+            x in slot2.baseX..(slot2.baseX + 1) && y in slot2.baseY..(slot2.baseY + 1) -> 1
+            x in slot3.baseX..(slot3.baseX + 1) && y in slot3.baseY..(slot3.baseY + 1) -> 2
+            x in slot4.baseX..(slot4.baseX + 1) && y in slot4.baseY..(slot4.baseY + 1) -> 3
+            else -> 0
+        }
     }
 
-    fun selectedSlotCol(): Int = (selectedX / 2).coerceIn(0, slotColsLogical - 1)
-    fun selectedSlotRow(): Int = (selectedY / 2).coerceIn(0, slotRowsLogical - 1)
-    fun selectedSlotIndex(): Int = selectedSlotRow() * slotColsLogical + selectedSlotCol()
+    fun landscapeSlotAt(index: Int): LandscapeSlotDef {
+        return landscapeSlots[index.coerceIn(0, 3)]
+    }
 
-    fun applySlotIndex(idx: Int) {
-        val i = idx.coerceIn(0, slotCount - 1)
-        val sr = i / slotColsLogical
-        val sc = i % slotColsLogical
-        selectedX = slotTopLeftCellX(sc)
-        selectedY = slotTopLeftCellY(sr)
+    fun applyLandscapeSlotIndex(idx: Int) {
+        val slot = landscapeSlotAt(idx)
+        selectedX = slot.baseX
+        selectedY = slot.baseY
         clampSel()
     }
 
-    fun slotHasBig2x2Widget(sc: Int, sr: Int): Boolean {
-        val bx = slotTopLeftCellX(sc)
-        val by = slotTopLeftCellY(sr)
-        val p = placementCovering(bx, by) ?: return false
+    fun landscapeTopLeftMap(slotIndex: Int): Map<Pair<Int, Int>, WidgetPlacement> {
+        return when (slotIndex) {
+            0 -> slot1TopLeft
+            1 -> slot2TopLeft
+            2 -> slot3TopLeft
+            else -> slot4TopLeft
+        }
+    }
+
+    fun landscapeCoverMap(slotIndex: Int): Map<Pair<Int, Int>, WidgetPlacement> {
+        return when (slotIndex) {
+            0 -> slot1Cover
+            1 -> slot2Cover
+            2 -> slot3Cover
+            else -> slot4Cover
+        }
+    }
+
+    fun landscapePlacements(slotIndex: Int): List<WidgetPlacement> {
+        return when (slotIndex) {
+            0 -> slot1Placements
+            1 -> slot2Placements
+            2 -> slot3Placements
+            else -> slot4Placements
+        }
+    }
+
+    fun landscapePlacementAtTopLeft(slotIndex: Int, x: Int, y: Int): WidgetPlacement? {
+        return landscapeTopLeftMap(slotIndex)[x to y]
+    }
+
+    fun landscapePlacementCovering(slotIndex: Int, x: Int, y: Int): WidgetPlacement? {
+        return landscapeCoverMap(slotIndex)[x to y]
+    }
+
+    fun landscapeIsCovered(slotIndex: Int, x: Int, y: Int): Boolean {
+        return landscapeCoverMap(slotIndex).containsKey(x to y)
+    }
+
+    fun landscapeSlotHasAnything(slotIndex: Int): Boolean {
+        val slot = landscapeSlotAt(slotIndex)
+        val bx = slot.baseX
+        val by = slot.baseY
+        return landscapeIsCovered(slotIndex, bx, by) ||
+                landscapeIsCovered(slotIndex, bx + 1, by) ||
+                landscapeIsCovered(slotIndex, bx, by + 1) ||
+                landscapeIsCovered(slotIndex, bx + 1, by + 1)
+    }
+
+    fun landscapeSlotHasBig2x2Widget(slotIndex: Int): Boolean {
+        val slot = landscapeSlotAt(slotIndex)
+        val bx = slot.baseX
+        val by = slot.baseY
+        val p = landscapePlacementCovering(slotIndex, bx, by) ?: return false
         return p.cellX == bx && p.cellY == by && p.spanX >= 2 && p.spanY >= 2
     }
 
-    LaunchedEffect(Unit, grid.cols, grid.rows, visiblePlacements, visualCols, slotCount) {
+    // =========================================================
+    // PORTRAIT / GENERIC
+    // =========================================================
+
+    val portraitPlacements = visiblePlacements
+
+    val portraitTopLeft: Map<Pair<Int, Int>, WidgetPlacement> = remember(portraitPlacements, grid.cols, grid.rows) {
+        portraitPlacements.associateBy { it.cellX to it.cellY }
+    }
+
+    val portraitCoverMap: Map<Pair<Int, Int>, WidgetPlacement> = remember(portraitPlacements, grid.cols, grid.rows) {
+        buildMap {
+            for (p in portraitPlacements) {
+                for (dy in 0 until p.spanY) {
+                    for (dx in 0 until p.spanX) {
+                        val x = p.cellX + dx
+                        val y = p.cellY + dy
+                        if (x in 0 until grid.cols && y in 0 until grid.rows) {
+                            put(x to y, p)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun portraitPlacementAtTopLeft(x: Int, y: Int): WidgetPlacement? = portraitTopLeft[x to y]
+    fun portraitPlacementCovering(x: Int, y: Int): WidgetPlacement? = portraitCoverMap[x to y]
+    fun portraitIsCovered(x: Int, y: Int): Boolean = portraitCoverMap.containsKey(x to y)
+
+    val portraitSlots = remember(grid.cols, grid.rows) {
+        val cols = ceil(grid.cols / 2f).toInt().coerceAtLeast(1)
+        val rows = ceil(grid.rows / 2f).toInt().coerceAtLeast(1)
+        buildList {
+            for (sr in 0 until rows) {
+                for (sc in 0 until cols) {
+                    add(
+                        PortraitSlot(
+                            baseX = (sc * 2).coerceIn(0, grid.cols - 1),
+                            baseY = (sr * 2).coerceIn(0, grid.rows - 1)
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    fun portraitSlotAt(index: Int): PortraitSlot =
+        portraitSlots[index.coerceIn(0, portraitSlots.lastIndex.coerceAtLeast(0))]
+
+    fun portraitSlotIndexForCell(x: Int, y: Int): Int {
+        val found = portraitSlots.indexOfFirst { slot ->
+            x in slot.baseX..(slot.baseX + 1) && y in slot.baseY..(slot.baseY + 1)
+        }
+        return if (found >= 0) found else 0
+    }
+
+    fun applyPortraitSlotIndex(idx: Int) {
+        val slot = portraitSlotAt(idx)
+        selectedX = slot.baseX
+        selectedY = slot.baseY
+        clampSel()
+    }
+
+    fun portraitSlotHasAnything(idx: Int): Boolean {
+        val slot = portraitSlotAt(idx)
+        val bx = slot.baseX
+        val by = slot.baseY
+        return portraitIsCovered(bx, by) ||
+                portraitIsCovered(bx + 1, by) ||
+                portraitIsCovered(bx, by + 1) ||
+                portraitIsCovered(bx + 1, by + 1)
+    }
+
+    fun portraitSlotHasBig2x2Widget(idx: Int): Boolean {
+        val slot = portraitSlotAt(idx)
+        val bx = slot.baseX
+        val by = slot.baseY
+        val p = portraitPlacementCovering(bx, by) ?: return false
+        return p.cellX == bx && p.cellY == by && p.spanX >= 2 && p.spanY >= 2
+    }
+
+    fun portraitSlotIndexForPlacement(p: WidgetPlacement): Int {
+        val found = portraitSlots.indexOfFirst { slot ->
+            p.cellX in slot.baseX..(slot.baseX + 1) &&
+                    p.cellY in slot.baseY..(slot.baseY + 1)
+        }
+        return if (found >= 0) found else 0
+    }
+
+    // =========================================================
+    // INPUT
+    // =========================================================
+
+    LaunchedEffect(
+        Unit,
+        grid.cols,
+        grid.rows,
+        visiblePlacements,
+        isLandscape,
+        slot1Placements,
+        slot2Placements,
+        slot3Placements,
+        slot4Placements
+    ) {
         registerKeyHandler { e ->
             val nk = e.nativeKeyEvent
             val code = nk.keyCode
@@ -166,9 +381,152 @@ fun WidgetsPanel(
                     AndroidKeyEvent.KEYCODE_BACK,
                     AndroidKeyEvent.KEYCODE_ESCAPE,
                     AndroidKeyEvent.KEYCODE_BUTTON_B -> {
-                        closeMenu(); true
+                        closeMenu()
+                        true
                     }
                     else -> true
+                }
+            }
+
+            if (isLandscape) {
+                val currentSlotIndex = landscapeSlotIndexForCell(selectedX, selectedY)
+                val currentSlot = landscapeSlotAt(currentSlotIndex)
+
+                val slotEmpty = !landscapeSlotHasAnything(currentSlotIndex)
+                val slotBig = !slotEmpty && landscapeSlotHasBig2x2Widget(currentSlotIndex)
+
+                if (slotEmpty) {
+                    return@registerKeyHandler when (code) {
+                        AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
+                            if (currentSlotIndex > 0) applyLandscapeSlotIndex(currentSlotIndex - 1)
+                            true
+                        }
+
+                        AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                            if (currentSlotIndex < 3) applyLandscapeSlotIndex(currentSlotIndex + 1)
+                            true
+                        }
+
+                        AndroidKeyEvent.KEYCODE_DPAD_UP -> true
+                        AndroidKeyEvent.KEYCODE_DPAD_DOWN -> true
+
+                        in okCodes -> {
+                            onRequestAddAt(currentSlot.baseX, currentSlot.baseY)
+                            true
+                        }
+
+                        in menuCodes -> false
+                        else -> false
+                    }
+                }
+
+                if (slotBig) {
+                    return@registerKeyHandler when (code) {
+                        AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
+                            if (currentSlotIndex > 0) applyLandscapeSlotIndex(currentSlotIndex - 1)
+                            true
+                        }
+
+                        AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                            if (currentSlotIndex < 3) applyLandscapeSlotIndex(currentSlotIndex + 1)
+                            true
+                        }
+
+                        AndroidKeyEvent.KEYCODE_DPAD_UP -> true
+                        AndroidKeyEvent.KEYCODE_DPAD_DOWN -> true
+
+                        in okCodes -> true
+
+                        in menuCodes -> {
+                            val p = landscapePlacementCovering(currentSlotIndex, currentSlot.baseX, currentSlot.baseY)
+                            if (p != null) {
+                                openMenuFor(p)
+                                true
+                            } else {
+                                false
+                            }
+                        }
+
+                        AndroidKeyEvent.KEYCODE_BACK,
+                        AndroidKeyEvent.KEYCODE_ESCAPE,
+                        AndroidKeyEvent.KEYCODE_BUTTON_B -> false
+
+                        else -> false
+                    }
+                }
+
+                val localX = (selectedX - currentSlot.baseX).coerceIn(0, 1)
+                val localY = (selectedY - currentSlot.baseY).coerceIn(0, 1)
+
+                fun jumpLandscapeSlot(newIdx: Int, keepLocalX: Int, keepLocalY: Int) {
+                    val targetSlot = landscapeSlotAt(newIdx)
+                    selectedX = targetSlot.baseX + keepLocalX.coerceIn(0, 1)
+                    selectedY = targetSlot.baseY + keepLocalY.coerceIn(0, 1)
+                    clampSel()
+                }
+
+                return@registerKeyHandler when (code) {
+                    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
+                        if (localX > 0) {
+                            selectedX -= 1
+                            clampSel()
+                        } else if (currentSlotIndex > 0) {
+                            jumpLandscapeSlot(currentSlotIndex - 1, 1, localY)
+                        }
+                        true
+                    }
+
+                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (localX < 1) {
+                            selectedX += 1
+                            clampSel()
+                        } else if (currentSlotIndex < 3) {
+                            jumpLandscapeSlot(currentSlotIndex + 1, 0, localY)
+                        }
+                        true
+                    }
+
+                    AndroidKeyEvent.KEYCODE_DPAD_UP -> {
+                        if (localY > 0) {
+                            selectedY -= 1
+                            clampSel()
+                        }
+                        true
+                    }
+
+                    AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
+                        if (localY < 1) {
+                            selectedY += 1
+                            clampSel()
+                        }
+                        true
+                    }
+
+                    in okCodes -> {
+                        val p = landscapePlacementCovering(currentSlotIndex, selectedX, selectedY)
+                        if (p != null) {
+                            true
+                        } else {
+                            onRequestAddAt(selectedX, selectedY)
+                            true
+                        }
+                    }
+
+                    in menuCodes -> {
+                        val p = landscapePlacementCovering(currentSlotIndex, selectedX, selectedY)
+                        if (p != null) {
+                            openMenuFor(p)
+                            true
+                        } else {
+                            false
+                        }
+                    }
+
+                    AndroidKeyEvent.KEYCODE_BACK,
+                    AndroidKeyEvent.KEYCODE_ESCAPE,
+                    AndroidKeyEvent.KEYCODE_BUTTON_B -> false
+
+                    else -> false
                 }
             }
 
@@ -176,180 +534,144 @@ fun WidgetsPanel(
                 return@registerKeyHandler false
             }
 
-            val sc = selectedSlotCol()
-            val sr = selectedSlotRow()
-
-            val slotEmpty = !slotHasAnything(sc, sr)
-            val slotBig = !slotEmpty && slotHasBig2x2Widget(sc, sr)
-
-            val colsNow = visualCols.coerceAtLeast(1)
-            val rowsNow = ceil(slotCount / colsNow.toFloat()).toInt().coerceAtLeast(1)
-            val idx = selectedSlotIndex()
+            val idx = portraitSlotIndexForCell(selectedX, selectedY)
+            val slot = portraitSlotAt(idx)
+            val slotEmpty = !portraitSlotHasAnything(idx)
+            val slotBig = !slotEmpty && portraitSlotHasBig2x2Widget(idx)
+            val slotCount = portraitSlots.size
 
             if (slotEmpty) {
-                when (code) {
+                return@registerKeyHandler when (code) {
                     AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
-                        val c = idx % colsNow
-                        if (c > 0) applySlotIndex(idx - 1)
+                        if (idx > 0) applyPortraitSlotIndex(idx - 1)
                         true
                     }
 
                     AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
-                        val c = idx % colsNow
-                        if (c < colsNow - 1 && idx + 1 < slotCount) applySlotIndex(idx + 1)
+                        if (idx < slotCount - 1) applyPortraitSlotIndex(idx + 1)
                         true
                     }
 
-                    AndroidKeyEvent.KEYCODE_DPAD_UP -> {
-                        val up = idx - colsNow
-                        if (up >= 0) applySlotIndex(up)
-                        true
-                    }
-
-                    AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
-                        if (rowsNow > 1) {
-                            val down = idx + colsNow
-                            if (down < slotCount) applySlotIndex(down)
-                        }
-                        true
-                    }
+                    AndroidKeyEvent.KEYCODE_DPAD_UP -> true
+                    AndroidKeyEvent.KEYCODE_DPAD_DOWN -> true
 
                     in okCodes -> {
-                        onRequestAddAt(slotTopLeftCellX(sc), slotTopLeftCellY(sr))
+                        onRequestAddAt(slot.baseX, slot.baseY)
                         true
                     }
 
                     in menuCodes -> false
                     else -> false
                 }
-            } else {
-                if (slotBig) {
-                    when (code) {
-                        AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
-                            val c = idx % colsNow
-                            if (c > 0) applySlotIndex(idx - 1)
-                            true
-                        }
+            }
 
-                        AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
-                            val c = idx % colsNow
-                            if (c < colsNow - 1 && idx + 1 < slotCount) applySlotIndex(idx + 1)
-                            true
-                        }
-
-                        AndroidKeyEvent.KEYCODE_DPAD_UP -> {
-                            val up = idx - colsNow
-                            if (up >= 0) applySlotIndex(up)
-                            true
-                        }
-
-                        AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
-                            if (rowsNow > 1) {
-                                val down = idx + colsNow
-                                if (down < slotCount) applySlotIndex(down)
-                            }
-                            true
-                        }
-
-                        in okCodes -> true
-
-                        in menuCodes -> {
-                            val bx = slotTopLeftCellX(sc)
-                            val by = slotTopLeftCellY(sr)
-                            val p = placementCovering(bx, by)
-                            if (p != null) { openMenuFor(p); true } else false
-                        }
-
-                        AndroidKeyEvent.KEYCODE_BACK,
-                        AndroidKeyEvent.KEYCODE_ESCAPE,
-                        AndroidKeyEvent.KEYCODE_BUTTON_B -> false
-
-                        else -> false
+            if (slotBig) {
+                return@registerKeyHandler when (code) {
+                    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
+                        if (idx > 0) applyPortraitSlotIndex(idx - 1)
+                        true
                     }
-                } else {
-                    val baseX = slotTopLeftCellX(sc)
-                    val baseY = slotTopLeftCellY(sr)
 
-                    val localX = (selectedX - baseX).coerceIn(0, 1)
-                    val localY = (selectedY - baseY).coerceIn(0, 1)
+                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (idx < slotCount - 1) applyPortraitSlotIndex(idx + 1)
+                        true
+                    }
 
-                    fun jumpToSlot(newIdx: Int, keepLocalX: Int, keepLocalY: Int) {
-                        val i2 = newIdx.coerceIn(0, slotCount - 1)
-                        val sr2 = i2 / slotColsLogical
-                        val sc2 = i2 % slotColsLogical
-                        selectedX = slotTopLeftCellX(sc2) + keepLocalX.coerceIn(0, 1)
-                        selectedY = slotTopLeftCellY(sr2) + keepLocalY.coerceIn(0, 1)
+                    AndroidKeyEvent.KEYCODE_DPAD_UP -> true
+                    AndroidKeyEvent.KEYCODE_DPAD_DOWN -> true
+
+                    in okCodes -> true
+
+                    in menuCodes -> {
+                        val p = portraitPlacementCovering(slot.baseX, slot.baseY)
+                        if (p != null) {
+                            openMenuFor(p)
+                            true
+                        } else {
+                            false
+                        }
+                    }
+
+                    AndroidKeyEvent.KEYCODE_BACK,
+                    AndroidKeyEvent.KEYCODE_ESCAPE,
+                    AndroidKeyEvent.KEYCODE_BUTTON_B -> false
+
+                    else -> false
+                }
+            }
+
+            val localX = (selectedX - slot.baseX).coerceIn(0, 1)
+            val localY = (selectedY - slot.baseY).coerceIn(0, 1)
+
+            fun jumpPortraitSlot(newIdx: Int, keepLocalX: Int, keepLocalY: Int) {
+                val target = portraitSlotAt(newIdx)
+                selectedX = target.baseX + keepLocalX.coerceIn(0, 1)
+                selectedY = target.baseY + keepLocalY.coerceIn(0, 1)
+                clampSel()
+            }
+
+            return@registerKeyHandler when (code) {
+                AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
+                    if (localX > 0) {
+                        selectedX -= 1
+                        clampSel()
+                    } else if (idx > 0) {
+                        jumpPortraitSlot(idx - 1, 1, localY)
+                    }
+                    true
+                }
+
+                AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    if (localX < 1) {
+                        selectedX += 1
+                        clampSel()
+                    } else if (idx < slotCount - 1) {
+                        jumpPortraitSlot(idx + 1, 0, localY)
+                    }
+                    true
+                }
+
+                AndroidKeyEvent.KEYCODE_DPAD_UP -> {
+                    if (localY > 0) {
+                        selectedY -= 1
                         clampSel()
                     }
+                    true
+                }
 
-                    when (code) {
-                        AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
-                            if (localX > 0) {
-                                selectedX -= 1
-                                clampSel()
-                            } else {
-                                val c = idx % colsNow
-                                if (c > 0) jumpToSlot(idx - 1, 1, localY)
-                            }
-                            true
-                        }
+                AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
+                    if (localY < 1) {
+                        selectedY += 1
+                        clampSel()
+                    }
+                    true
+                }
 
-                        AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
-                            if (localX < 1) {
-                                selectedX += 1
-                                clampSel()
-                            } else {
-                                val c = idx % colsNow
-                                if (c < colsNow - 1 && idx + 1 < slotCount) jumpToSlot(idx + 1, 0, localY)
-                            }
-                            true
-                        }
-
-                        AndroidKeyEvent.KEYCODE_DPAD_UP -> {
-                            if (localY > 0) {
-                                selectedY -= 1
-                                clampSel()
-                            } else {
-                                val up = idx - colsNow
-                                if (up >= 0) jumpToSlot(up, localX, 1)
-                            }
-                            true
-                        }
-
-                        AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
-                            if (localY < 1) {
-                                selectedY += 1
-                                clampSel()
-                            } else {
-                                if (rowsNow > 1) {
-                                    val down = idx + colsNow
-                                    if (down < slotCount) jumpToSlot(down, localX, 0)
-                                }
-                            }
-                            true
-                        }
-
-                        in okCodes -> {
-                            val p = placementCovering(selectedX, selectedY)
-                            if (p != null) true
-                            else {
-                                onRequestAddAt(selectedX, selectedY)
-                                true
-                            }
-                        }
-
-                        in menuCodes -> {
-                            val p = placementCovering(selectedX, selectedY)
-                            if (p != null) { openMenuFor(p); true } else false
-                        }
-
-                        AndroidKeyEvent.KEYCODE_BACK,
-                        AndroidKeyEvent.KEYCODE_ESCAPE,
-                        AndroidKeyEvent.KEYCODE_BUTTON_B -> false
-
-                        else -> false
+                in okCodes -> {
+                    val p = portraitPlacementCovering(selectedX, selectedY)
+                    if (p != null) {
+                        true
+                    } else {
+                        onRequestAddAt(selectedX, selectedY)
+                        true
                     }
                 }
+
+                in menuCodes -> {
+                    val p = portraitPlacementCovering(selectedX, selectedY)
+                    if (p != null) {
+                        openMenuFor(p)
+                        true
+                    } else {
+                        false
+                    }
+                }
+
+                AndroidKeyEvent.KEYCODE_BACK,
+                AndroidKeyEvent.KEYCODE_ESCAPE,
+                AndroidKeyEvent.KEYCODE_BUTTON_B -> false
+
+                else -> false
             }
         }
     }
@@ -357,13 +679,12 @@ fun WidgetsPanel(
     val noRipple = remember { MutableInteractionSource() }
 
     BoxWithConstraints(modifier = modifier) {
-        val scopeMaxW: Dp = this.maxWidth
-        val scopeMaxH: Dp = this.maxHeight
+        val scopeMaxW = maxWidth
+        val scopeMaxH = maxHeight
         val density = LocalDensity.current
 
         val outerGap = 18.dp
         val innerGap = 14.dp
-
         val slotShape = RoundedCornerShape(22.dp)
         val cellShape = RoundedCornerShape(18.dp)
 
@@ -400,7 +721,7 @@ fun WidgetsPanel(
                         interactionSource = remember { noRipple },
                         indication = null,
                         onClick = onClick,
-                        onLongClick = { }
+                        onLongClick = {}
                     )
             ) {
                 Box(Modifier.fillMaxSize()) {
@@ -450,7 +771,7 @@ fun WidgetsPanel(
                         interactionSource = remember { noRipple },
                         indication = null,
                         onClick = onClick,
-                        onLongClick = { }
+                        onLongClick = {}
                     )
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -464,101 +785,76 @@ fun WidgetsPanel(
             }
         }
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .focusRequester(focusRequester)
+        @Composable
+        fun RenderOneLandscapeSlot(
+            slotIndex: Int,
+            cardX: Dp,
+            cardY: Dp,
+            slotSize: Dp,
+            innerPad: Dp,
+            innerGapPx: Dp,
+            smallCell: Dp
         ) {
-            val innerPadOutside = 18.dp
-            val availW: Dp = (scopeMaxW - innerPadOutside * 2).coerceAtLeast(1.dp)
-            val availH: Dp = scopeMaxH.coerceAtLeast(1.dp)
+            val slot = landscapeSlotAt(slotIndex)
+            val slotPlacements = landscapePlacements(slotIndex)
+            val selectedPlacement = landscapePlacementCovering(
+                slotIndex = slotIndex,
+                x = selectedX,
+                y = selectedY
+            )
 
-            val cols = min(slotCount, 4).coerceAtLeast(1)
-            val visibleCount = min(slotCount, cols)
+            fun localOffset(local: Int): Dp = (smallCell + innerGapPx) * local.toFloat()
+            fun spanSize(span: Int): Dp = (smallCell * span.toFloat()) + innerGapPx * (span - 1)
 
-            SideEffect { visualCols = cols }
+            val selectedInside =
+                (selectedX in slot.baseX..(slot.baseX + 1)) &&
+                        (selectedY in slot.baseY..(slot.baseY + 1))
 
-            val slotFromW: Dp = (availW - outerGap * (cols - 1)) / cols
-            val slot: Dp = min(slotFromW.value, availH.value).dp
+            val hasAny = landscapeSlotHasAnything(slotIndex)
 
-            val gridW: Dp = (slot * cols.toFloat()) + outerGap * (cols - 1)
-            val gridH: Dp = slot
+            if (!hasAny) {
+                BigEmptyCard(
+                    x = cardX,
+                    y = cardY,
+                    w = slotSize,
+                    h = slotSize,
+                    selected = selectedInside,
+                    onClick = {
+                        selectedX = slot.baseX
+                        selectedY = slot.baseY
+                        clampSel()
+                        onRequestAddAt(slot.baseX, slot.baseY)
+                    }
+                )
+            } else {
+                Card(
+                    shape = slotShape,
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color.White.copy(alpha = if (selectedInside) 0.08f else 0.05f)
+                    ),
+                    modifier = Modifier
+                        .offset(x = cardX, y = cardY)
+                        .size(slotSize, slotSize)
+                        .border(
+                            2.dp,
+                            Color.White.copy(alpha = if (selectedInside) 0.35f else 0.18f),
+                            slotShape
+                        )
+                ) {}
 
-            val originX: Dp = (scopeMaxW - gridW) / 2
-            val originY: Dp = (scopeMaxH - gridH) / 2
+                for (cy in 0..1) {
+                    for (cx in 0..1) {
+                        val gx = slot.baseX + cx
+                        val gy = slot.baseY + cy
 
-            fun cardX(c: Int): Dp = originX + (slot + outerGap) * c.toFloat()
-            fun cardY(): Dp = originY
+                        if (landscapeIsCovered(slotIndex, gx, gy)) continue
+                        if (landscapePlacementAtTopLeft(slotIndex, gx, gy) != null) continue
 
-            val innerPad = 18.dp
-            val smallCell: Dp = (slot - innerGap - innerPad * 2) / 2
-            publishSmallCellPx(smallCell)
-
-            fun spanSize(span: Int): Dp =
-                (smallCell * span.toFloat()) + innerGap * (span - 1)
-
-            fun localOffset(local: Int): Dp =
-                (smallCell + innerGap) * local.toFloat()
-
-            val selectedPlacement = placementCovering(selectedX, selectedY)
-
-            for (i in 0 until visibleCount) {
-                val c = i
-
-                val logicalSlotY = i / slotColsLogical
-                val logicalSlotX = i % slotColsLogical
-
-                val sc = logicalSlotX
-                val sr = logicalSlotY
-
-                val cellX = slotTopLeftCellX(sc)
-                val cellY = slotTopLeftCellY(sr)
-
-                val selectedInside =
-                    (selectedX in cellX..(cellX + 1)) && (selectedY in cellY..(cellY + 1))
-
-                val hasAny = slotHasAnything(sc, sr)
-
-                if (!hasAny) {
-                    BigEmptyCard(
-                        x = cardX(c),
-                        y = cardY(),
-                        w = slot,
-                        h = slot,
-                        selected = selectedInside,
-                        onClick = {
-                            selectedX = cellX
-                            selectedY = cellY
-                            clampSel()
-                            onRequestAddAt(cellX, cellY)
-                        }
-                    )
-                } else {
-                    Card(
-                        shape = slotShape,
-                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = if (selectedInside) 0.08f else 0.05f)),
-                        modifier = Modifier
-                            .offset(x = cardX(c), y = cardY())
-                            .size(slot, slot)
-                            .border(
-                                2.dp,
-                                Color.White.copy(alpha = if (selectedInside) 0.35f else 0.18f),
-                                slotShape
-                            )
-                    ) {}
-
-                    for (cy in 0..1) for (cx in 0..1) {
-                        val gx = cellX + cx
-                        val gy = cellY + cy
-
-                        if (isCovered(gx, gy)) continue
-                        if (placementAtTopLeft(gx, gy) != null) continue
-
-                        val isSel = (gx == selectedX && gy == selectedY)
+                        val isSel = gx == selectedX && gy == selectedY
 
                         SmallAddCell(
-                            x = cardX(c) + innerPad + localOffset(cx),
-                            y = cardY() + innerPad + localOffset(cy),
+                            x = cardX + innerPad + localOffset(cx),
+                            y = cardY + innerPad + localOffset(cy),
                             size = smallCell,
                             selected = isSel,
                             onClick = {
@@ -569,48 +865,259 @@ fun WidgetsPanel(
                             }
                         )
                     }
+                }
 
-                    for (p in visiblePlacements) {
-                        val pSc = (p.cellX / 2).coerceIn(0, slotColsLogical - 1)
-                        val pSr = (p.cellY / 2).coerceIn(0, slotRowsLogical - 1)
-                        if (pSc != sc || pSr != sr) continue
+                for (p in slotPlacements) {
+                    key(p.appWidgetId, p.cellX, p.cellY, p.provider) {
+                        val localCx = (p.cellX - slot.baseX).coerceIn(0, 1)
+                        val localCy = (p.cellY - slot.baseY).coerceIn(0, 1)
+                        val isSel = selectedPlacement?.appWidgetId == p.appWidgetId
 
-                        key(p.appWidgetId, p.cellX, p.cellY, p.provider) {
-                            val localCx = (p.cellX - cellX).coerceIn(0, 1)
-                            val localCy = (p.cellY - cellY).coerceIn(0, 1)
+                        val scale by animateFloatAsState(
+                            targetValue = if (isSel) 1.02f else 1.0f,
+                            label = "widgetScaleLandscape_$slotIndex"
+                        )
 
-                            val isSel = (selectedPlacement?.appWidgetId == p.appWidgetId)
+                        Box(
+                            modifier = Modifier
+                                .offset(
+                                    x = cardX + innerPad + localOffset(localCx),
+                                    y = cardY + innerPad + localOffset(localCy)
+                                )
+                                .size(spanSize(p.spanX), spanSize(p.spanY))
+                                .scale(scale)
+                                .clip(cellShape)
+                                .border(
+                                    2.dp,
+                                    Color.White.copy(alpha = if (isSel) 0.95f else 0.18f),
+                                    cellShape
+                                )
+                                .combinedClickable(
+                                    interactionSource = remember { noRipple },
+                                    indication = null,
+                                    onClick = {
+                                        selectedX = p.cellX
+                                        selectedY = p.cellY
+                                        clampSel()
+                                    },
+                                    onLongClick = { openMenuFor(p) }
+                                )
+                        ) {
+                            renderWidget(p, Modifier.fillMaxSize())
+                        }
+                    }
+                }
+            }
+        }
 
-                            val scale by animateFloatAsState(
-                                targetValue = if (isSel) 1.02f else 1.0f,
-                                label = "widgetScale"
-                            )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .focusRequester(focusRequester)
+        ) {
+            val innerPadOutside = 18.dp
+            val availW = (scopeMaxW - innerPadOutside * 2).coerceAtLeast(1.dp)
+            val availH = scopeMaxH.coerceAtLeast(1.dp)
 
-                            Box(
-                                modifier = Modifier
-                                    .offset(
-                                        x = cardX(c) + innerPad + localOffset(localCx),
-                                        y = cardY() + innerPad + localOffset(localCy)
-                                    )
-                                    .size(spanSize(p.spanX), spanSize(p.spanY))
-                                    .scale(scale)
-                                    .border(
-                                        2.dp,
-                                        Color.White.copy(alpha = if (isSel) 0.95f else 0.18f),
-                                        cellShape
-                                    )
-                                    .combinedClickable(
-                                        interactionSource = remember { noRipple },
-                                        indication = null,
-                                        onClick = {
-                                            selectedX = p.cellX
-                                            selectedY = p.cellY
-                                            clampSel()
-                                        },
-                                        onLongClick = { openMenuFor(p) }
-                                    )
-                            ) {
-                                renderWidget(p, Modifier.fillMaxSize())
+            if (isLandscape) {
+                val slotCount = 4
+                val slotFromW = (availW - outerGap * (slotCount - 1)) / slotCount
+                val slotSize = min(slotFromW.value, availH.value).dp
+
+                val totalW = (slotSize * 4f) + outerGap * 3
+                val originX = (scopeMaxW - totalW) / 2
+                val originY = (scopeMaxH - slotSize) / 2
+
+                val slot1X = originX
+                val slot2X = originX + slotSize + outerGap
+                val slot3X = originX + (slotSize + outerGap) * 2f
+                val slot4X = originX + (slotSize + outerGap) * 3f
+                val slotY = originY
+
+                val innerPad = 18.dp
+                val smallCell = (slotSize - innerGap - innerPad * 2) / 2
+                publishSmallCellPx(smallCell)
+
+                // Slot1
+                RenderOneLandscapeSlot(
+                    slotIndex = 0,
+                    cardX = slot1X,
+                    cardY = slotY,
+                    slotSize = slotSize,
+                    innerPad = innerPad,
+                    innerGapPx = innerGap,
+                    smallCell = smallCell
+                )
+
+                // Slot2
+                RenderOneLandscapeSlot(
+                    slotIndex = 1,
+                    cardX = slot2X,
+                    cardY = slotY,
+                    slotSize = slotSize,
+                    innerPad = innerPad,
+                    innerGapPx = innerGap,
+                    smallCell = smallCell
+                )
+
+                // Slot3
+                RenderOneLandscapeSlot(
+                    slotIndex = 2,
+                    cardX = slot3X,
+                    cardY = slotY,
+                    slotSize = slotSize,
+                    innerPad = innerPad,
+                    innerGapPx = innerGap,
+                    smallCell = smallCell
+                )
+
+                // Slot4
+                RenderOneLandscapeSlot(
+                    slotIndex = 3,
+                    cardX = slot4X,
+                    cardY = slotY,
+                    slotSize = slotSize,
+                    innerPad = innerPad,
+                    innerGapPx = innerGap,
+                    smallCell = smallCell
+                )
+            } else {
+                val slotCount = portraitSlots.size
+                val cols = min(slotCount, 4).coerceAtLeast(1)
+                val visibleCount = min(slotCount, cols)
+
+                val slotFromW = (availW - outerGap * (cols - 1)) / cols
+                val slotSize = min(slotFromW.value, availH.value).dp
+
+                val gridW = (slotSize * cols.toFloat()) + outerGap * (cols - 1)
+                val gridH = slotSize
+
+                val originX = (scopeMaxW - gridW) / 2
+                val originY = (scopeMaxH - gridH) / 2
+
+                fun cardX(c: Int): Dp = originX + (slotSize + outerGap) * c.toFloat()
+                fun cardY(): Dp = originY
+
+                val innerPad = 18.dp
+                val smallCell = (slotSize - innerGap - innerPad * 2) / 2
+                publishSmallCellPx(smallCell)
+
+                fun spanSize(span: Int): Dp =
+                    (smallCell * span.toFloat()) + innerGap * (span - 1)
+
+                fun localOffset(local: Int): Dp =
+                    (smallCell + innerGap) * local.toFloat()
+
+                val selectedPlacement = portraitPlacementCovering(selectedX, selectedY)
+
+                for (i in 0 until visibleCount) {
+                    val slotDef = portraitSlotAt(i)
+                    val cellX = slotDef.baseX
+                    val cellY = slotDef.baseY
+
+                    val selectedInside =
+                        (selectedX in cellX..(cellX + 1)) &&
+                                (selectedY in cellY..(cellY + 1))
+
+                    val hasAny = portraitSlotHasAnything(i)
+
+                    if (!hasAny) {
+                        BigEmptyCard(
+                            x = cardX(i),
+                            y = cardY(),
+                            w = slotSize,
+                            h = slotSize,
+                            selected = selectedInside,
+                            onClick = {
+                                selectedX = cellX
+                                selectedY = cellY
+                                clampSel()
+                                onRequestAddAt(cellX, cellY)
+                            }
+                        )
+                    } else {
+                        Card(
+                            shape = slotShape,
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color.White.copy(alpha = if (selectedInside) 0.08f else 0.05f)
+                            ),
+                            modifier = Modifier
+                                .offset(x = cardX(i), y = cardY())
+                                .size(slotSize, slotSize)
+                                .border(
+                                    2.dp,
+                                    Color.White.copy(alpha = if (selectedInside) 0.35f else 0.18f),
+                                    slotShape
+                                )
+                        ) {}
+
+                        for (cy in 0..1) {
+                            for (cx in 0..1) {
+                                val gx = cellX + cx
+                                val gy = cellY + cy
+
+                                if (portraitIsCovered(gx, gy)) continue
+                                if (portraitPlacementAtTopLeft(gx, gy) != null) continue
+
+                                val isSel = gx == selectedX && gy == selectedY
+
+                                SmallAddCell(
+                                    x = cardX(i) + innerPad + localOffset(cx),
+                                    y = cardY() + innerPad + localOffset(cy),
+                                    size = smallCell,
+                                    selected = isSel,
+                                    onClick = {
+                                        selectedX = gx
+                                        selectedY = gy
+                                        clampSel()
+                                        onRequestAddAt(gx, gy)
+                                    }
+                                )
+                            }
+                        }
+
+                        for (p in portraitPlacements) {
+                            val pSlotIndex = portraitSlotIndexForPlacement(p)
+                            if (pSlotIndex != i) continue
+
+                            key(p.appWidgetId, p.cellX, p.cellY, p.provider) {
+                                val localCx = (p.cellX - cellX).coerceIn(0, 1)
+                                val localCy = (p.cellY - cellY).coerceIn(0, 1)
+
+                                val isSel = selectedPlacement?.appWidgetId == p.appWidgetId
+
+                                val scale by animateFloatAsState(
+                                    targetValue = if (isSel) 1.02f else 1.0f,
+                                    label = "widgetScalePortrait"
+                                )
+
+                                Box(
+                                    modifier = Modifier
+                                        .offset(
+                                            x = cardX(i) + innerPad + localOffset(localCx),
+                                            y = cardY() + innerPad + localOffset(localCy)
+                                        )
+                                        .size(spanSize(p.spanX), spanSize(p.spanY))
+                                        .scale(scale)
+                                        .clip(cellShape)
+                                        .border(
+                                            2.dp,
+                                            Color.White.copy(alpha = if (isSel) 0.95f else 0.18f),
+                                            cellShape
+                                        )
+                                        .combinedClickable(
+                                            interactionSource = remember { noRipple },
+                                            indication = null,
+                                            onClick = {
+                                                selectedX = p.cellX
+                                                selectedY = p.cellY
+                                                clampSel()
+                                            },
+                                            onLongClick = { openMenuFor(p) }
+                                        )
+                                ) {
+                                    renderWidget(p, Modifier.fillMaxSize())
+                                }
                             }
                         }
                     }
@@ -631,7 +1138,10 @@ fun WidgetsPanel(
                             fontWeight = FontWeight.Medium
                         )
                     },
-                    onClick = { target?.let(onMove); closeMenu() }
+                    onClick = {
+                        target?.let(onMove)
+                        closeMenu()
+                    }
                 )
                 DropdownMenuItem(
                     text = {
@@ -641,7 +1151,10 @@ fun WidgetsPanel(
                             fontWeight = FontWeight.Medium
                         )
                     },
-                    onClick = { target?.let(onDelete); closeMenu() }
+                    onClick = {
+                        target?.let(onDelete)
+                        closeMenu()
+                    }
                 )
             }
         }

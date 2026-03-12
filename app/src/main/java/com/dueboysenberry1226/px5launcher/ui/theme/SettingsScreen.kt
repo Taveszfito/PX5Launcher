@@ -2,35 +2,53 @@
 
 package com.dueboysenberry1226.px5launcher.ui.settings
 
-import com.dueboysenberry1226.px5launcher.ui.Haptics
 import android.app.Activity
-import androidx.compose.foundation.focusable
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import android.view.KeyEvent as AndroidKeyEvent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -48,13 +66,16 @@ import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.data.ButtonLayout
 import com.dueboysenberry1226.px5launcher.data.SettingsRepository
 import com.dueboysenberry1226.px5launcher.data.WidgetsRepository
+import com.dueboysenberry1226.px5launcher.ui.Haptics
 import kotlinx.coroutines.launch
 import kotlin.math.max
 
 private enum class FocusZone { LEFT, RIGHT }
 
-private sealed class SettingRow(val title: String, val subtitle: String? = null) {
-
+private sealed class SettingRow(
+    val title: String,
+    val subtitle: String? = null
+) {
     class Toggle(
         title: String,
         subtitle: String? = null,
@@ -85,6 +106,19 @@ private sealed class SettingRow(val title: String, val subtitle: String? = null)
         val getIndex: () -> Int,
         val setIndex: suspend (Int) -> Unit
     ) : SettingRow(title, subtitle)
+
+    class Info(
+        title: String,
+        val value: String,
+        subtitle: String? = null
+    ) : SettingRow(title, subtitle)
+
+    class DialogInfo(
+        title: String,
+        subtitle: String? = null,
+        val dialogTitle: String,
+        val dialogBody: String
+    ) : SettingRow(title, subtitle)
 }
 
 private fun snapToStep(raw: Int, min: Int, max: Int, step: Int): Int {
@@ -93,6 +127,22 @@ private fun snapToStep(raw: Int, min: Int, max: Int, step: Int): Int {
     val offset = clamped - min
     val snapped = ((offset + step / 2) / step) * step + min
     return snapped.coerceIn(min, max)
+}
+
+private fun getAppVersionName(context: Context): String {
+    return try {
+        val pm = context.packageManager
+        val pkg = context.packageName
+        val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pm.getPackageInfo(pkg, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+        } else {
+            @Suppress("DEPRECATION")
+            pm.getPackageInfo(pkg, 0)
+        }
+        info.versionName ?: "?"
+    } catch (_: Exception) {
+        "?"
+    }
 }
 
 @Composable
@@ -105,64 +155,37 @@ fun SettingsScreen(
     val settingsRepo = remember(context) { SettingsRepository(context) }
     val widgetsRepo = remember(context) { WidgetsRepository(context) }
 
-    // ---- values ----
     val clock24h by settingsRepo.clock24hFlow.collectAsState(initial = true)
     val showBigName by settingsRepo.showBigAppNameFlow.collectAsState(initial = true)
     val accentFromIcon by settingsRepo.accentFromAppIconFlow.collectAsState(initial = true)
     val languageCode by settingsRepo.languageCodeFlow.collectAsState(initial = "system")
-
-    val ambientEnabled by settingsRepo.ambientEnabledFlow.collectAsState(initial = false)
-    val ambientMuted by settingsRepo.ambientMutedFlow.collectAsState(initial = false)
-    val ambientVolume by settingsRepo.ambientVolumeFlow.collectAsState(initial = 35)
-    val ambientSoundUri by settingsRepo.ambientSoundUriFlow.collectAsState(initial = null)
-
-    val clickEnabled by settingsRepo.clickEnabledFlow.collectAsState(initial = true)
-    val clickVolume by settingsRepo.clickVolumeFlow.collectAsState(initial = 35)
 
     val buttonLayout by settingsRepo.buttonLayoutFlow.collectAsState(initial = ButtonLayout.PS)
     val vibrationEnabled by settingsRepo.vibrationEnabledFlow.collectAsState(initial = true)
     val vibrationStrength by settingsRepo.vibrationStrengthFlow.collectAsState(initial = 1)
 
     val allAppsColumns by settingsRepo.allAppsColumnsFlow.collectAsState(initial = 4)
-    val recentsMax by settingsRepo.recentsMaxFlow.collectAsState(initial = 30)
+
+    val appVersionName = remember(context) { getAppVersionName(context) }
 
     fun hClick() {
         if (vibrationEnabled) Haptics.click(context)
     }
-    fun hTick() {
-        if (vibrationEnabled) Haptics.tick(context)
-    }
 
-    // ✅ Globális haptics erősség bekötés
     LaunchedEffect(vibrationStrength) {
         Haptics.setStrength(vibrationStrength)
     }
 
-    val ambientPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        if (uri != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            }
-            scope.launch { settingsRepo.setAmbientSoundUri(uri.toString()) }
-        }
-    }
-
-    // ---- categories ----
     val categories = listOf(
         stringResource(R.string.settings_category_general),
-        stringResource(R.string.settings_category_audio),
-        stringResource(R.string.settings_category_controls),
         stringResource(R.string.settings_category_home),
+        stringResource(R.string.settings_category_feedback),
         stringResource(R.string.settings_category_permissions),
-        stringResource(R.string.settings_category_about)
+        stringResource(R.string.settings_category_application)
     )
     val backIndexLeft = categories.size
 
     var leftIndex by remember { mutableIntStateOf(0) }
-
     var catIndex by remember { mutableIntStateOf(0) }
     var rowIndex by remember { mutableIntStateOf(0) }
     var focusZone by remember { mutableStateOf(FocusZone.LEFT) }
@@ -170,12 +193,18 @@ fun SettingsScreen(
     var expandedRowIndex by remember { mutableStateOf<Int?>(null) }
     var expandedOptionIndex by remember { mutableIntStateOf(0) }
 
+    var openDialogTitle by remember { mutableStateOf<String?>(null) }
+    var openDialogBody by remember { mutableStateOf<String?>(null) }
+
     val rightListState = rememberLazyListState()
     var rightAutoScrollTick by remember { mutableIntStateOf(0) }
     val leftListState = rememberLazyListState()
 
     val rootFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { rootFocusRequester.requestFocus() }
+
+    LaunchedEffect(Unit) {
+        rootFocusRequester.requestFocus()
+    }
 
     val languageOptions = listOf(
         stringResource(R.string.common_system),
@@ -203,13 +232,6 @@ fun SettingsScreen(
         context.startActivity(intent)
     }
 
-    fun openSystemSettings() {
-        val intent = Intent(Settings.ACTION_SETTINGS).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(intent)
-    }
-
     fun openNotificationListenerSettings() {
         val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -229,8 +251,12 @@ fun SettingsScreen(
         return enabled.contains(target)
     }
 
-    fun toggle(title: String, subtitle: String? = null, get: () -> Boolean, set: suspend (Boolean) -> Unit) =
-        SettingRow.Toggle(title, subtitle, get, set)
+    fun toggle(
+        title: String,
+        subtitle: String? = null,
+        get: () -> Boolean,
+        set: suspend (Boolean) -> Unit
+    ) = SettingRow.Toggle(title, subtitle, get, set)
 
     fun expandableSlider(
         title: String,
@@ -242,8 +268,11 @@ fun SettingsScreen(
         set: suspend (Int) -> Unit
     ) = SettingRow.ExpandableSliderRow(title, subtitle, min, max, step, get, set)
 
-    fun action(title: String, subtitle: String? = null, onClick: suspend () -> Unit) =
-        SettingRow.Action(title, subtitle, onClick)
+    fun action(
+        title: String,
+        subtitle: String? = null,
+        onClick: suspend () -> Unit
+    ) = SettingRow.Action(title, subtitle, onClick)
 
     fun picker(
         title: String,
@@ -253,84 +282,49 @@ fun SettingsScreen(
         setIndex: suspend (Int) -> Unit
     ) = SettingRow.Picker(title, subtitle, options, getIndex, setIndex)
 
+    fun info(
+        title: String,
+        value: String,
+        subtitle: String? = null
+    ) = SettingRow.Info(title, value, subtitle)
+
+    fun dialogInfo(
+        title: String,
+        subtitle: String? = null,
+        dialogTitle: String,
+        dialogBody: String
+    ) = SettingRow.DialogInfo(title, subtitle, dialogTitle, dialogBody)
+
     val rowsForCategory: List<SettingRow> = when (catIndex) {
         0 -> listOf(
             toggle(
-                stringResource(R.string.settings_clock_24h_title),
-                stringResource(R.string.settings_clock_24h_subtitle),
-                { clock24h },
-                { settingsRepo.setClock24h(it) }
-            ),
-            toggle(
-                stringResource(R.string.settings_big_app_name_title),
-                stringResource(R.string.settings_big_app_name_subtitle),
-                { showBigName },
-                { settingsRepo.setShowBigAppName(it) }
-            ),
-            toggle(
-                stringResource(R.string.settings_accent_from_icon_title),
-                stringResource(R.string.settings_accent_from_icon_subtitle),
-                { accentFromIcon },
-                { settingsRepo.setAccentFromAppIcon(it) }
+                title = stringResource(R.string.settings_clock_24h_title),
+                subtitle = stringResource(R.string.settings_clock_24h_subtitle),
+                get = { clock24h },
+                set = { settingsRepo.setClock24h(it) }
             ),
             picker(
-                stringResource(R.string.settings_language_title),
-                stringResource(R.string.settings_language_subtitle),
-                languageOptions,
+                title = stringResource(R.string.settings_language_title),
+                subtitle = stringResource(R.string.settings_language_subtitle),
+                options = languageOptions,
                 getIndex = { langIndexFromCode(languageCode) },
                 setIndex = {
                     settingsRepo.setLanguageCode(codeFromLangIndex(it))
                     (context as? Activity)?.recreate()
                 }
             ),
-            action(
-                stringResource(R.string.settings_widgets_reset_title),
-                stringResource(R.string.settings_widgets_reset_subtitle)
-            ) { widgetsRepo.clearAll() }
-        )
-
-        1 -> listOf(
             toggle(
-                stringResource(R.string.settings_ambient_title),
-                stringResource(R.string.settings_ambient_subtitle),
-                { ambientEnabled },
-                { settingsRepo.setAmbientEnabled(it) }
+                title = stringResource(R.string.settings_accent_from_icon_title),
+                subtitle = stringResource(R.string.settings_accent_from_icon_subtitle),
+                get = { accentFromIcon },
+                set = { settingsRepo.setAccentFromAppIcon(it) }
             ),
             toggle(
-                stringResource(R.string.settings_ambient_mute_title),
-                stringResource(R.string.settings_ambient_mute_subtitle),
-                { ambientMuted },
-                { settingsRepo.setAmbientMuted(it) }
+                title = stringResource(R.string.settings_big_app_name_title),
+                subtitle = stringResource(R.string.settings_big_app_name_subtitle),
+                get = { showBigName },
+                set = { settingsRepo.setShowBigAppName(it) }
             ),
-            // ✅ MOST MÁR EXPANDABLE SLIDER
-            expandableSlider(
-                stringResource(R.string.settings_ambient_volume_title),
-                "0-100",
-                0, 100, 5,
-                { ambientVolume },
-                { settingsRepo.setAmbientVolume(it) }
-            ),
-            action(
-                stringResource(R.string.settings_ambient_change_title),
-                ambientSoundUri?.let { stringResource(R.string.common_selected) } ?: stringResource(R.string.common_not_selected)
-            ) { ambientPicker.launch(arrayOf("audio/*")) },
-            toggle(
-                stringResource(R.string.settings_click_sound_title),
-                stringResource(R.string.settings_click_sound_subtitle),
-                { clickEnabled },
-                { settingsRepo.setClickEnabled(it) }
-            ),
-            // ✅ MOST MÁR EXPANDABLE SLIDER
-            expandableSlider(
-                stringResource(R.string.settings_click_volume_title),
-                "0-100",
-                0, 100, 5,
-                { clickVolume },
-                { settingsRepo.setClickVolume(it) }
-            )
-        )
-
-        2 -> listOf(
             picker(
                 title = stringResource(R.string.settings_button_layout_title),
                 subtitle = stringResource(R.string.settings_button_layout_subtitle),
@@ -347,19 +341,40 @@ fun SettingsScreen(
                     }
                 },
                 setIndex = {
-                    val v = when (it) {
+                    val value = when (it) {
                         1 -> ButtonLayout.XBOX
                         2 -> ButtonLayout.TV
                         else -> ButtonLayout.PS
                     }
-                    settingsRepo.setButtonLayout(v)
+                    settingsRepo.setButtonLayout(value)
                 }
+            )
+        )
+
+        1 -> listOf(
+            expandableSlider(
+                title = stringResource(R.string.settings_allapps_columns_title),
+                subtitle = "2 - 5",
+                min = 2,
+                max = 5,
+                step = 1,
+                get = { allAppsColumns },
+                set = { settingsRepo.setAllAppsColumns(it) }
             ),
+            action(
+                title = stringResource(R.string.settings_widgets_reset_title),
+                subtitle = stringResource(R.string.settings_widgets_reset_subtitle)
+            ) {
+                widgetsRepo.clearAll()
+            }
+        )
+
+        2 -> listOf(
             toggle(
-                stringResource(R.string.settings_vibration_title),
-                stringResource(R.string.settings_vibration_subtitle),
-                { vibrationEnabled },
-                { settingsRepo.setVibrationEnabled(it) }
+                title = stringResource(R.string.settings_vibration_title),
+                subtitle = stringResource(R.string.settings_vibration_subtitle),
+                get = { vibrationEnabled },
+                set = { settingsRepo.setVibrationEnabled(it) }
             ),
             expandableSlider(
                 title = stringResource(R.string.settings_vibration_strength_title),
@@ -371,50 +386,67 @@ fun SettingsScreen(
                 set = { newValue ->
                     val v = newValue.coerceIn(0, 5)
                     settingsRepo.setVibrationStrength(v)
-                    if (v == 0) settingsRepo.setVibrationEnabled(false) else settingsRepo.setVibrationEnabled(true)
+                    if (v == 0) {
+                        settingsRepo.setVibrationEnabled(false)
+                    } else {
+                        settingsRepo.setVibrationEnabled(true)
+                    }
                 }
             )
         )
 
         3 -> listOf(
-            // ✅ MOST MÁR EXPANDABLE SLIDER
-            expandableSlider(
-                stringResource(R.string.settings_allapps_columns_title),
-                "2 - 5",
-                2, 5, 1,
-                { allAppsColumns },
-                { settingsRepo.setAllAppsColumns(it) }
-            ),
-            // ✅ MOST MÁR EXPANDABLE SLIDER
-            expandableSlider(
-                stringResource(R.string.settings_recents_max_title),
-                stringResource(R.string.settings_recents_max_subtitle),
-                5, 200, 5,
-                { recentsMax },
-                { settingsRepo.setRecentsMax(it) }
-            )
-        )
-
-        4 -> listOf(
             action(
-                stringResource(R.string.settings_notifications_permission_title),
-                if (isNotificationListenerEnabled(context)) stringResource(R.string.common_active) else stringResource(R.string.common_not_enabled)
-            ) { openNotificationListenerSettings() },
+                title = stringResource(R.string.settings_storage_permission_title),
+                subtitle = stringResource(R.string.settings_storage_permission_subtitle)
+            ) {
+                openAppDetails()
+            },
             action(
-                stringResource(R.string.settings_storage_permission_title),
-                stringResource(R.string.settings_storage_permission_subtitle)
-            ) { openAppDetails() },
+                title = stringResource(R.string.settings_notifications_permission_title),
+                subtitle = if (isNotificationListenerEnabled(context)) {
+                    stringResource(R.string.common_active)
+                } else {
+                    stringResource(R.string.common_not_enabled)
+                }
+            ) {
+                openNotificationListenerSettings()
+            },
             action(
-                stringResource(R.string.settings_system_settings_title),
-                stringResource(R.string.settings_android_settings_subtitle)
-            ) { openSystemSettings() }
+                title = stringResource(R.string.settings_camera_permission_title),
+                subtitle = stringResource(R.string.settings_camera_permission_subtitle)
+            ) {
+                openAppDetails()
+            },
+            action(
+                title = stringResource(R.string.settings_app_permissions_title),
+                subtitle = stringResource(R.string.settings_app_permissions_subtitle)
+            ) {
+                openAppDetails()
+            }
         )
 
         else -> listOf(
+            info(
+                title = stringResource(R.string.settings_app_version_title),
+                value = appVersionName
+            ),
+            info(
+                title = stringResource(R.string.settings_app_developer_title),
+                value = stringResource(R.string.settings_app_developer_value)
+            ),
+            dialogInfo(
+                title = stringResource(R.string.settings_privacy_policy_title),
+                subtitle = stringResource(R.string.common_open),
+                dialogTitle = stringResource(R.string.settings_privacy_policy_title),
+                dialogBody = stringResource(R.string.settings_privacy_policy_body)
+            ),
             action(
-                stringResource(R.string.settings_category_about),
-                stringResource(R.string.common_app_info)
-            ) { openAppDetails() }
+                title = stringResource(R.string.common_app_info),
+                subtitle = stringResource(R.string.settings_app_info_subtitle)
+            ) {
+                openAppDetails()
+            }
         )
     }
 
@@ -435,7 +467,9 @@ fun SettingsScreen(
         rightAutoScrollTick++
     }
 
-    LaunchedEffect(catIndex, rowsForCategory.size) { clampRowIndex() }
+    LaunchedEffect(catIndex, rowsForCategory.size) {
+        clampRowIndex()
+    }
 
     LaunchedEffect(leftIndex, focusZone) {
         if (focusZone == FocusZone.LEFT && leftIndex in 0..categories.lastIndex) {
@@ -457,14 +491,17 @@ fun SettingsScreen(
                 expandedRowIndex = index
                 expandedOptionIndex = if (row.get()) 1 else 0
             }
+
             is SettingRow.Picker -> {
                 expandedRowIndex = index
                 expandedOptionIndex = row.getIndex().coerceIn(0, row.options.lastIndex)
             }
+
             is SettingRow.ExpandableSliderRow -> {
                 expandedRowIndex = index
                 expandedOptionIndex = row.get().coerceIn(row.min, row.max)
             }
+
             else -> {
                 expandedRowIndex = null
                 expandedOptionIndex = 0
@@ -490,7 +527,6 @@ fun SettingsScreen(
                 else -> Unit
             }
         }
-        // Toggle/Picker esetén csukjuk, slider esetén maradhatna – de egységesen csukjuk Enterre.
         collapseExpanded()
     }
 
@@ -501,10 +537,10 @@ fun SettingsScreen(
         val isExpanded = (expandedRowIndex == rowIndex)
         val currentRow = rowsForCategory.getOrNull(rowIndex)
 
-        // ✅ Slider ütközőknél TICK, máshol CLICK
         val isSliderStepKey =
             focusZone == FocusZone.RIGHT &&
-                    (nk.keyCode == AndroidKeyEvent.KEYCODE_DPAD_LEFT || nk.keyCode == AndroidKeyEvent.KEYCODE_DPAD_RIGHT) &&
+                    (nk.keyCode == AndroidKeyEvent.KEYCODE_DPAD_LEFT ||
+                            nk.keyCode == AndroidKeyEvent.KEYCODE_DPAD_RIGHT) &&
                     (isExpanded && currentRow is SettingRow.ExpandableSliderRow)
 
         if (vibrationEnabled) {
@@ -528,6 +564,11 @@ fun SettingsScreen(
         when (nk.keyCode) {
             AndroidKeyEvent.KEYCODE_BACK,
             AndroidKeyEvent.KEYCODE_BUTTON_B -> {
+                if (openDialogTitle != null) {
+                    openDialogTitle = null
+                    openDialogBody = null
+                    return true
+                }
                 hClick()
                 onBackToHome()
                 return true
@@ -541,11 +582,13 @@ fun SettingsScreen(
                     if (leftIndex != backIndexLeft) selectCategory(leftIndex)
                     return true
                 }
+
                 AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
                     leftIndex = (leftIndex + 1).coerceAtMost(backIndexLeft)
                     if (leftIndex != backIndexLeft) selectCategory(leftIndex)
                     return true
                 }
+
                 AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
                     if (leftIndex == backIndexLeft) return true
                     focusZone = FocusZone.RIGHT
@@ -553,6 +596,7 @@ fun SettingsScreen(
                     rightAutoScrollTick++
                     return true
                 }
+
                 AndroidKeyEvent.KEYCODE_DPAD_CENTER,
                 AndroidKeyEvent.KEYCODE_ENTER,
                 AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
@@ -570,24 +614,28 @@ fun SettingsScreen(
             return false
         }
 
-        // RIGHT zone
         when (nk.keyCode) {
-
             AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
                 if (isExpanded) {
                     when (val row = currentRow) {
-                        is SettingRow.Toggle -> expandedOptionIndex =
-                            (expandedOptionIndex - 1).coerceAtLeast(0).coerceIn(0, 1)
+                        is SettingRow.Toggle -> {
+                            expandedOptionIndex =
+                                (expandedOptionIndex - 1).coerceAtLeast(0).coerceIn(0, 1)
+                        }
 
-                        is SettingRow.Picker -> expandedOptionIndex =
-                            (expandedOptionIndex - 1).coerceAtLeast(0).coerceIn(0, row.options.lastIndex)
+                        is SettingRow.Picker -> {
+                            expandedOptionIndex =
+                                (expandedOptionIndex - 1).coerceAtLeast(0)
+                                    .coerceIn(0, row.options.lastIndex)
+                        }
 
                         is SettingRow.ExpandableSliderRow -> {
-                            expandedOptionIndex = (expandedOptionIndex - row.step).coerceIn(row.min, row.max)
+                            expandedOptionIndex =
+                                (expandedOptionIndex - row.step).coerceIn(row.min, row.max)
                             scope.launch { row.set(expandedOptionIndex) }
                         }
 
-                        else -> {}
+                        else -> Unit
                     }
                     return true
                 }
@@ -600,13 +648,22 @@ fun SettingsScreen(
             AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
                 if (isExpanded) {
                     when (val row = currentRow) {
-                        is SettingRow.Toggle -> expandedOptionIndex = (expandedOptionIndex + 1).coerceAtMost(1)
-                        is SettingRow.Picker -> expandedOptionIndex = (expandedOptionIndex + 1).coerceAtMost(row.options.lastIndex)
+                        is SettingRow.Toggle -> {
+                            expandedOptionIndex = (expandedOptionIndex + 1).coerceAtMost(1)
+                        }
+
+                        is SettingRow.Picker -> {
+                            expandedOptionIndex =
+                                (expandedOptionIndex + 1).coerceAtMost(row.options.lastIndex)
+                        }
+
                         is SettingRow.ExpandableSliderRow -> {
-                            expandedOptionIndex = (expandedOptionIndex + row.step).coerceIn(row.min, row.max)
+                            expandedOptionIndex =
+                                (expandedOptionIndex + row.step).coerceIn(row.min, row.max)
                             scope.launch { row.set(expandedOptionIndex) }
                         }
-                        else -> {}
+
+                        else -> Unit
                     }
                     return true
                 }
@@ -638,17 +695,24 @@ fun SettingsScreen(
                     return true
                 }
 
-                if (row is SettingRow.Action) {
-                    scope.launch { row.onClick() }
-                    return true
-                }
+                when (row) {
+                    is SettingRow.Action -> {
+                        scope.launch { row.onClick() }
+                    }
 
-                // ✅ minden slider is ide esik: Enter -> nyit/zár
-                if (row is SettingRow.Toggle || row is SettingRow.Picker || row is SettingRow.ExpandableSliderRow) {
-                    if (expandedRowIndex == rowIndex) collapseExpanded() else expandRowIfPossible(rowIndex)
-                    return true
-                }
+                    is SettingRow.DialogInfo -> {
+                        openDialogTitle = row.dialogTitle
+                        openDialogBody = row.dialogBody
+                    }
 
+                    is SettingRow.Toggle,
+                    is SettingRow.Picker,
+                    is SettingRow.ExpandableSliderRow -> {
+                        if (expandedRowIndex == rowIndex) collapseExpanded() else expandRowIfPossible(rowIndex)
+                    }
+
+                    is SettingRow.Info -> Unit
+                }
                 return true
             }
         }
@@ -681,9 +745,7 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = stringResource(R.string.common_settings),
                         color = Color.White,
@@ -710,8 +772,6 @@ fun SettingsScreen(
             Spacer(Modifier.height(14.dp))
 
             Row(Modifier.fillMaxSize()) {
-
-                // LEFT
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
                     shape = RoundedCornerShape(22.dp),
@@ -719,7 +779,11 @@ fun SettingsScreen(
                         .fillMaxHeight()
                         .width(320.dp)
                 ) {
-                    Column(Modifier.fillMaxSize().padding(10.dp)) {
+                    Column(
+                        Modifier
+                            .fillMaxSize()
+                            .padding(10.dp)
+                    ) {
                         LazyColumn(
                             state = leftListState,
                             modifier = Modifier.weight(1f),
@@ -754,7 +818,11 @@ fun SettingsScreen(
                         Spacer(Modifier.height(10.dp))
 
                         val backSelected = (leftIndex == backIndexLeft && focusZone == FocusZone.LEFT)
-                        val backBg = if (backSelected) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.08f)
+                        val backBg = if (backSelected) {
+                            Color.White.copy(alpha = 0.14f)
+                        } else {
+                            Color.White.copy(alpha = 0.08f)
+                        }
 
                         Card(
                             colors = CardDefaults.cardColors(containerColor = backBg),
@@ -771,7 +839,7 @@ fun SettingsScreen(
                                 }
                         ) {
                             Box(
-                                Modifier
+                                modifier = Modifier
                                     .fillMaxWidth()
                                     .height(56.dp)
                                     .padding(horizontal = 14.dp),
@@ -790,7 +858,6 @@ fun SettingsScreen(
 
                 Spacer(Modifier.width(14.dp))
 
-                // RIGHT
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
                     shape = RoundedCornerShape(22.dp),
@@ -798,7 +865,9 @@ fun SettingsScreen(
                 ) {
                     LazyColumn(
                         state = rightListState,
-                        modifier = Modifier.fillMaxSize().padding(12.dp),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp),
                         userScrollEnabled = true
                     ) {
                         itemsIndexed(rowsForCategory) { i, row ->
@@ -819,11 +888,19 @@ fun SettingsScreen(
 
                                     when (row) {
                                         is SettingRow.Action -> scope.launch { row.onClick() }
+
+                                        is SettingRow.DialogInfo -> {
+                                            openDialogTitle = row.dialogTitle
+                                            openDialogBody = row.dialogBody
+                                        }
+
                                         is SettingRow.Toggle,
                                         is SettingRow.Picker,
                                         is SettingRow.ExpandableSliderRow -> {
                                             if (expanded) collapseExpanded() else expandRowIfPossible(i)
                                         }
+
+                                        is SettingRow.Info -> Unit
                                     }
                                 },
                                 onExpandableSliderChange = { v ->
@@ -846,6 +923,31 @@ fun SettingsScreen(
                     }
                 }
             }
+        }
+
+        if (openDialogTitle != null && openDialogBody != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    openDialogTitle = null
+                    openDialogBody = null
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            openDialogTitle = null
+                            openDialogBody = null
+                        }
+                    ) {
+                        Text(text = stringResource(R.string.common_close))
+                    }
+                },
+                title = {
+                    Text(text = openDialogTitle.orEmpty())
+                },
+                text = {
+                    Text(text = openDialogBody.orEmpty())
+                }
+            )
         }
     }
 }
@@ -879,7 +981,7 @@ private fun SettingRowCard(
             ) { onClickRow() }
     ) {
         Column(
-            Modifier
+            modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
@@ -892,13 +994,14 @@ private fun SettingRowCard(
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1
                     )
+
                     row.subtitle?.let {
                         Spacer(Modifier.height(4.dp))
                         Text(
                             text = it,
                             color = Color.White.copy(alpha = 0.65f),
                             fontSize = 13.sp,
-                            maxLines = 1
+                            maxLines = 2
                         )
                     }
                 }
@@ -915,7 +1018,7 @@ private fun SettingRowCard(
                     }
 
                     is SettingRow.Picker -> {
-                        val label = row.options.getOrNull(row.getIndex()) ?: ""
+                        val label = row.options.getOrNull(row.getIndex()).orEmpty()
                         Text(
                             text = label,
                             color = Color.White.copy(alpha = 0.9f),
@@ -926,7 +1029,7 @@ private fun SettingRowCard(
 
                     is SettingRow.Action -> {
                         Text(
-                            text = "A",
+                            text = stringResource(R.string.common_open),
                             color = Color.White.copy(alpha = 0.9f),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold
@@ -937,6 +1040,24 @@ private fun SettingRowCard(
                         val v = row.get().coerceIn(row.min, row.max)
                         Text(
                             text = v.toString(),
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    is SettingRow.Info -> {
+                        Text(
+                            text = row.value,
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    is SettingRow.DialogInfo -> {
+                        Text(
+                            text = stringResource(R.string.common_open),
                             color = Color.White.copy(alpha = 0.9f),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold
@@ -996,7 +1117,10 @@ private fun SettingRowCard(
                         is SettingRow.ExpandableSliderRow -> {
                             val v = expandedOptionIndex.coerceIn(row.min, row.max)
                             var lastTickValue by remember(row.title) { mutableIntStateOf(v) }
-                            LaunchedEffect(v) { lastTickValue = v }
+
+                            LaunchedEffect(v) {
+                                lastTickValue = v
+                            }
 
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
@@ -1006,7 +1130,9 @@ private fun SettingRowCard(
                                     fontWeight = FontWeight.SemiBold,
                                     modifier = Modifier.width(36.dp)
                                 )
+
                                 Spacer(Modifier.width(10.dp))
+
                                 Slider(
                                     value = v.toFloat(),
                                     onValueChange = {
@@ -1014,7 +1140,7 @@ private fun SettingRowCard(
                                         val snapped = snapToStep(raw, row.min, row.max, row.step)
                                         if (snapped != lastTickValue) {
                                             lastTickValue = snapped
-                                            hTick() // ✅ ütközőnél tick
+                                            hTick()
                                         }
                                         onExpandableSliderChange(snapped)
                                     },
@@ -1046,6 +1172,7 @@ private fun OptionButton(
     }
 
     val bg = if (selected) Color.White.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.08f)
+
     Card(
         colors = CardDefaults.cardColors(containerColor = bg),
         shape = RoundedCornerShape(16.dp),

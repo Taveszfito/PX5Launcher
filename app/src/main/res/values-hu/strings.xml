@@ -28,7 +28,7 @@
     <string name="common_app_info">App info megnyitása</string>
     <string name="common_open">Megnyitás</string>
 
-    <string name="common_back_hint">B / Back: vissza</string>
+    <string name="common_back_hint"></string>
 
     <!-- ===================== -->
     <!-- SETTINGS -->
@@ -206,8 +206,8 @@
     <!-- CALENDAR -->
     <!-- ===================== -->
 
-    <string name="calendar_hint_paging_mode">Lapozás: Fel/Le • Kilépés: A / B</string>
-    <string name="calendar_hint_enter_paging">Belépés lapozásba: A</string>
+    <string name="calendar_hint_paging_mode"> </string>
+    <string name="calendar_hint_enter_paging"> </string>
 
     <!-- ===================== -->
     <!-- NOTIFICATIONS -->
@@ -283,6 +283,7 @@
     <!-- State / titles -->
     <string name="music_no_active_playback">Nincs aktív lejátszás</string>
     <string name="music_grant_notification_access">Adj értesítés-hozzáférést</string>
+    <string name="easter_egg_topbar_shuffle_found">Felfedeztél egy easter egget. Haszna nincs, de a hatását vissza tudod csinálni, ha az Értesítések gombot 3x megnyomod.</string>
     <string name="music_open_settings_hint">A/Enter vagy katt: megnyitom a beállítást</string>
     <string name="music_unknown_media">Ismeretlen média</string>
 
@@ -323,7 +324,7 @@
     <string name="music_seek_perm_needed">Engedély kell (katt/A)</string>
     <string name="music_seek_no_data">Nincs seek adat</string>
     <string name="music_seek_mode_step">Seek mód: ←/→ (5 mp)</string>
-    <string name="music_seek_selected_hint">Kijelölve • A: megfog</string>
+    <string name="music_seek_selected_hint"> </string>
 
     <!-- format fallback -->
     <string name="music_time_zero">0:00</string>
@@ -373,6 +374,32 @@
     <string name="menu_app_info">App infó</string>
     <string name="menu_uninstall">Törlés</string>
     <string name="menu_disable">Letiltás</string>
+    <string name="settings_category_feedback">Visszajelzés</string>
+    <string name="settings_category_application">Alkalmazás</string>
+
+    <string name="settings_camera_permission_title">Kamera</string>
+    <string name="settings_camera_permission_subtitle">App beállítások megnyitása</string>
+
+    <string name="settings_app_permissions_title">App engedélyek</string>
+    <string name="settings_app_permissions_subtitle">Összes app jogosultság megnyitása</string>
+
+    <string name="settings_app_version_title">Verziószám</string>
+    <string name="settings_app_developer_title">Fejlesztő</string>
+    <string name="settings_app_developer_value">Dueboysenberry1226</string>
+
+    <string name="settings_privacy_policy_title">Privacy Policy</string>
+    <string name="settings_privacy_policy_body">
+A végleges Privacy Policy még nincs hozzáadva ehhez a verzióhoz.
+Később itt jelenhet meg a teljes adatkezelési tájékoztató vagy egy külső link.
+</string>
+
+    <string name="settings_credits_title">Credits</string>
+    <string name="settings_credits_body">
+PX5 Launcher fejlesztő: Dueboysenberry1226.
+Itt később megjelenhetnek a felhasznált könyvtárak, assetek és egyéb köszönetnyilvánítások.
+</string>
+
+    <string name="settings_app_info_subtitle">Android app információs oldal</string>
 
     <string name="search_title">Keresés</string>
     <string name="search_placeholder">Írd be az app nevét…</string>

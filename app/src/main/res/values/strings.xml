@@ -28,7 +28,7 @@
     <string name="common_app_info">Open app info</string>
     <string name="common_open">Open</string>
 
-    <string name="common_back_hint">B / Back: go back</string>
+    <string name="common_back_hint"> </string>
 
     <!-- ===================== -->
     <!-- SETTINGS -->
@@ -191,8 +191,8 @@
     <!-- CALENDAR -->
     <!-- ===================== -->
 
-    <string name="calendar_hint_paging_mode">Paging: Up/Down • Exit: A / B</string>
-    <string name="calendar_hint_enter_paging">Enter paging: A</string>
+    <string name="calendar_hint_paging_mode"> </string>
+    <string name="calendar_hint_enter_paging"> </string>
 
     <!-- ===================== -->
     <!-- NOTIFICATIONS -->
@@ -275,6 +275,7 @@
     <string name="music_list_hint_maybe_not_reached">Maybe not reached</string>
     <string name="music_list_hint_cancelled">Cancelled</string>
 
+    <string name="easter_egg_topbar_shuffle_found">You found an easter egg. It has no real use, but you can undo its effect by pressing the Notifications button 3 times.</string>
     <string name="music_hint_enable_permission">A/Enter or click: enable permission</string>
     <string name="music_hint_skipping_cancel">Skipping… (B: cancel)</string>
     <string name="music_hint_seek_mode">Seek mode: DPAD ←/→ • Exit: B/Back</string>
@@ -295,7 +296,7 @@
     <string name="music_seek_perm_needed">Permission required (click/A)</string>
     <string name="music_seek_no_data">No seek data</string>
     <string name="music_seek_mode_step">Seek mode: ←/→ (5 sec)</string>
-    <string name="music_seek_selected_hint">Selected • A: grab</string>
+    <string name="music_seek_selected_hint"> </string>
 
     <string name="music_time_zero">0:00</string>
 
@@ -352,6 +353,32 @@
     <string name="common_close">Close</string>
     <string name="common_search">Search</string>
     <string name="common_widget">Widget</string>
+    <string name="settings_category_feedback">Feedback</string>
+    <string name="settings_category_application">Application</string>
+
+    <string name="settings_camera_permission_title">Camera</string>
+    <string name="settings_camera_permission_subtitle">Open app settings</string>
+
+    <string name="settings_app_permissions_title">App permissions</string>
+    <string name="settings_app_permissions_subtitle">Open all app permissions</string>
+
+    <string name="settings_app_version_title">Version</string>
+    <string name="settings_app_developer_title">Developer</string>
+    <string name="settings_app_developer_value">Dueboysenberry1226</string>
+
+    <string name="settings_privacy_policy_title">Privacy Policy</string>
+    <string name="settings_privacy_policy_body">
+The final Privacy Policy has not been added to this build yet.
+Later this can show the full privacy text or open an external link.
+</string>
+
+    <string name="settings_credits_title">Credits</string>
+    <string name="settings_credits_body">
+PX5 Launcher developer: Dueboysenberry1226.
+Used libraries, assets and acknowledgements can be listed here later.
+</string>
+
+    <string name="settings_app_info_subtitle">Android app information page</string>
 
     <string name="widget_picker_title">Widgets</string>
     <string name="widget_count">%1$d widget</string>
