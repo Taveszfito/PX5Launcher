@@ -20,10 +20,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.data.PhoneCardType
 import com.dueboysenberry1226.px5launcher.ui.widgets.WidgetPickerScreen
 import com.dueboysenberry1226.px5launcher.ui.widgets.rememberWidgetPickerState
@@ -151,14 +153,14 @@ internal fun AddStuffPopup(
         ) {
             Column(Modifier.padding(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    TabPill("Kártyák", tab == 0) { onTabChange(0) }
+                    TabPill(stringResource(R.string.phone_add_popup_tab_cards), tab == 0) { onTabChange(0) }
                     Spacer(Modifier.width(10.dp))
-                    TabPill("Widgetek", tab == 1) { onTabChange(1) }
+                    TabPill(stringResource(R.string.phone_add_popup_tab_widgets), tab == 1) { onTabChange(1) }
 
                     Spacer(modifier = Modifier.weight(1f))
 
                     Text(
-                        text = "Bezár",
+                        text = stringResource(R.string.phone_add_popup_close),
                         color = Color.White.copy(alpha = 0.75f),
                         fontSize = 13.sp,
                         modifier = Modifier
@@ -177,16 +179,27 @@ internal fun AddStuffPopup(
 
                 if (tab == 0) {
                     Text(
-                        text = "Válassz kártyát:",
+                        text = stringResource(R.string.phone_add_popup_choose_card),
                         color = Color.White.copy(alpha = 0.80f),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(Modifier.height(10.dp))
 
-                    CardChoiceRow("Naptár", selectedCard == PhoneCardType.CALENDAR) { onSelectCard(PhoneCardType.CALENDAR) }
-                    CardChoiceRow("Zene", selectedCard == PhoneCardType.MUSIC) { onSelectCard(PhoneCardType.MUSIC) }
-                    CardChoiceRow("Értesítések", selectedCard == PhoneCardType.NOTIFICATIONS) { onSelectCard(PhoneCardType.NOTIFICATIONS) }
+                    CardChoiceRow(
+                        stringResource(R.string.phone_card_calendar),
+                        selectedCard == PhoneCardType.CALENDAR
+                    ) { onSelectCard(PhoneCardType.CALENDAR) }
+
+                    CardChoiceRow(
+                        stringResource(R.string.phone_card_music),
+                        selectedCard == PhoneCardType.MUSIC
+                    ) { onSelectCard(PhoneCardType.MUSIC) }
+
+                    CardChoiceRow(
+                        stringResource(R.string.phone_card_notifications),
+                        selectedCard == PhoneCardType.NOTIFICATIONS
+                    ) { onSelectCard(PhoneCardType.NOTIFICATIONS) }
 
                     if (!errorText.isNullOrBlank()) {
                         Spacer(Modifier.height(10.dp))
@@ -198,10 +211,14 @@ internal fun AddStuffPopup(
                     }
 
                     Row(Modifier.fillMaxWidth()) {
-                        ActionPill("Mégse", onCancel, Modifier.weight(1f))
+                        ActionPill(
+                            text = stringResource(R.string.common_cancel),
+                            onClick = onCancel,
+                            modifier = Modifier.weight(1f)
+                        )
                         Spacer(Modifier.width(10.dp))
                         ActionPill(
-                            text = "Hozzáadás",
+                            text = stringResource(R.string.common_add),
                             onClick = { onConfirmAddCard(MAX_ROWS) },
                             modifier = Modifier.weight(1f)
                         )

@@ -380,6 +380,43 @@ Used libraries, assets and acknowledgements can be listed here later.
 
     <string name="settings_app_info_subtitle">Android app information page</string>
 
+    <string name="notifications_title">Notifications</string>
+    <string name="delete_badge_text">X</string>
+    <string name="app_icon_fallback_symbol">•</string>
+    <string name="phone_add_popup_tab_cards">Cards</string>
+    <string name="phone_add_popup_tab_widgets">Widgets</string>
+    <string name="phone_add_popup_close">Close</string>
+    <string name="phone_add_popup_choose_card">Choose a card:</string>
+
+    <string name="phone_card_calendar">Calendar</string>
+    <string name="phone_card_music">Music</string>
+    <string name="phone_card_notifications">Notifications</string>
+
+    <string name="common_cancel">Cancel</string>
+    <string name="common_add">Add</string>
+
+    <string name="phone_drawer_title">App list</string>
+    <string name="phone_drawer_close">Close</string>
+    <string name="phone_drawer_search_placeholder">Search…</string>
+
+    <string name="phone_home_error_cannot_place_app_here">You can\'t place an app here.</string>
+    <string name="phone_home_error_cannot_place_widget_here">You can\'t place a widget here.</string>
+    <string name="phone_home_error_cannot_place_card_here">You can\'t place a card here.</string>
+    <string name="phone_home_error_card_not_found">Card not found.</string>
+
+    <string name="phone_home_edit_mode">Edit mode</string>
+    <string name="common_done">Done</string>
+
+    <string name="phone_home_add_error_select_card">Select a card.</string>
+    <string name="phone_home_add_error_not_enough_card_space">There isn\'t enough free space (2×4) on the screen.</string>
+
+    <string name="phone_home_widget_provider_error">Widget provider error.</string>
+    <string name="phone_home_widget_bind_error">The widget can\'t be bound (permission may be required).</string>
+    <string name="phone_home_widget_no_space">There isn\'t enough free space for the widget.</string>
+
+    <string name="phone_home_quick_menu_title">Menu</string>
+    <string name="phone_home_quick_menu_add_cards">Add cards</string>
+
     <string name="widget_picker_title">Widgets</string>
     <string name="widget_count">%1$d widget</string>
     <string name="settings_experimental_notice">

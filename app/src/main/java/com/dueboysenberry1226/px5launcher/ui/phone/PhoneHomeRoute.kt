@@ -2,7 +2,6 @@
 
 package com.dueboysenberry1226.px5launcher.ui.phone
 
-import com.dueboysenberry1226.px5launcher.data.WidgetLayoutMode
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.content.Intent
@@ -10,6 +9,7 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -32,19 +32,25 @@ import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.data.LauncherRepository
 import com.dueboysenberry1226.px5launcher.data.PhoneCardPlacement
 import com.dueboysenberry1226.px5launcher.data.PhoneCardType
-import com.dueboysenberry1226.px5launcher.data.WidgetsRepository
+import com.dueboysenberry1226.px5launcher.data.WidgetLayoutMode
 import com.dueboysenberry1226.px5launcher.data.WidgetPlacement
+import com.dueboysenberry1226.px5launcher.data.WidgetsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import kotlin.math.roundToInt
 
 private const val WIDGET_HOST_ID = 1024
 
@@ -63,7 +69,6 @@ fun PhoneHomeRoute(
     val repo = remember(pm, context) { LauncherRepository(context, pm) }
     val recents by repo.recentsFlow.collectAsState(initial = emptyList())
 
-    // ✅ Widgets repo + flow
     val widgetsRepo = remember(context) { WidgetsRepository(context) }
 
     val currentWidgetLayoutMode = remember(isPortrait) {
@@ -74,7 +79,6 @@ fun PhoneHomeRoute(
         .widgetsFlow(currentWidgetLayoutMode)
         .collectAsState(initial = emptyList())
 
-    // ✅ AppWidget host/manager
     val appWidgetManager = remember(context) { AppWidgetManager.getInstance(context) }
     val appWidgetHost = remember(context) { AppWidgetHost(context, WIDGET_HOST_ID) }
 
@@ -83,7 +87,6 @@ fun PhoneHomeRoute(
         onDispose { appWidgetHost.stopListening() }
     }
 
-    // ===== Ambient light =====
     val ambientColor = remember { mutableStateOf(Color(0xFF101826)) }
 
     val baseBg = remember {
@@ -95,6 +98,7 @@ fun PhoneHomeRoute(
             )
         )
     }
+
     val ambientOverlay = remember(ambientColor.value) {
         Brush.verticalGradient(
             listOf(
@@ -105,7 +109,6 @@ fun PhoneHomeRoute(
         )
     }
 
-    // --- Apps load ---
     var allApps by remember { mutableStateOf<List<AppItem>>(emptyList()) }
 
     LaunchedEffect(Unit) {
@@ -132,14 +135,12 @@ fun PhoneHomeRoute(
         scope.launch { repo.pushRecent(pkg) }
     }
 
-    // Ambient a legutóbb megnyitott app alapján (recents[0])
     LaunchedEffect(recents, allApps) {
         val pkg = recents.firstOrNull() ?: return@LaunchedEffect
         val app = allApps.firstOrNull { it.packageName == pkg }
         setAmbientFromApp(ambientColor, app)
     }
 
-    // ===== Persisted: slots + cards =====
     val storedSlots by repo.phoneHomeSlotsFlow.collectAsState(initial = emptyList())
     val storedCards by repo.phoneHomeCardsFlow.collectAsState(initial = emptyList())
 
@@ -167,7 +168,6 @@ fun PhoneHomeRoute(
         cards.addAll(storedCards)
     }
 
-    // uninstall/tiltás pucolás
     LaunchedEffect(allApps) {
         if (allApps.isEmpty() || slots.isEmpty()) return@LaunchedEffect
         val valid = allApps.asSequence().map { it.packageName }.toHashSet()
@@ -198,9 +198,10 @@ fun PhoneHomeRoute(
         }
     }
 
-    // ===== UI states =====
     var placeError by remember { mutableStateOf<String?>(null) }
-    fun clearPlaceError() { placeError = null }
+    fun clearPlaceError() {
+        placeError = null
+    }
 
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
     var drawerDragActive by remember { mutableStateOf(false) }
@@ -218,14 +219,12 @@ fun PhoneHomeRoute(
         clearPlaceError()
     }
 
-    // ===== Drag state =====
     var dragging by remember { mutableStateOf<DragPayload?>(null) }
     var dragPointerPx by remember { mutableStateOf(Offset.Zero) }
     var hasDragPointer by remember { mutableStateOf(false) }
     var dragPointerId by remember { mutableStateOf<PointerId?>(null) }
     var dropPreview by remember { mutableStateOf<DropPreview?>(null) }
 
-    // Grid geometry (root coords)
     var gridTopLeftPx by remember { mutableStateOf(Offset.Zero) }
     var cellSizePx by remember { mutableStateOf(0f) }
     var gapHPx by remember { mutableStateOf(0f) }
@@ -237,7 +236,6 @@ fun PhoneHomeRoute(
         hasDragPointer = false
         dropPreview = null
     }
-
 
     fun slotIndexFromPointer(pointerPx: Offset): Int? {
         val localX = pointerPx.x - gridTopLeftPx.x
@@ -272,7 +270,6 @@ fun PhoneHomeRoute(
 
         return col to row
     }
-
 
     fun isCellCoveredByCard(
         row: Int,
@@ -395,9 +392,9 @@ fun PhoneHomeRoute(
 
         if (payload == null || preview == null || !preview.isValid) {
             placeError = when (payload) {
-                is DragPayload.App -> "Ide nem lehet appot lerakni."
-                is DragPayload.Widget -> "Ide nem lehet widgetet lerakni."
-                is DragPayload.Card -> "Ide nem lehet kártyát lerakni."
+                is DragPayload.App -> context.getString(R.string.phone_home_error_cannot_place_app_here)
+                is DragPayload.Widget -> context.getString(R.string.phone_home_error_cannot_place_widget_here)
+                is DragPayload.Card -> context.getString(R.string.phone_home_error_cannot_place_card_here)
                 null -> placeError
             }
             stopDrag()
@@ -442,7 +439,7 @@ fun PhoneHomeRoute(
                     persistCards()
                     clearPlaceError()
                 } else {
-                    placeError = "A kártya nem található."
+                    placeError = context.getString(R.string.phone_home_error_card_not_found)
                 }
             }
         }
@@ -452,11 +449,9 @@ fun PhoneHomeRoute(
         suppressBackgroundLongPress = false
     }
 
-    // grid used sizes
     var gridUsedWidth by remember { mutableStateOf(0.dp) }
     var phoneCellDp by remember { mutableStateOf(96.dp) }
 
-    // ===== ROOT =====
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -475,7 +470,6 @@ fun PhoneHomeRoute(
     ) {
         Box(Modifier.fillMaxSize().background(ambientOverlay))
 
-        // ✅ GLOBAL DRAG TRACKER + DROP (root coords)
         if (dragging != null) {
             Box(
                 modifier = Modifier
@@ -517,8 +511,8 @@ fun PhoneHomeRoute(
                 .navigationBarsPadding()
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
-            // ===== Hint area =====
             val hintAreaHeight = 52.dp
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -536,11 +530,12 @@ fun PhoneHomeRoute(
                         ) {
                             Column {
                                 Text(
-                                    text = "Szerkesztés mód",
+                                    text = stringResource(R.string.phone_home_edit_mode),
                                     color = Color.White.copy(alpha = 0.85f),
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
+
                                 val err = placeError
                                 if (!err.isNullOrBlank()) {
                                     Spacer(Modifier.height(2.dp))
@@ -556,7 +551,7 @@ fun PhoneHomeRoute(
                             Spacer(modifier = Modifier.weight(1f))
 
                             Text(
-                                text = "Kész",
+                                text = stringResource(R.string.common_done),
                                 color = Color.White.copy(alpha = 0.92f),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -617,7 +612,6 @@ fun PhoneHomeRoute(
                 hasDragPointer = hasDragPointer,
                 setHasDragPointer = { hasDragPointer = it },
 
-
                 setDragPointer = { dragPointerPx = it },
                 updateDropPreview = { pointerPx ->
                     dropPreview = computeDropPreview(pointerPx)
@@ -660,9 +654,15 @@ fun PhoneHomeRoute(
                 addStuffContent = { rowsToShow, cellDp ->
                     AddStuffPopup(
                         tab = addStuffTab,
-                        onTabChange = { addStuffTab = it; addError = null },
+                        onTabChange = {
+                            addStuffTab = it
+                            addError = null
+                        },
                         selectedCard = selectedCard,
-                        onSelectCard = { selectedCard = it; addError = null },
+                        onSelectCard = {
+                            selectedCard = it
+                            addError = null
+                        },
                         errorText = addError,
                         onCancel = {
                             addStuffOpen = false
@@ -672,19 +672,22 @@ fun PhoneHomeRoute(
                         onConfirmAddCard = { _ ->
                             val t = selectedCard
                             if (t == null) {
-                                addError = "Válassz ki egy kártyát."
+                                addError = context.getString(R.string.phone_home_add_error_select_card)
                                 return@AddStuffPopup
                             }
+
                             val ok = tryPlaceCard(
                                 slots = slots,
                                 cards = cards,
                                 type = t,
                                 rowsToShow = rowsToShow
                             )
+
                             if (!ok) {
-                                addError = "Nincs elég szabad hely (2×4) a képernyőn."
+                                addError = context.getString(R.string.phone_home_add_error_not_enough_card_space)
                                 return@AddStuffPopup
                             }
+
                             persistCards()
                             addStuffOpen = false
                             selectedCard = null
@@ -692,8 +695,6 @@ fun PhoneHomeRoute(
                         },
                         pm = pm,
                         cellDp = cellDp,
-
-                        // ✅ Widget pick: allocate + bind + place
                         onPickWidget = { providerInfo, rawSpanX, rawSpanY ->
                             scope.launch {
                                 val maxX = if (isPortrait) 4 else 2
@@ -703,7 +704,7 @@ fun PhoneHomeRoute(
 
                                 val widgetId = appWidgetHost.allocateAppWidgetId()
                                 val provider = providerInfo.provider ?: run {
-                                    placeError = "Widget provider hiba."
+                                    placeError = context.getString(R.string.phone_home_widget_provider_error)
                                     return@launch
                                 }
 
@@ -713,7 +714,7 @@ fun PhoneHomeRoute(
 
                                 if (!bound) {
                                     runCatching { appWidgetHost.deleteAppWidgetId(widgetId) }
-                                    placeError = "A widget nem köthető (engedély kellhet)."
+                                    placeError = context.getString(R.string.phone_home_widget_bind_error)
                                     return@launch
                                 }
 
@@ -731,7 +732,7 @@ fun PhoneHomeRoute(
 
                                 if (best == null) {
                                     runCatching { appWidgetHost.deleteAppWidgetId(widgetId) }
-                                    placeError = "Nincs elég szabad hely a widgetnek."
+                                    placeError = context.getString(R.string.phone_home_widget_no_space)
                                     return@launch
                                 }
 
@@ -764,7 +765,6 @@ fun PhoneHomeRoute(
             )
         }
 
-        // ===== FIX App lista gomb =====
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -795,7 +795,7 @@ fun PhoneHomeRoute(
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        text = "App lista",
+                        text = stringResource(R.string.phone_drawer_title),
                         color = Color.White.copy(alpha = 0.92f),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
@@ -804,20 +804,19 @@ fun PhoneHomeRoute(
             }
         }
 
-        // ===== ÜRES HÁTTÉR QUICK MENU =====
         if (homeQuickMenuOpen) {
             BubbleMenu(
-                title = "Menü",
+                title = stringResource(R.string.phone_home_quick_menu_title),
                 onDismiss = { homeQuickMenuOpen = false },
                 items = listOf(
-                    "Kártyák hozzáadása" to {
+                    stringResource(R.string.phone_home_quick_menu_add_cards) to {
                         homeQuickMenuOpen = false
                         addError = null
                         selectedCard = null
                         addStuffTab = 0
                         addStuffOpen = true
                     },
-                    "Szerkesztés mód" to {
+                    stringResource(R.string.phone_home_edit_mode) to {
                         homeQuickMenuOpen = false
                         if (!drawerOpen && !addStuffOpen) {
                             editMode = true
@@ -827,7 +826,6 @@ fun PhoneHomeRoute(
             )
         }
 
-        // ===== DRAWER =====
         PhoneHomeDrawer(
             open = drawerOpen,
             dragActive = drawerDragActive,
@@ -840,8 +838,15 @@ fun PhoneHomeRoute(
             dragging = dragging,
             setDragging = { dragging = it },
 
-            setDragPointer = { dragPointerPx = it },
+            setDragPointer = {
+                dragPointerPx = it
+                hasDragPointer = true
+            },
             setHasDragPointer = { hasDragPointer = it },
+
+            updateDropPreview = { pointer ->
+                dropPreview = computeDropPreview(pointer)
+            },
 
             onBeginEditDrag = {
                 dragPointerId = null
@@ -868,6 +873,74 @@ fun PhoneHomeRoute(
             clearPlaceError = { clearPlaceError() },
             finishDragAt = { finishDragAt(it) }
         )
+
+        val rootPreview = dropPreview
+        if (
+            drawerDragActive &&
+            dragging is DragPayload.App &&
+            rootPreview != null &&
+            hasDragPointer
+        ) {
+            val density = LocalDensity.current
+
+            val px = (
+                    gridTopLeftPx.x +
+                            rootPreview.cellX * (cellSizePx + gapHPx)
+                    ).roundToInt()
+
+            val py = (
+                    gridTopLeftPx.y +
+                            rootPreview.cellY * (cellSizePx + gapVPx)
+                    ).roundToInt()
+
+            val pw = (
+                    rootPreview.spanX * cellSizePx +
+                            (rootPreview.spanX - 1) * gapHPx
+                    ).roundToInt()
+
+            val ph = (
+                    rootPreview.spanY * cellSizePx +
+                            (rootPreview.spanY - 1) * gapVPx
+                    ).roundToInt()
+
+            val ghostBorder = if (rootPreview.isValid) {
+                Color.LightGray.copy(alpha = 0.95f)
+            } else {
+                Color(0xFFFF5A5A).copy(alpha = 0.98f)
+            }
+
+            val ghostFill = if (rootPreview.isValid) {
+                Color.LightGray.copy(alpha = 0.18f)
+            } else {
+                Color(0xFFFF5A5A).copy(alpha = 0.18f)
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(20_000f)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .offset { IntOffset(px, py) }
+                        .size(
+                            width = with(density) { pw.toDp() },
+                            height = with(density) { ph.toDp() }
+                        )
+                        .border(
+                            width = 2.dp,
+                            color = ghostBorder,
+                            shape = RoundedCornerShape(22.dp)
+                        )
+                        .padding(2.dp)
+                ) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = ghostFill),
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) { }
+                }
+            }
+        }
     }
 }
-

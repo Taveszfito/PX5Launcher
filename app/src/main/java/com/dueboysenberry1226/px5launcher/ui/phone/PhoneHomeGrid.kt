@@ -3,15 +3,16 @@
 
 package com.dueboysenberry1226.px5launcher.ui.phone
 
-import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.view.ViewGroup
+import android.widget.ImageView
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
@@ -25,6 +26,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -149,6 +151,7 @@ internal fun PhoneHomeGrid(
                 val gh = minGapH.toPx()
                 col * (cs + gh)
             }
+
             fun cellOffsetY(row: Int): Float = with(density) {
                 val cs = cellSize.toPx()
                 val gv = minGapV.toPx()
@@ -288,7 +291,7 @@ internal fun PhoneHomeGrid(
                     ) {
                         Card(
                             colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.10f)),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+                            shape = RoundedCornerShape(22.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
                             AndroidView(
@@ -348,13 +351,11 @@ internal fun PhoneHomeGrid(
                             cardTopLeftPx = Offset(pos.x, pos.y)
                         }
                 ) {
-                    // Az eredeti kártya UI
                     PhoneHomeCard(
                         type = card.type,
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    // EDIT MÓDBAN: teljes érintésblokkoló + drag overlay
                     if (editMode) {
                         Box(
                             modifier = Modifier
@@ -419,6 +420,10 @@ internal fun PhoneHomeGrid(
 
             // 4) DROP GHOST PREVIEW
             val preview = dropPreview
+            val draggingAppPkg = (dragging as? DragPayload.App)?.pkg
+            val draggingAppIcon = if (draggingAppPkg != null) resolveIconForSlot(draggingAppPkg) else null
+            val draggingAppLabel = if (draggingAppPkg != null) resolveLabelForSlot(draggingAppPkg) else ""
+
             if (preview != null && hasDragPointer) {
                 val px = cellOffsetX(preview.cellX).roundToInt()
                 val py = cellOffsetY(preview.cellY).roundToInt()
@@ -455,7 +460,50 @@ internal fun PhoneHomeGrid(
                         colors = CardDefaults.cardColors(containerColor = ghostFill),
                         shape = RoundedCornerShape(20.dp),
                         modifier = Modifier.fillMaxSize()
-                    ) { }
+                    ) {
+                        if (
+                            dragging is DragPayload.App &&
+                            preview.spanX == 1 &&
+                            preview.spanY == 1
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 6.dp, vertical = 8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                AndroidView(
+                                    factory = { ctx ->
+                                        ImageView(ctx).apply {
+                                            scaleType = ImageView.ScaleType.FIT_CENTER
+                                            adjustViewBounds = true
+                                            alpha = 0.92f
+                                        }
+                                    },
+                                    update = { imageView ->
+                                        imageView.setImageDrawable(draggingAppIcon)
+                                    },
+                                    modifier = Modifier.size(cellSize * 0.52f)
+                                )
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                Text(
+                                    text = draggingAppLabel,
+                                    color = if (preview.isValid) {
+                                        Color.White.copy(alpha = 0.92f)
+                                    } else {
+                                        Color(0xFFFFB3B3)
+                                    },
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 2,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

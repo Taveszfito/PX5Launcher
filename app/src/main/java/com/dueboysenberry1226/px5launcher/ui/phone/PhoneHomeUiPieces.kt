@@ -26,10 +26,12 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.consumeAllChanges
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.data.PhoneCardType
 import com.dueboysenberry1226.px5launcher.ui.CalendarPanelCard
 import com.dueboysenberry1226.px5launcher.ui.MusicControlPanelCard
@@ -68,7 +70,7 @@ internal fun PhoneHomeCard(
                         .padding(14.dp)
                 ) {
                     Text(
-                        text = "Értesítések",
+                        text = stringResource(R.string.notifications_title),
                         color = Color.White,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold
@@ -98,7 +100,7 @@ internal fun DeleteBadge(
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
-                text = "X",
+                text = stringResource(R.string.delete_badge_text),
                 color = Color.White.copy(alpha = 0.92f),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
@@ -415,7 +417,7 @@ internal fun DrawerRow(
                 )
             } else {
                 Text(
-                    text = "•",
+                    text = stringResource(R.string.app_icon_fallback_symbol),
                     color = Color.White.copy(alpha = 0.35f),
                     fontSize = 18.sp
                 )

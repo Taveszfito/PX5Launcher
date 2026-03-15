@@ -29,10 +29,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dueboysenberry1226.px5launcher.R
 import java.util.Locale
 
 @Composable
@@ -50,6 +52,7 @@ internal fun PhoneHomeDrawer(
 
     setDragPointer: (Offset) -> Unit,
     setHasDragPointer: (Boolean) -> Unit,
+    updateDropPreview: (Offset) -> Unit,
     finishDragAt: (Offset) -> Unit,
 
     onBeginEditDrag: () -> Unit,
@@ -187,7 +190,7 @@ internal fun PhoneHomeDrawer(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "App lista",
+                            text = stringResource(R.string.phone_drawer_title),
                             color = Color.White,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold
@@ -196,7 +199,7 @@ internal fun PhoneHomeDrawer(
                         Spacer(modifier = Modifier.weight(1f))
 
                         Text(
-                            text = "Bezár",
+                            text = stringResource(R.string.phone_drawer_close),
                             color = Color.White.copy(alpha = 0.75f),
                             fontSize = 13.sp,
                             modifier = Modifier
@@ -219,7 +222,7 @@ internal fun PhoneHomeDrawer(
                         modifier = Modifier.fillMaxWidth(),
                         placeholder = {
                             Text(
-                                text = "Keresés…",
+                                text = stringResource(R.string.phone_drawer_search_placeholder),
                                 color = Color.White.copy(alpha = 0.45f)
                             )
                         },
@@ -275,24 +278,30 @@ internal fun PhoneHomeDrawer(
                                         onStartDrag = { rootPointer ->
                                             onBeginEditDrag()
 
+                                            clearPlaceError()
+
                                             setDragging(
                                                 DragPayload.App(
                                                     pkg = entry.app.packageName,
                                                     fromIndex = -1
                                                 )
                                             )
+
                                             setHasDragPointer(true)
                                             setDragPointer(rootPointer)
+                                            updateDropPreview(rootPointer)
 
                                             onDragActiveChange(true)
                                         },
                                         onDragMove = { rootPointer ->
                                             setHasDragPointer(true)
                                             setDragPointer(rootPointer)
+                                            updateDropPreview(rootPointer)
                                         },
                                         onEndDrag = { rootPointer ->
                                             setHasDragPointer(true)
                                             setDragPointer(rootPointer)
+                                            updateDropPreview(rootPointer)
 
                                             finishDragAt(rootPointer)
 

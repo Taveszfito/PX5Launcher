@@ -405,9 +405,46 @@ Itt később megjelenhetnek a felhasznált könyvtárak, assetek és egyéb kös
     <string name="search_placeholder">Írd be az app nevét…</string>
     <string name="search_no_results">Találatok itt fognak megjelenni.</string>
 
+    <string name="notifications_title">Értesítések</string>
+    <string name="delete_badge_text">X</string>
+    <string name="app_icon_fallback_symbol">•</string>
+    <string name="phone_add_popup_tab_cards">Kártyák</string>
+    <string name="phone_add_popup_tab_widgets">Widgetek</string>
+    <string name="phone_add_popup_close">Bezár</string>
+    <string name="phone_add_popup_choose_card">Válassz kártyát:</string>
+
+    <string name="phone_card_calendar">Naptár</string>
+    <string name="phone_card_music">Zene</string>
+    <string name="phone_card_notifications">Értesítések</string>
+
+    <string name="common_cancel">Mégse</string>
+    <string name="common_add">Hozzáadás</string>
+
     <string name="common_close">Bezár</string>
     <string name="common_search">Keresés</string>
     <string name="common_widget">Widget</string>
+
+    <string name="phone_drawer_title">App lista</string>
+    <string name="phone_drawer_close">Bezár</string>
+    <string name="phone_drawer_search_placeholder">Keresés…</string>
+
+    <string name="phone_home_error_cannot_place_app_here">Ide nem lehet appot lerakni.</string>
+    <string name="phone_home_error_cannot_place_widget_here">Ide nem lehet widgetet lerakni.</string>
+    <string name="phone_home_error_cannot_place_card_here">Ide nem lehet kártyát lerakni.</string>
+    <string name="phone_home_error_card_not_found">A kártya nem található.</string>
+
+    <string name="phone_home_edit_mode">Szerkesztés mód</string>
+    <string name="common_done">Kész</string>
+
+    <string name="phone_home_add_error_select_card">Válassz ki egy kártyát.</string>
+    <string name="phone_home_add_error_not_enough_card_space">Nincs elég szabad hely (2×4) a képernyőn.</string>
+
+    <string name="phone_home_widget_provider_error">Widget provider hiba.</string>
+    <string name="phone_home_widget_bind_error">A widget nem köthető (engedély kellhet).</string>
+    <string name="phone_home_widget_no_space">Nincs elég szabad hely a widgetnek.</string>
+
+    <string name="phone_home_quick_menu_title">Menü</string>
+    <string name="phone_home_quick_menu_add_cards">Kártyák hozzáadása</string>
 
     <string name="widget_picker_title">Widgetek</string>
     <string name="widget_count">%1$d widget</string>
