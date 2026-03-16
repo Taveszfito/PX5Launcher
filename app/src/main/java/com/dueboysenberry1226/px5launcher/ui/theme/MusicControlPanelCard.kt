@@ -136,6 +136,7 @@ fun MusicControlPanelCard(
     fun hClick() {
         if (vibrationEnabled) Haptics.click(context)
     }
+
     fun hTick() {
         if (vibrationEnabled) Haptics.tick(context)
     }
@@ -925,73 +926,23 @@ fun MusicControlPanelCard(
 
                 } else {
 
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(start = outerPad, end = outerPad, top = outerPad, bottom = 0.dp),
-                        verticalArrangement = Arrangement.Top
-                    ) {
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 2.dp, vertical = 0.dp)
-                                .pointerInput(Unit) {
-                                    awaitEachGesture {
-                                        val down = awaitFirstDown(requireUnconsumed = false)
-                                        var totalY = 0f
-                                        drag(down.id) { change ->
-                                            totalY += (change.position.y - change.previousPosition.y)
-                                            if (abs(totalY) > 10f) change.consume()
-                                        }
-                                        if (totalY > 30f) backToControlsPortrait()
-                                    }
-                                },
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = stringResource(R.string.music_queue_title),
-                                color = Color.White.copy(alpha = 0.85f),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(0.35f)
-                            )
-
-                            Spacer(Modifier.width(8.dp))
-
-                            Text(
-                                text = stringResource(R.string.music_swipe_down_for_controls),
-                                color = Color.White.copy(alpha = 0.46f),
-                                fontSize = hintSize,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(0.65f)
-                            )
+                    PortraitQueuePage(
+                        modifier = Modifier.fillMaxSize(),
+                        outerPad = outerPad,
+                        hintSize = hintSize,
+                        busy = autoSkipActive,
+                        items = queueItems,
+                        index = listIndex,
+                        currentIndex = currentIndex,
+                        listState = listState,
+                        onBackToControls = { backToControlsPortrait() },
+                        onClickItem = { i ->
+                            hClick()
+                            selected = Selected.LIST
+                            listIndex = i.coerceIn(0, queueItems.lastIndex)
+                            playQueueItemOrAutoSkip(listIndex)
                         }
-
-                        Spacer(Modifier.height(3.dp))
-
-                        PortraitQueueList(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                                .fillMaxHeight(),
-                            busy = autoSkipActive,
-                            items = queueItems,
-                            index = listIndex,
-                            currentIndex = currentIndex,
-                            listState = listState,
-                            onClickItem = { i ->
-                                hClick()
-                                selected = Selected.LIST
-                                listIndex = i.coerceIn(0, queueItems.lastIndex)
-                                playQueueItemOrAutoSkip(listIndex)
-                            }
-                        )
-                    }
+                    )
                 }
             }
         }
@@ -1458,6 +1409,111 @@ private fun QueuePanel(
 }
 
 @Composable
+private fun PortraitQueuePage(
+    modifier: Modifier,
+    outerPad: Dp,
+    hintSize: androidx.compose.ui.unit.TextUnit,
+    busy: Boolean,
+    items: List<QueueItemUi>,
+    index: Int,
+    currentIndex: Int,
+    listState: LazyListState,
+    onBackToControls: () -> Unit,
+    onClickItem: (Int) -> Unit
+) {
+    Box(modifier = modifier) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .queueBlurIf(busy)
+                .then(if (busy) Modifier.background(Color.Black.copy(alpha = 0.12f)) else Modifier)
+                .padding(start = outerPad, end = outerPad, top = outerPad, bottom = 0.dp),
+            verticalArrangement = Arrangement.Top
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 2.dp, vertical = 0.dp)
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            var totalY = 0f
+                            drag(down.id) { change ->
+                                totalY += (change.position.y - change.previousPosition.y)
+                                if (abs(totalY) > 10f) change.consume()
+                            }
+                            if (totalY > 30f) onBackToControls()
+                        }
+                    },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.music_queue_title),
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(0.35f)
+                )
+
+                Spacer(Modifier.width(8.dp))
+
+                Text(
+                    text = stringResource(R.string.music_swipe_down_for_controls),
+                    color = Color.White.copy(alpha = 0.46f),
+                    fontSize = hintSize,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(0.65f)
+                )
+            }
+
+            Spacer(Modifier.height(3.dp))
+
+            PortraitQueueList(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .fillMaxHeight(),
+                items = items,
+                index = index,
+                currentIndex = currentIndex,
+                listState = listState,
+                enabled = !busy,
+                onClickItem = onClickItem
+            )
+        }
+
+        if (busy) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.22f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Filled.SkipNext,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.92f),
+                        modifier = Modifier.size(30.dp)
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = stringResource(R.string.music_busy_title),
+                        color = Color.White.copy(alpha = 0.88f),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun SeekBar(
     modifier: Modifier,
     selected: Boolean,
@@ -1567,11 +1623,11 @@ private fun formatMs(context: Context, ms: Long): String {
 @Composable
 private fun PortraitQueueList(
     modifier: Modifier,
-    busy: Boolean,
     items: List<QueueItemUi>,
     index: Int,
     currentIndex: Int,
     listState: LazyListState,
+    enabled: Boolean,
     onClickItem: (Int) -> Unit
 ) {
     val noRipple = remember { MutableInteractionSource() }
@@ -1581,84 +1637,46 @@ private fun PortraitQueueList(
             .filter { it.originalIndex != currentIndex }
     }
 
-    Box(
+    LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .queueBlurIf(busy)
-            .then(if (busy) Modifier.background(Color.Black.copy(alpha = 0.12f)) else Modifier)
-            .padding(6.dp)
+            .padding(6.dp),
+        state = listState,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            state = listState,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            itemsIndexed(displayItems, key = { _, d -> d.originalIndex }) { _, d ->
-                val item = d.item
-                val origIndex = d.originalIndex
+        itemsIndexed(displayItems, key = { _, d -> d.originalIndex }) { _, d ->
+            val item = d.item
+            val origIndex = d.originalIndex
 
-                val rowSelected = origIndex == index
-                val rowShape = RoundedCornerShape(14.dp)
-                val rowBgA = if (rowSelected) 0.22f else 0.06f
-                val rowBorderA = if (rowSelected) 0.55f else 0.12f
+            val rowSelected = origIndex == index
+            val rowShape = RoundedCornerShape(14.dp)
+            val rowBgA = if (rowSelected) 0.22f else 0.06f
+            val rowBorderA = if (rowSelected) 0.55f else 0.12f
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(rowShape)
-                        .background(Color.White.copy(alpha = rowBgA))
-                        .border(2.dp, Color.White.copy(alpha = rowBorderA), rowShape)
-                        .combinedClickable(
-                            interactionSource = noRipple,
-                            indication = null,
-                            enabled = !busy,
-                            onClick = { onClickItem(origIndex) }
-                        )
-                        .padding(horizontal = 10.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = item.title,
-                        modifier = Modifier.weight(1f),
-                        color = Color.White.copy(alpha = 0.88f),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-
-        if (busy) {
-            Box(
+            Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.22f)),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .clip(rowShape)
+                    .background(Color.White.copy(alpha = rowBgA))
+                    .border(2.dp, Color.White.copy(alpha = rowBorderA), rowShape)
+                    .combinedClickable(
+                        interactionSource = noRipple,
+                        indication = null,
+                        enabled = enabled,
+                        onClick = { onClickItem(origIndex) }
+                    )
+                    .padding(horizontal = 10.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Filled.SkipNext,
-                        contentDescription = stringResource(R.string.music_cd_skipping),
-                        tint = Color.White.copy(alpha = 0.92f),
-                        modifier = Modifier.size(30.dp)
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = stringResource(R.string.music_busy_title),
-                        color = Color.White.copy(alpha = 0.88f),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = stringResource(R.string.music_busy_cancel),
-                        color = Color.White.copy(alpha = 0.55f),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+                Text(
+                    text = item.title,
+                    modifier = Modifier.weight(1f),
+                    color = Color.White.copy(alpha = 0.88f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
