@@ -1,6 +1,5 @@
-package com.dueboysenberry1226.px5launcher.ui
+package com.dueboysenberry1226.px5launcher.ui.theme
 
-import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.ui.input.key.KeyEvent
 
 object InputController {
@@ -10,60 +9,6 @@ object InputController {
     data class State(
         val zone: Zone
     )
-
-    private val OK_CODES = setOf(
-        AndroidKeyEvent.KEYCODE_DPAD_CENTER,
-        AndroidKeyEvent.KEYCODE_ENTER,
-        AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
-        AndroidKeyEvent.KEYCODE_BUTTON_A
-    )
-
-    // ✅ LB / RB támogatás
-    val LB_CODES = setOf(
-        AndroidKeyEvent.KEYCODE_BUTTON_L1,
-        AndroidKeyEvent.KEYCODE_1          // emulator: 1 = LB
-    )
-
-    val RB_CODES = setOf(
-        AndroidKeyEvent.KEYCODE_BUTTON_R1,
-        AndroidKeyEvent.KEYCODE_2          // emulator: 2 = RB
-    )
-
-    fun isLB(e: KeyEvent): Boolean {
-        val nk = e.nativeKeyEvent
-        return nk.action == AndroidKeyEvent.ACTION_DOWN &&
-                nk.keyCode in LB_CODES
-    }
-
-    fun isRB(e: KeyEvent): Boolean {
-        val nk = e.nativeKeyEvent
-        return nk.action == AndroidKeyEvent.ACTION_DOWN &&
-                nk.keyCode in RB_CODES
-    }
-
-    fun isLeftDown(e: KeyEvent): Boolean {
-        val nk = e.nativeKeyEvent
-        return nk.action == AndroidKeyEvent.ACTION_DOWN &&
-                nk.keyCode == AndroidKeyEvent.KEYCODE_DPAD_LEFT
-    }
-
-    fun isUpDown(e: KeyEvent): Boolean {
-        val nk = e.nativeKeyEvent
-        return nk.action == AndroidKeyEvent.ACTION_DOWN &&
-                nk.keyCode == AndroidKeyEvent.KEYCODE_DPAD_UP
-    }
-
-    fun isRightDown(e: KeyEvent): Boolean {
-        val nk = e.nativeKeyEvent
-        return nk.action == AndroidKeyEvent.ACTION_DOWN &&
-                nk.keyCode == AndroidKeyEvent.KEYCODE_DPAD_RIGHT
-    }
-
-    fun isDownDown(e: KeyEvent): Boolean {
-        val nk = e.nativeKeyEvent
-        return nk.action == AndroidKeyEvent.ACTION_DOWN &&
-                nk.keyCode == AndroidKeyEvent.KEYCODE_DPAD_DOWN
-    }
 
     fun route(
         e: KeyEvent,

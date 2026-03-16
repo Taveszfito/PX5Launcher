@@ -8,9 +8,6 @@ enum class WidgetLayoutMode {
     PORTRAIT;
 
     companion object {
-        fun fromGrid(grid: WidgetGridSpec): WidgetLayoutMode {
-            return if (grid.rows > grid.cols) PORTRAIT else LANDSCAPE
-        }
     }
 }
 

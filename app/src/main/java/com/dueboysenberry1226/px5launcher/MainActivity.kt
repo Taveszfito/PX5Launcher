@@ -20,9 +20,9 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.dueboysenberry1226.px5launcher.data.SettingsRepository
-import com.dueboysenberry1226.px5launcher.ui.PSHomeRoute
+import com.dueboysenberry1226.px5launcher.ui.theme.PSHomeRoute
 import com.dueboysenberry1226.px5launcher.ui.phone.PhoneHomeRoute
-import com.dueboysenberry1226.px5launcher.ui.settings.SettingsScreen
+import com.dueboysenberry1226.px5launcher.ui.theme.SettingsScreen
 import com.dueboysenberry1226.px5launcher.util.updateLocale
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking

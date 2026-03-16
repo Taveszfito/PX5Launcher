@@ -15,7 +15,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
+import androidx.compose.material3.DividerDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,7 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.input.pointer.consumeAllChanges
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.res.stringResource
@@ -33,8 +33,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.data.PhoneCardType
-import com.dueboysenberry1226.px5launcher.ui.CalendarPanelCard
-import com.dueboysenberry1226.px5launcher.ui.MusicControlPanelCard
+import com.dueboysenberry1226.px5launcher.ui.theme.CalendarPanelCard
+import com.dueboysenberry1226.px5launcher.ui.theme.MusicControlPanelCard
 
 @Composable
 internal fun PhoneHomeCard(
@@ -133,7 +133,7 @@ internal fun HomeSlot(
 
     val bg = when {
         isInvisibleEmpty -> Color.Transparent
-        isEmpty && showPlaceholder -> Color.White.copy(alpha = 0.06f)
+        isEmpty -> Color.White.copy(alpha = 0.06f)
         else -> Color.White.copy(alpha = 0.08f)
     }
 
@@ -161,7 +161,7 @@ internal fun HomeSlot(
                                 onStartDrag(root)
                             },
                             onDrag = { change, _ ->
-                                change.consumeAllChanges()
+                                change.consume()
                                 val root = slotTopLeftPx + change.position
                                 lastRootPointer = root
                                 onDragMove(root)
@@ -262,7 +262,7 @@ internal fun WidgetDragSurface(
                             onStartDrag(root)
                         },
                         onDrag = { change, _ ->
-                            change.consumeAllChanges()
+                            change.consume()
                             val root = topLeftPx + change.position
                             lastRootPointer = root
                             onDragMove(root)
@@ -299,9 +299,10 @@ internal fun DrawerHeader(
             fontWeight = FontWeight.SemiBold
         )
         Spacer(Modifier.width(10.dp))
-        Divider(
-            color = Color.White.copy(alpha = 0.10f),
-            modifier = Modifier.weight(1f)
+        HorizontalDivider(
+            modifier = Modifier.weight(1f),
+            thickness = DividerDefaults.Thickness,
+            color = Color.White.copy(alpha = 0.10f)
         )
     }
 }
@@ -342,7 +343,7 @@ internal fun DrawerRow(
                     val down = awaitFirstDown(requireUnconsumed = false)
                     var dragStarted = false
                     var longPressReached = false
-                    var pointerId = down.id
+                    val pointerId = down.id
                     var currentPos = down.position
                     lastRootPointer = rowTopLeftPx + currentPos
 

@@ -1,9 +1,9 @@
 @file:OptIn(
-    androidx.compose.foundation.ExperimentalFoundationApi::class,
-    androidx.compose.ui.ExperimentalComposeUiApi::class
+    ExperimentalFoundationApi::class,
+    ExperimentalComposeUiApi::class
 )
 
-package com.dueboysenberry1226.px5launcher.ui
+package com.dueboysenberry1226.px5launcher.ui.theme
 
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.animation.core.animateFloatAsState
@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
@@ -28,7 +29,6 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -65,8 +65,7 @@ fun AllAppsScreen(
     onLaunch: (LaunchableApp) -> Unit,
     onBack: () -> Unit,
     onLongPress: (LaunchableApp) -> Unit,
-    modifier: Modifier = Modifier,
-    topbarFocusRequester: FocusRequester? = null
+    modifier: Modifier = Modifier
 ) {
     val cols = columns.coerceIn(2, 5)
     val gridState = rememberLazyGridState()
@@ -96,7 +95,7 @@ fun AllAppsScreen(
     // (Back/NONE esetén nem scrollozunk)
     // =========================================================
     LaunchedEffect(safeSelected, appCount) {
-        if (safeSelected >= 0 && safeSelected < appCount) {
+        if (safeSelected in 0..<appCount) {
             gridState.animateScrollToItem(safeSelected)
         }
     }
@@ -145,7 +144,6 @@ fun AllAppsScreen(
                     iconSize = adaptiveIconSize(cols),
                     isFirstColumn = isFirstColumn,
                     onBackSelect = { onSelectChange(SEL_BACK) },
-                    onBack = onBack,
                     onFocus = { onSelectChange(index) },
                     onClick = {
                         onSelectChange(index)
@@ -166,7 +164,7 @@ private fun BackMiniTile(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    val shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(14.dp)
 
     val scale by animateFloatAsState(
         targetValue = if (isSelected) 1.10f else 1f,
@@ -208,7 +206,6 @@ private fun AppTile(
     iconSize: Dp,
     isFirstColumn: Boolean,
     onBackSelect: () -> Unit,
-    onBack: () -> Unit,
     onFocus: () -> Unit,
     onClick: () -> Unit,
     onLongPress: () -> Unit

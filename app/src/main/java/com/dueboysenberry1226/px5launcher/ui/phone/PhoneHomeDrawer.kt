@@ -45,9 +45,7 @@ internal fun PhoneHomeDrawer(
     onDragActiveChange: (Boolean) -> Unit,
 
     allApps: List<AppItem>,
-    rowsToShowState: Int,
 
-    dragging: DragPayload?,
     setDragging: (DragPayload?) -> Unit,
 
     setDragPointer: (Offset) -> Unit,
@@ -60,11 +58,6 @@ internal fun PhoneHomeDrawer(
 
     onLaunch: (String) -> Unit,
 
-    slotIndexFromPointer: (Offset) -> Int?,
-    nearestFreeSlot: (Int, Int) -> Int?,
-    moveAppToIndex: (String, Int, Int) -> Unit,
-
-    placeErrorSet: (String?) -> Unit,
     clearPlaceError: () -> Unit
 ) {
     var search by rememberSaveable(stateSaver = TextFieldValue.Saver) {

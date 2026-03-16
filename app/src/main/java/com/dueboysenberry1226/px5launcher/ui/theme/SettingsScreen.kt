@@ -1,11 +1,12 @@
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@file:OptIn(ExperimentalFoundationApi::class)
 
-package com.dueboysenberry1226.px5launcher.ui.settings
+package com.dueboysenberry1226.px5launcher.ui.theme
 
 import android.app.Activity
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -14,6 +15,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -66,7 +68,7 @@ import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.data.ButtonLayout
 import com.dueboysenberry1226.px5launcher.data.SettingsRepository
 import com.dueboysenberry1226.px5launcher.data.WidgetsRepository
-import com.dueboysenberry1226.px5launcher.ui.Haptics
+import com.dueboysenberry1226.px5launcher.media.PX5NotificationListener
 import kotlinx.coroutines.launch
 import kotlin.math.max
 
@@ -134,7 +136,7 @@ private fun getAppVersionName(context: Context): String {
         val pm = context.packageManager
         val pkg = context.packageName
         val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            pm.getPackageInfo(pkg, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+            pm.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(0))
         } else {
             @Suppress("DEPRECATION")
             pm.getPackageInfo(pkg, 0)
@@ -246,7 +248,7 @@ fun SettingsScreen(
         ) ?: return false
         val target = ComponentName(
             ctx,
-            com.dueboysenberry1226.px5launcher.media.PX5NotificationListener::class.java
+            PX5NotificationListener::class.java
         ).flattenToString()
         return enabled.contains(target)
     }
@@ -617,7 +619,7 @@ fun SettingsScreen(
         when (nk.keyCode) {
             AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
                 if (isExpanded) {
-                    when (val row = currentRow) {
+                    when (currentRow) {
                         is SettingRow.Toggle -> {
                             expandedOptionIndex =
                                 (expandedOptionIndex - 1).coerceAtLeast(0).coerceIn(0, 1)
@@ -626,13 +628,15 @@ fun SettingsScreen(
                         is SettingRow.Picker -> {
                             expandedOptionIndex =
                                 (expandedOptionIndex - 1).coerceAtLeast(0)
-                                    .coerceIn(0, row.options.lastIndex)
+                                    .coerceIn(0, currentRow.options.lastIndex)
                         }
 
                         is SettingRow.ExpandableSliderRow -> {
                             expandedOptionIndex =
-                                (expandedOptionIndex - row.step).coerceIn(row.min, row.max)
-                            scope.launch { row.set(expandedOptionIndex) }
+                                (expandedOptionIndex - currentRow.step).coerceIn(
+                                    currentRow.min,
+                                    currentRow.max)
+                            scope.launch { currentRow.set(expandedOptionIndex) }
                         }
 
                         else -> Unit
@@ -647,20 +651,22 @@ fun SettingsScreen(
 
             AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
                 if (isExpanded) {
-                    when (val row = currentRow) {
+                    when (currentRow) {
                         is SettingRow.Toggle -> {
                             expandedOptionIndex = (expandedOptionIndex + 1).coerceAtMost(1)
                         }
 
                         is SettingRow.Picker -> {
                             expandedOptionIndex =
-                                (expandedOptionIndex + 1).coerceAtMost(row.options.lastIndex)
+                                (expandedOptionIndex + 1).coerceAtMost(currentRow.options.lastIndex)
                         }
 
                         is SettingRow.ExpandableSliderRow -> {
                             expandedOptionIndex =
-                                (expandedOptionIndex + row.step).coerceIn(row.min, row.max)
-                            scope.launch { row.set(expandedOptionIndex) }
+                                (expandedOptionIndex + currentRow.step).coerceIn(
+                                    currentRow.min,
+                                    currentRow.max)
+                            scope.launch { currentRow.set(expandedOptionIndex) }
                         }
 
                         else -> Unit

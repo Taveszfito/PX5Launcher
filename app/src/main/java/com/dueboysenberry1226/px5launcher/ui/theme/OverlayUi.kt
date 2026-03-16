@@ -1,4 +1,4 @@
-package com.dueboysenberry1226.px5launcher.ui
+package com.dueboysenberry1226.px5launcher.ui.theme
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*

@@ -1,4 +1,4 @@
-package com.dueboysenberry1226.px5launcher.ui
+package com.dueboysenberry1226.px5launcher.ui.theme
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row

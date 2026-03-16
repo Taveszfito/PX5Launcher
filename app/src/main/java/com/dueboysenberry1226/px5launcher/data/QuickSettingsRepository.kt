@@ -3,8 +3,8 @@ package com.dueboysenberry1226.px5launcher.data
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.dueboysenberry1226.px5launcher.ui.QuickTileType
-import com.dueboysenberry1226.px5launcher.ui.QuickTilesState
+import com.dueboysenberry1226.px5launcher.ui.theme.QuickTileType
+import com.dueboysenberry1226.px5launcher.ui.theme.QuickTilesState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

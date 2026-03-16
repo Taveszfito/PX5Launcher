@@ -17,7 +17,7 @@ class WidgetsRepository(private val context: Context) {
         context.px5DataStore.data.map { prefs ->
             val raw = prefs[PREF_WIDGETS] ?: emptySet()
             raw.mapNotNull(::decode).sortedWith(
-                compareBy<WidgetPlacement>(
+                compareBy(
                     { it.layoutMode.name },
                     { it.cellY },
                     { it.cellX },

@@ -180,36 +180,6 @@ object MediaControllerRepo {
 
     // ---- Controls ----
 
-    fun togglePlayPause() {
-        val c = controller ?: return
-        val ps = c.playbackState
-        val playing = ps?.state == PlaybackState.STATE_PLAYING
-        if (playing) c.transportControls.pause() else c.transportControls.play()
-    }
-
     fun next() { controller?.transportControls?.skipToNext() }
-    fun prev() { controller?.transportControls?.skipToPrevious() }
 
-    fun seekTo(ms: Long) {
-        val c = controller ?: return
-        val st = _state.value
-        if (!st.canSeek) return
-        c.transportControls.seekTo(ms.coerceIn(0L, st.durationMs.coerceAtLeast(0L)))
-    }
-
-    fun skipToQueueItem(queueId: Long) {
-        val c = controller ?: return
-        val ps = c.playbackState ?: return
-        val ok = (ps.actions and PlaybackState.ACTION_SKIP_TO_QUEUE_ITEM) != 0L
-        if (!ok) return
-        c.transportControls.skipToQueueItem(queueId)
-    }
-
-    fun volumeUp() {
-        audioManager?.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, 0)
-    }
-
-    fun volumeDown() {
-        audioManager?.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, 0)
-    }
 }

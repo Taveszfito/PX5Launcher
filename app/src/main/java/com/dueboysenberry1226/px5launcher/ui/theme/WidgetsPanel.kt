@@ -1,6 +1,6 @@
 @file:Suppress("UnusedBoxWithConstraintsScope")
 
-package com.dueboysenberry1226.px5launcher.ui
+package com.dueboysenberry1226.px5launcher.ui.theme
 
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.animation.core.animateFloatAsState
@@ -174,11 +174,11 @@ fun WidgetsPanel(
     val slot4Cover = remember(slot4Placements, grid.cols, grid.rows) { buildCoverMap(slot4Placements) }
 
     fun landscapeSlotIndexForCell(x: Int, y: Int): Int {
-        return when {
-            x in slot1.baseX..(slot1.baseX + 1) && y in slot1.baseY..(slot1.baseY + 1) -> 0
-            x in slot2.baseX..(slot2.baseX + 1) && y in slot2.baseY..(slot2.baseY + 1) -> 1
-            x in slot3.baseX..(slot3.baseX + 1) && y in slot3.baseY..(slot3.baseY + 1) -> 2
-            x in slot4.baseX..(slot4.baseX + 1) && y in slot4.baseY..(slot4.baseY + 1) -> 3
+        return when (x) {
+            in slot1.baseX..(slot1.baseX + 1) if y in slot1.baseY..(slot1.baseY + 1) -> 0
+            in slot2.baseX..(slot2.baseX + 1) if y in slot2.baseY..(slot2.baseY + 1) -> 1
+            in slot3.baseX..(slot3.baseX + 1) if y in slot3.baseY..(slot3.baseY + 1) -> 2
+            in slot4.baseX..(slot4.baseX + 1) if y in slot4.baseY..(slot4.baseY + 1) -> 3
             else -> 0
         }
     }
@@ -928,11 +928,9 @@ fun WidgetsPanel(
                 val originX = (scopeMaxW - totalW) / 2
                 val originY = (scopeMaxH - slotSize) / 2
 
-                val slot1X = originX
                 val slot2X = originX + slotSize + outerGap
                 val slot3X = originX + (slotSize + outerGap) * 2f
                 val slot4X = originX + (slotSize + outerGap) * 3f
-                val slotY = originY
 
                 val innerPad = 18.dp
                 val smallCell = (slotSize - innerGap - innerPad * 2) / 2
@@ -941,8 +939,8 @@ fun WidgetsPanel(
                 // Slot1
                 RenderOneLandscapeSlot(
                     slotIndex = 0,
-                    cardX = slot1X,
-                    cardY = slotY,
+                    cardX = originX,
+                    cardY = originY,
                     slotSize = slotSize,
                     innerPad = innerPad,
                     innerGapPx = innerGap,
@@ -953,7 +951,7 @@ fun WidgetsPanel(
                 RenderOneLandscapeSlot(
                     slotIndex = 1,
                     cardX = slot2X,
-                    cardY = slotY,
+                    cardY = originY,
                     slotSize = slotSize,
                     innerPad = innerPad,
                     innerGapPx = innerGap,
@@ -964,7 +962,7 @@ fun WidgetsPanel(
                 RenderOneLandscapeSlot(
                     slotIndex = 2,
                     cardX = slot3X,
-                    cardY = slotY,
+                    cardY = originY,
                     slotSize = slotSize,
                     innerPad = innerPad,
                     innerGapPx = innerGap,
@@ -975,7 +973,7 @@ fun WidgetsPanel(
                 RenderOneLandscapeSlot(
                     slotIndex = 3,
                     cardX = slot4X,
-                    cardY = slotY,
+                    cardY = originY,
                     slotSize = slotSize,
                     innerPad = innerPad,
                     innerGapPx = innerGap,
@@ -990,10 +988,9 @@ fun WidgetsPanel(
                 val slotSize = min(slotFromW.value, availH.value).dp
 
                 val gridW = (slotSize * cols.toFloat()) + outerGap * (cols - 1)
-                val gridH = slotSize
 
                 val originX = (scopeMaxW - gridW) / 2
-                val originY = (scopeMaxH - gridH) / 2
+                val originY = (scopeMaxH - slotSize) / 2
 
                 fun cardX(c: Int): Dp = originX + (slotSize + outerGap) * c.toFloat()
                 fun cardY(): Dp = originY

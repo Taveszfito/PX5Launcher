@@ -1,7 +1,8 @@
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@file:OptIn(ExperimentalFoundationApi::class)
 
-package com.dueboysenberry1226.px5launcher.ui
+package com.dueboysenberry1226.px5launcher.ui.theme
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -45,7 +46,7 @@ fun NotificationRightSide(
     fun hTick() { if (vibrationEnabled) Haptics.tick(context) }
 
     var pickerOpen by remember { mutableStateOf(false) }
-    var pickerTargetSlot by remember { mutableStateOf(-1) }
+    var pickerTargetSlot by remember { mutableIntStateOf(-1) }
 
     val used = remember(tilesState.slots) { tilesState.slots.filterNotNull().toSet() }
     val available = remember(used) { QuickTileType.entries.filter { it !in used } }
@@ -117,15 +118,12 @@ fun NotificationRightSide(
             available = available,
             onCancel = {
                 hClick()
-                pickerOpen = false
-                pickerTargetSlot = -1
             },
             onConfirm = { selected: QuickTileType ->
                 hClick()
                 if (pickerTargetSlot >= 0) {
                     onTileAssign(pickerTargetSlot, selected)
                 }
-                pickerOpen = false
                 pickerTargetSlot = -1
             },
             colors = colors,
@@ -162,7 +160,6 @@ private fun QuickTileCell(
                 shape = shape
             )
             .onFocusChanged {
-                focused = it.isFocused
                 if (it.isFocused) onFocusTick()
                 if (isTopRow) onTopRowFocusEdgeChanged(it.isFocused)
             }
@@ -233,7 +230,7 @@ private fun QuickTilePickerDialog(
     onPickClick: () -> Unit,
     onPickTick: () -> Unit,
 ) {
-    var selected by remember { mutableStateOf<QuickTileType?>(available.firstOrNull()) }
+    var selected by remember { mutableStateOf(available.firstOrNull()) }
 
     AlertDialog(
         onDismissRequest = onCancel,

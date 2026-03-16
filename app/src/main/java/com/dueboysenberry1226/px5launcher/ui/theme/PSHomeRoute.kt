@@ -1,6 +1,10 @@
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-package com.dueboysenberry1226.px5launcher.ui
+@file:OptIn(ExperimentalFoundationApi::class)
+@file:Suppress("DEPRECATION")
 
+package com.dueboysenberry1226.px5launcher.ui.theme
+
+import android.Manifest
+import android.annotation.SuppressLint
 import com.dueboysenberry1226.px5launcher.data.WidgetLayoutMode
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -33,7 +37,9 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.ComponentName
 import android.content.pm.ApplicationInfo
+import android.hardware.camera2.CameraCharacteristics
 import android.net.Uri
+import android.util.Log
 import android.view.KeyEvent as AndroidKeyEvent
 import android.widget.FrameLayout
 import android.widget.TextView
@@ -50,6 +56,7 @@ import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -61,13 +68,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
@@ -82,8 +89,6 @@ import com.dueboysenberry1226.px5launcher.data.TopItem
 import com.dueboysenberry1226.px5launcher.data.WidgetGridSpec
 import com.dueboysenberry1226.px5launcher.data.WidgetPlacement
 import com.dueboysenberry1226.px5launcher.data.WidgetsRepository
-import com.dueboysenberry1226.px5launcher.ui.widgets.WidgetPickerScreen
-import com.dueboysenberry1226.px5launcher.ui.widgets.rememberWidgetPickerState
 import com.dueboysenberry1226.px5launcher.util.computeDominantColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -93,6 +98,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
+import androidx.core.net.toUri
+import kotlinx.coroutines.yield
+import kotlin.math.max
 
 private enum class HomeSection { TOPBAR, TOP, ACTIONS, WIDGETS, NOTIFS }
 private enum class BottomPanel { WIDGETS, CALENDAR, MUSIC }
@@ -160,7 +168,7 @@ fun PSHomeRoute(
         }.getOrDefault(true)
     }
 
-    val allApps by produceState(initialValue = emptyList<LaunchableApp>(), appsRefreshTick) {
+    val allApps by produceState(initialValue = emptyList(), appsRefreshTick) {
         value = withContext(Dispatchers.Default) {
             repo.loadApps().filter { isAppEnabled(it.packageName) }
         }
@@ -229,7 +237,7 @@ fun PSHomeRoute(
     fun goWidgets() {
         scope.launch {
             homeScrollState.animateScrollToItem(1)
-            kotlinx.coroutines.yield()
+            yield()
             currentPanelFR().requestFocus()
         }
     }
@@ -237,7 +245,7 @@ fun PSHomeRoute(
     fun goActions() {
         scope.launch {
             homeScrollState.animateScrollToItem(0)
-            kotlinx.coroutines.yield()
+            yield()
             focusActions()
         }
     }
@@ -304,7 +312,7 @@ fun PSHomeRoute(
 
         val pinnedApps = pinned
             .mapNotNull { appByPkg[it] }
-            .sortedWith(compareBy<LaunchableApp>({ recencyRank(it.packageName) }, { it.label.lowercase() }))
+            .sortedWith(compareBy({ recencyRank(it.packageName) }, { it.label.lowercase() }))
 
         val recentApps = recents
             .mapNotNull { appByPkg[it] }
@@ -366,19 +374,18 @@ fun PSHomeRoute(
             return@LaunchedEffect
         }
 
-        val app = selectedApp
-        if (app == null) {
+        if (selectedApp == null) {
             accent = defaultAccent
         } else {
-            dominantCache[app.packageName]?.let { accent = it } ?: run {
-                val c = computeDominantColor(app.iconBitmap, fallback = defaultAccent)
-                dominantCache[app.packageName] = c
+            dominantCache[selectedApp.packageName]?.let { accent = it } ?: run {
+                val c = computeDominantColor(selectedApp.iconBitmap, fallback = defaultAccent)
+                dominantCache[selectedApp.packageName] = c
                 accent = c
             }
         }
     }
 
-    val bg = androidx.compose.ui.graphics.Brush.verticalGradient(
+    val bg = Brush.verticalGradient(
         listOf(
             accent.copy(alpha = 0.22f),
             Color(0xFF0A0F18),
@@ -424,9 +431,10 @@ fun PSHomeRoute(
         }.getOrDefault(false)
     }
 
+    @SuppressLint("UseKtx")
     fun requestUninstall(app: LaunchableApp) {
         val pkg = app.packageName
-        val uri = Uri.parse("package:$pkg")
+        val uri = "package:$pkg".toUri()
 
         fun fallback(reason: String? = null) {
             if (!reason.isNullOrBlank()) Toast.makeText(context, reason, Toast.LENGTH_SHORT).show()
@@ -682,7 +690,6 @@ fun PSHomeRoute(
     var showWidgetPicker by rememberSaveable { mutableStateOf(false) }
     var pendingPickCellX by remember { mutableIntStateOf(0) }
     var pendingPickCellY by remember { mutableIntStateOf(0) }
-    var allAppsLastAppIndex by remember { mutableIntStateOf(0) }
 
     val cellDp = remember(cellPx) {
         if (cellPx > 0f) with(density) { cellPx.toDp() } else 90.dp
@@ -897,10 +904,10 @@ fun PSHomeRoute(
                             true
                         } else {
                             // normál működés (amikor nincs AllApps)
-                            when (tab) {
-                                Tab.GAMES -> homeSection = HomeSection.TOP
-                                Tab.MEDIA -> homeSection = HomeSection.TOP
-                                Tab.NOTIFICATIONS -> homeSection = HomeSection.NOTIFS
+                            homeSection = when (tab) {
+                                Tab.GAMES -> HomeSection.TOP
+                                Tab.MEDIA -> HomeSection.TOP
+                                Tab.NOTIFICATIONS -> HomeSection.NOTIFS
                             }
                             true
                         }
@@ -990,7 +997,6 @@ fun PSHomeRoute(
                             // ✅ FELSŐ SORBÓL: fel -> TOPBAR, DE NEM állítjuk -1-re
                             allAppsSelectedIndex < columns -> {
                                 // jegyezzük meg, melyik app volt kijelölve
-                                allAppsLastAppIndex = allAppsSelectedIndex.coerceAtLeast(0)
 
                                 // topbar
                                 homeSection = HomeSection.TOPBAR
@@ -1015,12 +1021,13 @@ fun PSHomeRoute(
                     }
 
                     AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
-                        when {
-                            // NONE állapotból ne csináljon semmit
-                            allAppsSelectedIndex == -2 -> true
+                        when (// NONE állapotból ne csináljon semmit
+                            allAppsSelectedIndex) {
+                            -2 -> true
+
 
                             // Back-ről lefelé: első app
-                            allAppsSelectedIndex == -1 -> {
+                            -1 -> {
                                 allAppsSelectedIndex = 0
                                 true
                             }
@@ -1039,19 +1046,23 @@ fun PSHomeRoute(
                     AndroidKeyEvent.KEYCODE_ENTER,
                     AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
                     AndroidKeyEvent.KEYCODE_BUTTON_A -> {
-                        if (allAppsSelectedIndex == -1) {
-                            allAppsOpen = false
-                            true
-                        } else if (allAppsSelectedIndex == -2) {
-                            // NONE: a TOPBAR irányít, itt ne történjen semmi
-                            true
-                        } else {
-                            val app = allApps.getOrNull(allAppsSelectedIndex)
-                            if (app != null) {
+                        when (allAppsSelectedIndex) {
+                            -1 -> {
                                 allAppsOpen = false
-                                launchApp(app)
+                                true
                             }
-                            true
+                            -2 -> {
+                                // NONE: a TOPBAR irányít, itt ne történjen semmi
+                                true
+                            }
+                            else -> {
+                                val app = allApps.getOrNull(allAppsSelectedIndex)
+                                if (app != null) {
+                                    allAppsOpen = false
+                                    launchApp(app)
+                                }
+                                true
+                            }
                         }
                     }
 
@@ -1116,8 +1127,8 @@ fun PSHomeRoute(
                             AndroidKeyEvent.KEYCODE_ENTER,
                             AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
                             AndroidKeyEvent.KEYCODE_BUTTON_A -> {
-                                when (val it = selectedTopItem) {
-                                    is TopItem.App -> launchApp(it.app)
+                                when (selectedTopItem) {
+                                    is TopItem.App -> launchApp(selectedTopItem.app)
                                     is TopItem.AllApps -> {
                                         allAppsOpen = true
                                         allAppsSelectedIndex =
@@ -1131,9 +1142,8 @@ fun PSHomeRoute(
                             AndroidKeyEvent.KEYCODE_BUTTON_Y -> { searchOpen = true; true }
 
                             AndroidKeyEvent.KEYCODE_BUTTON_X -> {
-                                val app = selectedApp
-                                if (app != null) {
-                                    scope.launch { repo.setPinned(app.packageName, value = app.packageName !in pinned) }
+                                if (selectedApp != null) {
+                                    scope.launch { repo.setPinned(selectedApp.packageName, value = selectedApp.packageName !in pinned) }
                                     true
                                 } else false
                             }
@@ -1174,9 +1184,9 @@ fun PSHomeRoute(
                             AndroidKeyEvent.KEYCODE_BUTTON_A -> {
                                 val canLaunchNow = selectedTopItem is TopItem.App
                                 if (actionIndex == 0) {
-                                    if (canLaunchNow) (selectedTopItem as? TopItem.App)?.app?.let { launchApp(it) }
+                                    if (canLaunchNow) launchApp(selectedTopItem.app)
                                 } else {
-                                    if (canLaunchNow) openMenuFor((selectedTopItem as? TopItem.App)?.app)
+                                    if (canLaunchNow) openMenuFor(selectedTopItem.app)
                                 }
                                 true
                             }
@@ -1250,7 +1260,7 @@ fun PSHomeRoute(
 
                         val axNow = abs(totalX)
                         val ayNow = abs(totalY)
-                        val maxNow = kotlin.math.max(axNow, ayNow)
+                        val maxNow = max(axNow, ayNow)
 
                         if (dragDominant == null && maxNow >= swipeThresholdPx) {
                             dragDominant = (axNow > ayNow)
@@ -1280,7 +1290,7 @@ fun PSHomeRoute(
 
                     val ax = abs(totalX)
                     val ay = abs(totalY)
-                    val maxA = kotlin.math.max(ax, ay)
+                    val maxA = max(ax, ay)
 
                     if (maxA < tapSlopPx) {
                         if (homeSection == HomeSection.TOPBAR) {
@@ -1433,7 +1443,6 @@ fun PSHomeRoute(
 
             if (tab == Tab.MEDIA) {
                 MediaRoute(
-                    pm = pm,
                     onRequestBackToGames = { tab = Tab.GAMES },
                     hubSelectionEnabled = (homeSection != HomeSection.TOPBAR),
                     registerKeyHandler = { handler -> mediaKeyHandler = handler },
@@ -1447,8 +1456,10 @@ fun PSHomeRoute(
                     liveNotifications = liveNotifs,
                     historyNotifications = historyNotifs,
                     historyMode = notifHistoryMode,
-                    onLeftButtonsFocusEdgeChanged = { focused -> notifUpFromLeftButtonsAllowed = focused },
-                    onQsTopRowFocusEdgeChanged = { focused -> notifUpFromQsTopRowAllowed = focused },
+                    onLeftButtonsFocusEdgeChanged = { _ ->
+                    },
+                    onQsTopRowFocusEdgeChanged = { _ ->
+                    },
                     onDismissOne = { id, fromHistory ->
                         if (fromHistory) NotificationsRepository.removeFromHistory(id)
                         else NotificationsRepository.dismissLiveToHistory(id)
@@ -1461,7 +1472,12 @@ fun PSHomeRoute(
                     tilesState = qsState,
                     onTileClick = quickTileClick,
                     onTileRemove = { slotIndex -> QuickSettingsRepository.remove(slotIndex) },
-                    onTileAssign = { slotIndex, type -> QuickSettingsRepository.assign(slotIndex, type) }
+                    onTileAssign = { slotIndex, type ->
+                        QuickSettingsRepository.assign(
+                            slotIndex,
+                            type
+                        )
+                    }
                 )
             } else {
                 if (allAppsOpen) {
@@ -1486,7 +1502,7 @@ fun PSHomeRoute(
                             .weight(1f)
                     )
                 } else {
-                    androidx.compose.foundation.lazy.LazyColumn(
+                    LazyColumn(
                         state = homeScrollState,
                         userScrollEnabled = false,
                         modifier = Modifier.fillMaxWidth()
@@ -1517,16 +1533,20 @@ fun PSHomeRoute(
                                                 }
                                                 if (target >= 0) topIndex = target
                                             }
+
                                             is TopItem.AllApps -> {
-                                                val target = realItems.indexOfFirst { it is TopItem.AllApps }
+                                                val target =
+                                                    realItems.indexOfFirst { it is TopItem.AllApps }
                                                 if (target >= 0) topIndex = target
                                             }
+
                                             else -> Unit
                                         }
                                     } else {
                                         when (item) {
                                             is TopItem.App -> {
-                                                val curPkg = (rawSelectedTopItem as? TopItem.App)?.app?.packageName
+                                                val curPkg =
+                                                    (rawSelectedTopItem as? TopItem.App)?.app?.packageName
                                                 if (curPkg == item.app.packageName) {
                                                     launchApp(item.app)
                                                 } else {
@@ -1538,13 +1558,18 @@ fun PSHomeRoute(
                                             }
 
                                             is TopItem.AllApps -> {
-                                                val isAlready = rawSelectedTopItem is TopItem.AllApps
+                                                val isAlready =
+                                                    rawSelectedTopItem is TopItem.AllApps
                                                 if (isAlready) {
                                                     allAppsOpen = true
                                                     allAppsSelectedIndex =
-                                                        allAppsSelectedIndex.coerceIn(0, allAppsLastIndex.coerceAtLeast(0))
+                                                        allAppsSelectedIndex.coerceIn(
+                                                            0,
+                                                            allAppsLastIndex.coerceAtLeast(0)
+                                                        )
                                                 } else {
-                                                    val target = realItems.indexOfFirst { it is TopItem.AllApps }
+                                                    val target =
+                                                        realItems.indexOfFirst { it is TopItem.AllApps }
                                                     if (target >= 0) topIndex = target
                                                 }
                                             }
@@ -1569,8 +1594,8 @@ fun PSHomeRoute(
 
                             if (showBigAppName) {
                                 Text(
-                                    text = when (val it = selectedTopItem) {
-                                        is TopItem.App -> it.app.label
+                                    text = when (selectedTopItem) {
+                                        is TopItem.App -> selectedTopItem.app.label
                                         is TopItem.AllApps -> context.getString(R.string.homescreen_apps_title)
                                         else -> ""
                                     },
@@ -1602,7 +1627,7 @@ fun PSHomeRoute(
                                     onMenu = {
                                         if (vibrationEnabled) Haptics.click(context)
                                         if (selectedTopItem is TopItem.App) {
-                                            openMenuFor((selectedTopItem as TopItem.App).app)
+                                            openMenuFor(selectedTopItem.app)
                                         }
                                     }
                                 )
@@ -1664,17 +1689,32 @@ fun PSHomeRoute(
                                                 grid = gridSpec,
                                                 layoutMode = WidgetLayoutMode.LANDSCAPE,
                                                 focusRequester = widgetsFR,
-                                                registerKeyHandler = { handler -> widgetsKeyHandler = handler },
+                                                registerKeyHandler = { handler ->
+                                                    widgetsKeyHandler = handler
+                                                },
                                                 onRequestAddAt = { x, y -> requestAddAt(x, y) },
-                                                onMove = { placement -> moveWidgetClockwise(placement) },
+                                                onMove = { placement ->
+                                                    moveWidgetClockwise(
+                                                        placement
+                                                    )
+                                                },
                                                 onDelete = { placement -> deleteWidget(placement) },
                                                 onCellPxKnown = { px -> cellPx = px },
                                                 renderWidget = { placement, modifier ->
-                                                    key(placement.appWidgetId, placement.provider, placement.cellX, placement.cellY) {
-                                                        val info = widgetManager.getAppWidgetInfo(placement.appWidgetId)
+                                                    key(
+                                                        placement.appWidgetId,
+                                                        placement.provider,
+                                                        placement.cellX,
+                                                        placement.cellY
+                                                    ) {
+                                                        val info =
+                                                            widgetManager.getAppWidgetInfo(placement.appWidgetId)
 
                                                         if (info == null) {
-                                                            Box(modifier, contentAlignment = Alignment.Center) {
+                                                            Box(
+                                                                modifier,
+                                                                contentAlignment = Alignment.Center
+                                                            ) {
                                                                 Text(
                                                                     context.getString(R.string.homescreen_widget_error_title),
                                                                     color = Color.White.copy(alpha = 0.65f)
@@ -1684,19 +1724,30 @@ fun PSHomeRoute(
                                                             AndroidView(
                                                                 factory = { ctx ->
                                                                     try {
-                                                                        widgetHost.createView(ctx, placement.appWidgetId, info).apply {
-                                                                            setAppWidget(placement.appWidgetId, info)
-                                                                            setPadding(0, 0, 0, 0)
-                                                                            layoutParams = FrameLayout.LayoutParams(
-                                                                                FrameLayout.LayoutParams.MATCH_PARENT,
-                                                                                FrameLayout.LayoutParams.MATCH_PARENT
+                                                                        widgetHost.createView(
+                                                                            ctx,
+                                                                            placement.appWidgetId,
+                                                                            info
+                                                                        ).apply {
+                                                                            setAppWidget(
+                                                                                placement.appWidgetId,
+                                                                                info
                                                                             )
+                                                                            setPadding(0, 0, 0, 0)
+                                                                            layoutParams =
+                                                                                FrameLayout.LayoutParams(
+                                                                                    FrameLayout.LayoutParams.MATCH_PARENT,
+                                                                                    FrameLayout.LayoutParams.MATCH_PARENT
+                                                                                )
                                                                         }
                                                                     } catch (_: Throwable) {
                                                                         FrameLayout(ctx).apply {
                                                                             addView(
                                                                                 TextView(ctx).apply {
-                                                                                    text = context.getString(R.string.homescreen_widget_error_title)
+                                                                                    text =
+                                                                                        context.getString(
+                                                                                            R.string.homescreen_widget_error_title
+                                                                                        )
                                                                                 }
                                                                             )
                                                                         }
@@ -1704,10 +1755,11 @@ fun PSHomeRoute(
                                                                 },
                                                                 update = { view ->
                                                                     view.setPadding(0, 0, 0, 0)
-                                                                    view.layoutParams = FrameLayout.LayoutParams(
-                                                                        FrameLayout.LayoutParams.MATCH_PARENT,
-                                                                        FrameLayout.LayoutParams.MATCH_PARENT
-                                                                    )
+                                                                    view.layoutParams =
+                                                                        FrameLayout.LayoutParams(
+                                                                            FrameLayout.LayoutParams.MATCH_PARENT,
+                                                                            FrameLayout.LayoutParams.MATCH_PARENT
+                                                                        )
                                                                 },
                                                                 modifier = modifier
                                                             )
@@ -1722,14 +1774,18 @@ fun PSHomeRoute(
                                             CalendarPanelCard(
                                                 modifier = Modifier.fillMaxSize(),
                                                 vibrationEnabled = vibrationEnabled,
-                                                registerKeyHandler = { handler -> calendarKeyHandler = handler }
+                                                registerKeyHandler = { handler ->
+                                                    calendarKeyHandler = handler
+                                                }
                                             )
                                         }
 
                                         BottomPanel.MUSIC -> {
                                             MusicControlPanelCard(
                                                 modifier = Modifier.fillMaxSize(),
-                                                registerKeyHandler = { handler -> musicKeyHandler = handler },
+                                                registerKeyHandler = { handler ->
+                                                    musicKeyHandler = handler
+                                                },
                                                 focusRequester = musicFR
                                             )
                                         }
@@ -1776,7 +1832,12 @@ fun PSHomeRoute(
                 onTogglePin = {
                     val app = menuAppSnapshot ?: return@HomeOverlays
                     closeMenu()
-                    scope.launch { repo.setPinned(app.packageName, value = app.packageName !in pinned) }
+                    scope.launch {
+                        repo.setPinned(
+                            app.packageName,
+                            value = app.packageName !in pinned
+                        )
+                    }
                 },
                 onAppInfo = {
                     val app = menuAppSnapshot ?: return@HomeOverlays
@@ -1810,7 +1871,7 @@ fun PSHomeRoute(
             // FONTOS: itt van kompozícióban a Card, ezért itt kérünk fókuszt
             LaunchedEffect(Unit) {
                 // 1 frame várás, hogy biztosan felépüljön a focus node
-                kotlinx.coroutines.yield()
+                yield()
                 widgetPickerFR.requestFocus()
             }
 
@@ -1845,11 +1906,11 @@ private fun rememberQuickTileClickHandler(context: Context): (QuickTileType) -> 
     var pendingAfterPermission by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     fun toast(msg: String) {
-        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
     }
 
     fun log(msg: String) {
-        android.util.Log.d("PX5QS", msg)
+        Log.d("PX5QS", msg)
     }
 
     fun openIntent(intent: Intent) {
@@ -1864,7 +1925,7 @@ private fun rememberQuickTileClickHandler(context: Context): (QuickTileType) -> 
 
     fun openAppDetailsSettings() {
         val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-            data = android.net.Uri.parse("package:${context.packageName}")
+            data = "package:${context.packageName}".toUri()
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         runCatching { context.startActivity(intent) }
@@ -1902,7 +1963,7 @@ private fun rememberQuickTileClickHandler(context: Context): (QuickTileType) -> 
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val perm = android.Manifest.permission.BLUETOOTH_CONNECT
+            val perm = Manifest.permission.BLUETOOTH_CONNECT
             val granted = ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED
             if (!granted) {
                 pendingAfterPermission = { toggleBluetooth() }
@@ -1932,7 +1993,7 @@ private fun rememberQuickTileClickHandler(context: Context): (QuickTileType) -> 
         val cameraId = runCatching {
             cam.cameraIdList.firstOrNull { id ->
                 val ch = cam.getCameraCharacteristics(id)
-                ch.get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+                ch.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
             }
         }.getOrNull()
 
@@ -1955,7 +2016,7 @@ private fun rememberQuickTileClickHandler(context: Context): (QuickTileType) -> 
     }
 
     fun toggleFlashlight() {
-        val perm = android.Manifest.permission.CAMERA
+        val perm = Manifest.permission.CAMERA
         val granted = ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED
         log("toggleFlashlight permissionGranted=$granted")
         if (!granted) {

@@ -7,7 +7,6 @@ import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
@@ -608,7 +607,6 @@ fun PhoneHomeRoute(
                     dragging = payload
                     dropPreview = null
                 },
-                dragPointerPx = dragPointerPx,
                 hasDragPointer = hasDragPointer,
                 setHasDragPointer = { hasDragPointer = it },
 
@@ -627,24 +625,8 @@ fun PhoneHomeRoute(
                 setGridUsedWidth = { gridUsedWidth = it },
                 setPhoneCellDp = { phoneCellDp = it },
 
-                moveAppToIndex = { pkg, idx, vis -> moveAppToIndex(pkg, idx, vis) },
                 clearPlaceError = { clearPlaceError() },
 
-                onMoveCard = { card, targetRow ->
-                    val bestRow = nearestFreeCardRow(
-                        slots = slots,
-                        cards = cards,
-                        widgets = widgets,
-                        targetRow = targetRow,
-                        rowsToShow = rowsToShowState,
-                        ignore = card
-                    )
-                    if (bestRow != null && bestRow != card.row) {
-                        cards.remove(card)
-                        cards.add(card.copy(row = bestRow, col = 0))
-                        persistCards()
-                    }
-                },
                 onDeleteCard = { card ->
                     cards.remove(card)
                     persistCards()
@@ -833,9 +815,7 @@ fun PhoneHomeRoute(
             onDragActiveChange = { drawerDragActive = it },
 
             allApps = allApps,
-            rowsToShowState = rowsToShowState,
 
-            dragging = dragging,
             setDragging = { dragging = it },
 
             setDragPointer = {
@@ -865,11 +845,6 @@ fun PhoneHomeRoute(
 
             onLaunch = { launch(it) },
 
-            slotIndexFromPointer = { slotIndexFromPointer(it) },
-            nearestFreeSlot = { idx, vis -> nearestFreeSlot(slots, idx, vis) },
-            moveAppToIndex = { pkg, idx, vis -> moveAppToIndex(pkg, idx, vis) },
-
-            placeErrorSet = { placeError = it },
             clearPlaceError = { clearPlaceError() },
             finishDragAt = { finishDragAt(it) }
         )

@@ -436,6 +436,19 @@ Itt később megjelenhetnek a felhasznált könyvtárak, assetek és egyéb kös
     <string name="phone_home_edit_mode">Szerkesztés mód</string>
     <string name="common_done">Kész</string>
 
+    <string name="music_cd_previous">Előző</string>
+    <string name="music_cd_play_pause">Lejátszás vagy szünet</string>
+    <string name="music_cd_next">Következő</string>
+    <string name="music_cd_skipping">Ugrás</string>
+
+    <string name="music_swipe_up_for_queue">Pöccints felfelé\na lejátszási listához</string>
+    <string name="music_swipe_down_for_controls">Pöccints lefelé a vezérléshez.</string>
+
+    <string name="music_volume_down_short">HANG−</string>
+    <string name="music_volume_up_short">HANG+</string>
+
+    <string name="music_time_separator_with_value">• %1$s</string>
+
     <string name="phone_home_add_error_select_card">Válassz ki egy kártyát.</string>
     <string name="phone_home_add_error_not_enough_card_space">Nincs elég szabad hely (2×4) a képernyőn.</string>
 

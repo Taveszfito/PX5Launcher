@@ -65,7 +65,6 @@ internal fun PhoneHomeGrid(
     setDragPointer: (Offset) -> Unit,
     updateDropPreview: (Offset) -> Unit,
     finishDragAt: (Offset) -> Unit,
-    dragPointerPx: Offset,
     hasDragPointer: Boolean,
     setHasDragPointer: (Boolean) -> Unit,
 
@@ -81,13 +80,11 @@ internal fun PhoneHomeGrid(
     setPhoneCellDp: (Dp) -> Unit,
 
     // slot move
-    moveAppToIndex: (String, Int, Int) -> Unit,
 
     // place error
     clearPlaceError: () -> Unit,
 
     // card persist helpers
-    onMoveCard: (PhoneCardPlacement, Int) -> Unit,
     onDeleteCard: (PhoneCardPlacement) -> Unit,
 
     // add stuff popup
@@ -95,7 +92,6 @@ internal fun PhoneHomeGrid(
     addStuffContent: @Composable (rowsToShow: Int, cellDp: Dp) -> Unit
 ) {
     val density = LocalDensity.current
-    var gridTopLeftPx by remember { mutableStateOf(Offset.Zero) }
 
     val btnH = 58.dp
     val bottomGap = 10.dp
@@ -142,7 +138,6 @@ internal fun PhoneHomeGrid(
                 .onGloballyPositioned { coords ->
                     val pos = coords.positionInRoot()
                     val rootPos = Offset(pos.x, pos.y)
-                    gridTopLeftPx = rootPos
                     setGridTopLeftPx(rootPos)
                 }
         ) {
@@ -172,7 +167,7 @@ internal fun PhoneHomeGrid(
                 return cards.any { card ->
                     card.col == 0 &&
                             r in card.row until (card.row + CARD_SPAN_Y) &&
-                            c in card.col until (card.col + CARD_SPAN_X)
+                            c in 0 until (0 + CARD_SPAN_X)
                 }
             }
 
@@ -242,8 +237,8 @@ internal fun PhoneHomeGrid(
 
             // 2) WIDGETEK (cards alatt, drag preview felett)
             widgets.forEach { w ->
-                if (w.cellY < 0 || w.cellY >= rowsToShow) return@forEach
-                if (w.cellX < 0 || w.cellX >= COLS) return@forEach
+                if (w.cellY !in 0..<rowsToShow) return@forEach
+                if (w.cellX !in 0..<COLS) return@forEach
                 if (w.cellX + w.spanX > COLS) return@forEach
                 if (w.cellY + w.spanY > rowsToShow) return@forEach
 
@@ -334,11 +329,10 @@ internal fun PhoneHomeGrid(
                 if (card.col != 0) return@forEach
                 if (card.row < 0 || card.row + 1 >= rowsToShow) return@forEach
 
-                val ox = cellOffsetX(card.col).roundToInt()
+                val ox = cellOffsetX(0).roundToInt()
                 val oy = cellOffsetY(card.row).roundToInt()
 
                 var cardTopLeftPx by remember(card) { mutableStateOf(Offset.Zero) }
-                var lastRootPointer by remember(card) { mutableStateOf(Offset.Zero) }
 
                 Box(
                     modifier = Modifier
@@ -367,12 +361,9 @@ internal fun PhoneHomeGrid(
                                         down.consume()
 
                                         var lastRootPointer = cardTopLeftPx + down.position
-                                        var dragStarted = false
 
                                         val longPress = awaitLongPressOrCancellation(down.id)
-                                        if (longPress == null) {
-                                            return@awaitEachGesture
-                                        }
+                                            ?: return@awaitEachGesture
 
                                         lastRootPointer = cardTopLeftPx + longPress.position
                                         clearPlaceError()
@@ -381,19 +372,16 @@ internal fun PhoneHomeGrid(
                                         setHasDragPointer(true)
                                         updateDropPreview(lastRootPointer)
                                         updateDropPreview(lastRootPointer)
-                                        dragStarted = true
 
                                         while (true) {
                                             val event = awaitPointerEvent()
                                             val change = event.changes.firstOrNull { it.id == down.id } ?: break
 
                                             if (!change.pressed) {
-                                                if (dragStarted) {
-                                                    setDragPointer(lastRootPointer)
-                                                    setHasDragPointer(true)
-                                                    updateDropPreview(lastRootPointer)
-                                                    finishDragAt(lastRootPointer)
-                                                }
+                                                setDragPointer(lastRootPointer)
+                                                setHasDragPointer(true)
+                                                updateDropPreview(lastRootPointer)
+                                                finishDragAt(lastRootPointer)
                                                 break
                                             }
 

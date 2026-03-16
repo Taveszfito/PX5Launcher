@@ -1,5 +1,6 @@
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-package com.dueboysenberry1226.px5launcher.ui
+@file:OptIn(ExperimentalFoundationApi::class)
+
+package com.dueboysenberry1226.px5launcher.ui.theme
 
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.animation.AnimatedContent
@@ -19,10 +20,12 @@ import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
+import android.media.session.PlaybackState
 import android.os.Build
 import android.provider.Settings
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
@@ -32,6 +35,7 @@ import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -74,6 +78,11 @@ private data class QueueItemUi(
     val title: String
 )
 
+private data class DisplayQueueItem(
+    val originalIndex: Int,
+    val item: QueueItemUi
+)
+
 private enum class PortraitPage { CONTROLS, QUEUE }
 
 @Composable
@@ -99,12 +108,12 @@ fun MusicControlPanelCard(
     var title by remember { mutableStateOf(context.getString(R.string.music_no_active_playback)) }
     var artist by remember { mutableStateOf("") }
     var isPlaying by remember { mutableStateOf(false) }
-    var durationMs by remember { mutableStateOf(0L) }
-    var positionMs by remember { mutableStateOf(0L) }
+    var durationMs by remember { mutableLongStateOf(0L) }
+    var positionMs by remember { mutableLongStateOf(0L) }
 
     var queueItems by remember { mutableStateOf<List<QueueItemUi>>(emptyList()) }
     var canSkipToQueueItem by remember { mutableStateOf(false) }
-    var listIndex by remember { mutableStateOf(0) }
+    var listIndex by remember { mutableIntStateOf(0) }
     var listHint by remember { mutableStateOf<String?>(null) }
 
     val listState = rememberLazyListState()
@@ -115,15 +124,13 @@ fun MusicControlPanelCard(
     var autoSkipActive by remember { mutableStateOf(false) }
     var autoSkipTargetTitleNorm by remember { mutableStateOf("") }
 
-    // volume (landscape-ben marad, portraitban nem mutatjuk)
     val audioManager = remember(context) { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
-    var volNow by remember { mutableStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)) }
+    var volNow by remember { mutableIntStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)) }
     val volMax = remember(audioManager) { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }
     var autoSkipSavedVolume by remember { mutableStateOf<Int?>(null) }
 
     val noRipple = remember { MutableInteractionSource() }
 
-    // portrait oldal (vezérlés / queue)
     var portraitPage by remember { mutableStateOf(PortraitPage.CONTROLS) }
 
     fun hClick() {
@@ -172,7 +179,7 @@ fun MusicControlPanelCard(
                 ComponentName(context, PX5NotificationListener::class.java)
             )
             val best =
-                sessions.firstOrNull { it.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING }
+                sessions.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
                     ?: sessions.firstOrNull()
 
             controller = best
@@ -202,16 +209,6 @@ fun MusicControlPanelCard(
         }
     }
 
-    fun clampListIndex() {
-        if (queueItems.isEmpty()) {
-            listIndex = 0
-            if (selected == Selected.LIST) selected = Selected.SEEK
-            if (isPortrait) portraitPage = PortraitPage.CONTROLS
-            return
-        }
-        listIndex = listIndex.coerceIn(0, queueItems.lastIndex)
-    }
-
     val currentIndex = remember(title, queueItems) {
         when {
             queueItems.isEmpty() -> -1
@@ -230,7 +227,6 @@ fun MusicControlPanelCard(
 
         listIndex = listIndex.coerceIn(0, queueItems.lastIndex)
 
-        // ha a "most játszó" elem rejtve van, a kijelölés ne állhasson rá
         if (currentIndex >= 0 && queueItems.size > 1 && listIndex == currentIndex) {
             listIndex = if (currentIndex < queueItems.lastIndex) currentIndex + 1 else currentIndex - 1
             listIndex = listIndex.coerceIn(0, queueItems.lastIndex)
@@ -281,7 +277,7 @@ fun MusicControlPanelCard(
         val controllerArtist = desc?.subtitle?.toString().orEmpty()
 
         val st = c.playbackState
-        val playingNow = st?.state == android.media.session.PlaybackState.STATE_PLAYING
+        val playingNow = st?.state == PlaybackState.STATE_PLAYING
         var posNow = st?.position ?: 0L
         var durNow = md?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
         if (durNow < 0) durNow = 0L
@@ -290,7 +286,7 @@ fun MusicControlPanelCard(
 
         val actions = st?.actions ?: 0L
         canSkipToQueueItem =
-            (actions and android.media.session.PlaybackState.ACTION_SKIP_TO_QUEUE_ITEM) != 0L
+            (actions and PlaybackState.ACTION_SKIP_TO_QUEUE_ITEM) != 0L
 
         val rawQueue = c.queue
             ?.mapNotNull { qi ->
@@ -312,7 +308,7 @@ fun MusicControlPanelCard(
                     )
 
             queueItems = rawQueue
-            clampListIndex()
+            clampListIndexSkippingCurrent()
 
             if (reached) {
                 autoSkipActive = false
@@ -339,7 +335,7 @@ fun MusicControlPanelCard(
             } else rawQueue
 
         queueItems = uiQueue
-        clampListIndex()
+        clampListIndexSkippingCurrent()
 
         val trackKeyNow = normalizeTitle(controllerTitle) + "|" + normalizeTitle(controllerArtist)
         val trackChanged = trackKeyNow.isNotBlank() && trackKeyNow != lastTrackKey
@@ -353,10 +349,10 @@ fun MusicControlPanelCard(
                 val idx = indexOfTitleInQueue(controllerTitle, queueItems)
                 if (idx >= 0) listIndex = (idx + 1).coerceIn(0, queueItems.lastIndex)
             }
+            clampListIndexSkippingCurrent()
             lastTrackKey = trackKeyNow
         }
 
-        // ha portraitban listán vagyunk, de közben eltűnt a queue → vissza vezérlésre
         if (isPortrait && queueItems.isEmpty()) portraitPage = PortraitPage.CONTROLS
     }
 
@@ -380,8 +376,6 @@ fun MusicControlPanelCard(
         }
     }
 
-
-// ✅ görgetés: original index -> display index (mert a current sort kivesszük a megjelenítésből)
     LaunchedEffect(selected, listIndex, queueItems.size, currentIndex) {
         if (selected == Selected.LIST && queueItems.isNotEmpty()) {
             val original = listIndex.coerceIn(0, queueItems.lastIndex)
@@ -413,7 +407,6 @@ fun MusicControlPanelCard(
 
     fun backToControlsPortrait() {
         portraitPage = PortraitPage.CONTROLS
-        // vissza vezérlés fókusz
         if (selected == Selected.LIST) selected = Selected.SEEK
     }
 
@@ -430,7 +423,7 @@ fun MusicControlPanelCard(
 
         val st = c.playbackState
         val canDirect = st != null &&
-                (st.actions and android.media.session.PlaybackState.ACTION_SKIP_TO_QUEUE_ITEM) != 0L
+                (st.actions and PlaybackState.ACTION_SKIP_TO_QUEUE_ITEM) != 0L
 
         if (canDirect) {
             c.transportControls.skipToQueueItem(item.queueId)
@@ -511,7 +504,6 @@ fun MusicControlPanelCard(
             )
 
             if (code in backCodes) {
-                // portrait queue oldalon: back → vissza vezérlésre
                 if (isPortrait && portraitPage == PortraitPage.QUEUE && showQueue) {
                     backToControlsPortrait()
                     return@registerKeyHandler true
@@ -583,7 +575,6 @@ fun MusicControlPanelCard(
                 AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
                     when (selected) {
                         Selected.LIST -> {
-                            // portraitban listán maradunk, nem dobjuk ki
                             if (isPortrait) true else {
                                 selected = Selected.SEEK
                                 true
@@ -678,11 +669,7 @@ fun MusicControlPanelCard(
         label = "musicBorderAlpha"
     )
 
-    // =========================
-// ✅ PORTRAIT UI (2 oldal)
-// =========================
     if (isPortrait) {
-        // Egységes portrait méretek
         val outerPad = 12.dp
         val titleSize = 15.sp
         val artistSize = 12.sp
@@ -697,7 +684,6 @@ fun MusicControlPanelCard(
                 .clip(shape)
                 .background(Color.White.copy(alpha = 0.06f))
                 .border(2.dp, Color.White.copy(alpha = borderAlpha), shape)
-                // ✅ swipe UP bárhol a kártyán (csak CONTROLS + csak ha van queue)
                 .pointerInput(showQueue, portraitPage) {
                     if (!showQueue || portraitPage != PortraitPage.CONTROLS) return@pointerInput
 
@@ -712,19 +698,17 @@ fun MusicControlPanelCard(
                             totalX += dx
                             totalY += dy
 
-                            // csak akkor consumoljuk, ha tényleg vertikális a gesztus
-                            if (kotlin.math.abs(totalY) > 12f && kotlin.math.abs(totalY) > kotlin.math.abs(totalX)) {
+                            if (abs(totalY) > 12f && abs(totalY) > abs(totalX)) {
                                 change.consume()
                             }
                         }
 
-                        // swipe UP -> QUEUE
-                        val vertical = kotlin.math.abs(totalY) > kotlin.math.abs(totalX)
+                        val vertical = abs(totalY) > abs(totalX)
                         if (vertical && totalY < -48f) {
                             portraitPage = PortraitPage.QUEUE
                             selected = Selected.LIST
                             seekMode = false
-                            clampListIndex()
+                            clampListIndexSkippingCurrent()
                         }
                     }
                 }
@@ -767,7 +751,6 @@ fun MusicControlPanelCard(
 
                 if (page == PortraitPage.CONTROLS) {
 
-                    // ===== CONTROLS =====
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -786,91 +769,91 @@ fun MusicControlPanelCard(
 
                         Spacer(Modifier.height(3.dp))
 
-                    Text(
-                        text = when {
-                            hasPermissionIssue -> stringResource(R.string.music_hint_enable_permission)
-                            autoSkipActive -> stringResource(R.string.music_hint_skipping_cancel)
-                            seekMode -> stringResource(R.string.music_hint_seek_mode)
-                            else -> artist
-                        },
-                        color = Color.White.copy(alpha = if (hasPermissionIssue || autoSkipActive || seekMode) 0.45f else 0.62f),
-                        fontSize = artistSize,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = if (hasPermissionIssue) {
-                            Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .combinedClickable(
-                                    interactionSource = noRipple,
-                                    indication = null,
-                                    onClick = {
-                                        hClick()
-                                        openNotificationListenerSettings(context)
-                                    }
-                                )
-                                .padding(6.dp)
-                        } else Modifier
-                    )
-
-                    Spacer(Modifier.height(10.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        SmallIconChip(
-                            icon = Icons.Filled.SkipPrevious,
-                            contentDescription = "Previous",
-                            selected = selected == Selected.PREV,
-                            onClick = {
-                                hClick()
-                                if (hasPermissionIssue) openNotificationListenerSettings(context)
-                                else controller?.transportControls?.skipToPrevious()
-                            }
-                        )
-
-                        SmallIconChip(
-                            icon = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                            contentDescription = "Play/Pause",
-                            selected = selected == Selected.PLAY_PAUSE,
-                            onClick = {
-                                hClick()
-                                if (hasPermissionIssue) openNotificationListenerSettings(context)
-                                else {
-                                    val c = controller
-                                    if (c != null) {
-                                        if (isPlaying) c.transportControls.pause() else c.transportControls.play()
-                                    } else tryAttachController()
-                                }
-                            }
-                        )
-
-                        SmallIconChip(
-                            icon = Icons.Filled.SkipNext,
-                            contentDescription = "Next",
-                            selected = selected == Selected.NEXT,
-                            onClick = {
-                                hClick()
-                                if (hasPermissionIssue) openNotificationListenerSettings(context)
-                                else controller?.transportControls?.skipToNext()
-                            }
-                        )
-
-                        Spacer(Modifier.weight(1f))
-
                         Text(
-                            text = if (showQueue) "Pöccints felfelé\na lejátszási listához" else "",
-                            color = Color.White.copy(alpha = if (showQueue) 0.46f else 0.0f),
-                            fontSize = 10.sp,
+                            text = when {
+                                hasPermissionIssue -> stringResource(R.string.music_hint_enable_permission)
+                                autoSkipActive -> stringResource(R.string.music_hint_skipping_cancel)
+                                seekMode -> stringResource(R.string.music_hint_seek_mode)
+                                else -> artist
+                            },
+                            color = Color.White.copy(alpha = if (hasPermissionIssue || autoSkipActive || seekMode) 0.45f else 0.62f),
+                            fontSize = artistSize,
                             fontWeight = FontWeight.Medium,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = if (hasPermissionIssue) {
+                                Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .combinedClickable(
+                                        interactionSource = noRipple,
+                                        indication = null,
+                                        onClick = {
+                                            hClick()
+                                            openNotificationListenerSettings(context)
+                                        }
+                                    )
+                                    .padding(6.dp)
+                            } else Modifier
                         )
-                    }
 
-                    Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(10.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            SmallIconChip(
+                                icon = Icons.Filled.SkipPrevious,
+                                contentDescription = stringResource(R.string.music_cd_previous),
+                                selected = selected == Selected.PREV,
+                                onClick = {
+                                    hClick()
+                                    if (hasPermissionIssue) openNotificationListenerSettings(context)
+                                    else controller?.transportControls?.skipToPrevious()
+                                }
+                            )
+
+                            SmallIconChip(
+                                icon = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                contentDescription = stringResource(R.string.music_cd_play_pause),
+                                selected = selected == Selected.PLAY_PAUSE,
+                                onClick = {
+                                    hClick()
+                                    if (hasPermissionIssue) openNotificationListenerSettings(context)
+                                    else {
+                                        val c = controller
+                                        if (c != null) {
+                                            if (isPlaying) c.transportControls.pause() else c.transportControls.play()
+                                        } else tryAttachController()
+                                    }
+                                }
+                            )
+
+                            SmallIconChip(
+                                icon = Icons.Filled.SkipNext,
+                                contentDescription = stringResource(R.string.music_cd_next),
+                                selected = selected == Selected.NEXT,
+                                onClick = {
+                                    hClick()
+                                    if (hasPermissionIssue) openNotificationListenerSettings(context)
+                                    else controller?.transportControls?.skipToNext()
+                                }
+                            )
+
+                            Spacer(Modifier.weight(1f))
+
+                            Text(
+                                text = if (showQueue) stringResource(R.string.music_swipe_up_for_queue) else "",
+                                color = Color.White.copy(alpha = if (showQueue) 0.46f else 0.0f),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Spacer(Modifier.height(8.dp))
 
                         SeekBar(
                             modifier = Modifier.fillMaxWidth(),
@@ -902,48 +885,45 @@ fun MusicControlPanelCard(
 
                         Spacer(Modifier.height(8.dp))
 
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
-                        Text(
-                            text = formatMs(context, positionMs),
-                            color = Color.White.copy(alpha = 0.55f),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-
-                        if (durationMs > 0L) {
-                            Spacer(Modifier.width(10.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
                             Text(
-                                text = "• " + formatMs(context, durationMs),
+                                text = formatMs(context, positionMs),
                                 color = Color.White.copy(alpha = 0.55f),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium
                             )
+
+                            if (durationMs > 0L) {
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    text = stringResource(R.string.music_time_separator_with_value, formatMs(context, durationMs)),
+                                    color = Color.White.copy(alpha = 0.55f),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(6.dp))
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(hintHeight),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = " ",
+                                color = Color.White.copy(alpha = if (showQueue) 0.46f else 0.0f),
+                                fontSize = hintSize,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
 
-                    Spacer(Modifier.height(6.dp))
-
-                    // (itt nálad most üres helyet tartasz fent – oké maradhat)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(hintHeight),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = " ",
-                            color = Color.White.copy(alpha = if (showQueue) 0.46f else 0.0f),
-                            fontSize = hintSize,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
                 } else {
-
-                    // ===== QUEUE =====
 
                     Column(
                         modifier = Modifier
@@ -962,7 +942,7 @@ fun MusicControlPanelCard(
                                         var totalY = 0f
                                         drag(down.id) { change ->
                                             totalY += (change.position.y - change.previousPosition.y)
-                                            if (kotlin.math.abs(totalY) > 10f) change.consume()
+                                            if (abs(totalY) > 10f) change.consume()
                                         }
                                         if (totalY > 30f) backToControlsPortrait()
                                     }
@@ -970,7 +950,7 @@ fun MusicControlPanelCard(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Következők",
+                                text = stringResource(R.string.music_queue_title),
                                 color = Color.White.copy(alpha = 0.85f),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -982,7 +962,7 @@ fun MusicControlPanelCard(
                             Spacer(Modifier.width(8.dp))
 
                             Text(
-                                text = "Pöccints lefelé a vezérléshez.",
+                                text = stringResource(R.string.music_swipe_down_for_controls),
                                 color = Color.White.copy(alpha = 0.46f),
                                 fontSize = hintSize,
                                 fontWeight = FontWeight.Medium,
@@ -998,10 +978,11 @@ fun MusicControlPanelCard(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f)
-                            .fillMaxHeight(),
+                                .fillMaxHeight(),
                             busy = autoSkipActive,
                             items = queueItems,
                             index = listIndex,
+                            currentIndex = currentIndex,
                             listState = listState,
                             onClickItem = { i ->
                                 hClick()
@@ -1017,9 +998,6 @@ fun MusicControlPanelCard(
         return
     }
 
-    // =========================
-    // ✅ LANDSCAPE / PSHOME UI (változatlan)
-    // =========================
     Row(
         modifier = modifier
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
@@ -1097,7 +1075,7 @@ fun MusicControlPanelCard(
             ) {
                 ControlChip(
                     icon = Icons.Filled.SkipPrevious,
-                    contentDescription = "Previous",
+                    contentDescription = stringResource(R.string.music_cd_previous),
                     selected = selected == Selected.PREV,
                     onClick = {
                         hClick()
@@ -1108,7 +1086,7 @@ fun MusicControlPanelCard(
 
                 ControlChip(
                     icon = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    contentDescription = "Play/Pause",
+                    contentDescription = stringResource(R.string.music_cd_play_pause),
                     selected = selected == Selected.PLAY_PAUSE,
                     onClick = {
                         hClick()
@@ -1124,7 +1102,7 @@ fun MusicControlPanelCard(
 
                 ControlChip(
                     icon = Icons.Filled.SkipNext,
-                    contentDescription = "Next",
+                    contentDescription = stringResource(R.string.music_cd_next),
                     selected = selected == Selected.NEXT,
                     onClick = {
                         hClick()
@@ -1136,7 +1114,7 @@ fun MusicControlPanelCard(
                 Spacer(Modifier.weight(1f))
 
                 ControlChip(
-                    label = "VOL−",
+                    label = stringResource(R.string.music_volume_down_short),
                     selected = selected == Selected.VOL_DOWN,
                     onClick = {
                         hTick()
@@ -1153,7 +1131,7 @@ fun MusicControlPanelCard(
                 )
 
                 ControlChip(
-                    label = "VOL+",
+                    label = stringResource(R.string.music_volume_up_short),
                     selected = selected == Selected.VOL_UP,
                     onClick = {
                         hTick()
@@ -1203,7 +1181,7 @@ fun MusicControlPanelCard(
                 if (durationMs > 0L) {
                     Spacer(Modifier.width(10.dp))
                     Text(
-                        text = "• " + formatMs(context, durationMs),
+                        text = stringResource(R.string.music_time_separator_with_value, formatMs(context, durationMs)),
                         color = Color.White.copy(alpha = 0.55f),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
@@ -1221,9 +1199,7 @@ fun MusicControlPanelCard(
                 busy = autoSkipActive,
                 items = queueItems,
                 index = listIndex,
-                hint = listHint,
-                canJump = canSkipToQueueItem,
-                currentIndex = currentIndex, // ✅ ÚJ
+                currentIndex = currentIndex,
                 listState = listState,
                 onClickItem = { i ->
                     hClick()
@@ -1267,114 +1243,6 @@ private fun SmallIconChip(
             tint = Color.White.copy(alpha = 0.88f),
             modifier = Modifier.size(16.dp)
         )
-    }
-}
-
-@Composable
-private fun PortraitQueuePanel(
-    modifier: Modifier,
-    busy: Boolean,
-    items: List<QueueItemUi>,
-    index: Int,
-    listState: androidx.compose.foundation.lazy.LazyListState,
-    onClickItem: (Int) -> Unit
-) {
-    val shape = RoundedCornerShape(18.dp)
-    val noRipple = remember { MutableInteractionSource() }
-
-    Box(
-        modifier = modifier
-            .clip(shape)
-            .background(Color.White.copy(alpha = 0.06f))
-            .border(2.dp, Color.White.copy(alpha = 0.18f), shape)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .queueBlurIf(busy)
-                .then(if (busy) Modifier.background(Color.Black.copy(alpha = 0.12f)) else Modifier)
-                .padding(8.dp) // ✅ sokkal kevesebb padding
-        ) {
-            // Bal sáv ~ 1/4
-            Column(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .weight(0.28f),
-                verticalArrangement = Arrangement.Top
-            ) {
-                Text(
-                    text = "Következők",
-                    color = Color.White.copy(alpha = 0.85f),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            Spacer(Modifier.width(8.dp))
-
-
-
-            // Jobb sáv ~ 3/4 (lista)
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .weight(0.72f),
-                state = listState,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                itemsIndexed(items) { i, item ->
-                    val rowSelected = i == index
-                    val rowShape = RoundedCornerShape(14.dp)
-                    val rowBgA = if (rowSelected) 0.22f else 0.06f
-                    val rowBorderA = if (rowSelected) 0.55f else 0.12f
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(rowShape)
-                            .background(Color.White.copy(alpha = rowBgA))
-                            .border(2.dp, Color.White.copy(alpha = rowBorderA), rowShape)
-                            .combinedClickable(
-                                interactionSource = noRipple,
-                                indication = null,
-                                enabled = !busy,
-                                onClick = { onClickItem(i) }
-                            )
-                            .padding(horizontal = 10.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = item.title,
-                            modifier = Modifier.weight(1f),
-                            color = Color.White.copy(alpha = 0.88f),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-        }
-
-        // busy overlay marad (auto-skip logika belül működik, de szöveget nem mutatunk)
-        if (busy) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.18f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.SkipNext,
-                    contentDescription = "Skipping",
-                    tint = Color.White.copy(alpha = 0.92f),
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-        }
     }
 }
 
@@ -1454,11 +1322,6 @@ private fun Modifier.queueBlurIf(active: Boolean): Modifier {
     }
 }
 
-private data class DisplayQueueItem(
-    val originalIndex: Int,
-    val item: QueueItemUi
-)
-
 @Composable
 private fun QueuePanel(
     modifier: Modifier,
@@ -1466,10 +1329,8 @@ private fun QueuePanel(
     busy: Boolean,
     items: List<QueueItemUi>,
     index: Int,
-    hint: String?,
-    canJump: Boolean,
     currentIndex: Int,
-    listState: androidx.compose.foundation.lazy.LazyListState,
+    listState: LazyListState,
     onClickItem: (Int) -> Unit
 ) {
     val shape = RoundedCornerShape(18.dp)
@@ -1477,7 +1338,6 @@ private fun QueuePanel(
     val bgA = if (selected) 0.10f else 0.06f
     val noRipple = remember { MutableInteractionSource() }
 
-    // ✅ LANDSCAPE queue: vékony header, nincs "A:" hint, lista leér a kártya aljáig
     val sidePad = 12.dp
     val headerH = 20.dp
 
@@ -1493,7 +1353,6 @@ private fun QueuePanel(
                 .queueBlurIf(busy)
                 .then(if (busy) Modifier.background(Color.Black.copy(alpha = 0.12f)) else Modifier)
         ) {
-            // ====== VÉKONY FELSŐ SÁV ======
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1512,13 +1371,11 @@ private fun QueuePanel(
                 )
             }
 
-            // ✅ UI lista: kiszűrjük a "most játszó" sort, de megőrizzük az eredeti indexet
             val displayItems = remember(items, currentIndex) {
                 items.mapIndexed { i, it -> DisplayQueueItem(originalIndex = i, item = it) }
                     .filter { it.originalIndex != currentIndex }
             }
 
-            // ====== LISTA: LEÉR A KÁRTYA ALJÁIG ======
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1547,7 +1404,7 @@ private fun QueuePanel(
                                 interactionSource = noRipple,
                                 indication = null,
                                 enabled = !busy,
-                                onClick = { onClickItem(origIndex) } // ✅ eredeti indexet küldjük vissza
+                                onClick = { onClickItem(origIndex) }
                             )
                             .padding(horizontal = 10.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -1566,7 +1423,6 @@ private fun QueuePanel(
             }
         }
 
-        // busy overlay marad
         if (busy) {
             Box(
                 modifier = Modifier
@@ -1577,7 +1433,7 @@ private fun QueuePanel(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
                         imageVector = Icons.Filled.SkipNext,
-                        contentDescription = "Skipping",
+                        contentDescription = stringResource(R.string.music_cd_skipping),
                         tint = Color.White.copy(alpha = 0.92f),
                         modifier = Modifier.size(30.dp)
                     )
@@ -1609,7 +1465,7 @@ private fun SeekBar(
     hasPermissionIssue: Boolean,
     positionMs: Long,
     durationMs: Long,
-    barHeight: Dp = 44.dp, // ✅ ÚJ
+    barHeight: Dp = 44.dp,
     onRequestPermission: () -> Unit,
     onSeekToFraction: (Float) -> Unit,
     onToggleSeekMode: () -> Unit,
@@ -1693,10 +1549,9 @@ private fun doSeekBy(
     updatePos: (Long) -> Unit
 ) {
     val c = controller ?: return
-    val d = durationMs
-    if (d <= 0L) return
+    if (durationMs <= 0L) return
 
-    val target = (currentPos + deltaMs).coerceIn(0L, d)
+    val target = (currentPos + deltaMs).coerceIn(0L, durationMs)
     c.transportControls.seekTo(target)
     updatePos(target)
 }
@@ -1715,25 +1570,34 @@ private fun PortraitQueueList(
     busy: Boolean,
     items: List<QueueItemUi>,
     index: Int,
-    listState: androidx.compose.foundation.lazy.LazyListState,
+    currentIndex: Int,
+    listState: LazyListState,
     onClickItem: (Int) -> Unit
 ) {
     val noRipple = remember { MutableInteractionSource() }
+
+    val displayItems = remember(items, currentIndex) {
+        items.mapIndexed { i, it -> DisplayQueueItem(originalIndex = i, item = it) }
+            .filter { it.originalIndex != currentIndex }
+    }
 
     Box(
         modifier = modifier
             .fillMaxSize()
             .queueBlurIf(busy)
             .then(if (busy) Modifier.background(Color.Black.copy(alpha = 0.12f)) else Modifier)
-            .padding(6.dp) // ✅ kicsi padding, nincs keret
+            .padding(6.dp)
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = listState,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            itemsIndexed(items) { i, item ->
-                val rowSelected = i == index
+            itemsIndexed(displayItems, key = { _, d -> d.originalIndex }) { _, d ->
+                val item = d.item
+                val origIndex = d.originalIndex
+
+                val rowSelected = origIndex == index
                 val rowShape = RoundedCornerShape(14.dp)
                 val rowBgA = if (rowSelected) 0.22f else 0.06f
                 val rowBorderA = if (rowSelected) 0.55f else 0.12f
@@ -1748,7 +1612,7 @@ private fun PortraitQueueList(
                             interactionSource = noRipple,
                             indication = null,
                             enabled = !busy,
-                            onClick = { onClickItem(i) }
+                            onClick = { onClickItem(origIndex) }
                         )
                         .padding(horizontal = 10.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -1770,15 +1634,31 @@ private fun PortraitQueueList(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.18f)),
+                    .background(Color.Black.copy(alpha = 0.22f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Filled.SkipNext,
-                    contentDescription = "Skipping",
-                    tint = Color.White.copy(alpha = 0.92f),
-                    modifier = Modifier.size(28.dp)
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Filled.SkipNext,
+                        contentDescription = stringResource(R.string.music_cd_skipping),
+                        tint = Color.White.copy(alpha = 0.92f),
+                        modifier = Modifier.size(30.dp)
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = stringResource(R.string.music_busy_title),
+                        color = Color.White.copy(alpha = 0.88f),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = stringResource(R.string.music_busy_cancel),
+                        color = Color.White.copy(alpha = 0.55f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         }
     }

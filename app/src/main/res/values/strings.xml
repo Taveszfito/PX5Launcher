@@ -407,6 +407,19 @@ Used libraries, assets and acknowledgements can be listed here later.
     <string name="phone_home_edit_mode">Edit mode</string>
     <string name="common_done">Done</string>
 
+    <string name="music_cd_previous">Previous</string>
+    <string name="music_cd_play_pause">Play or pause</string>
+    <string name="music_cd_next">Next</string>
+    <string name="music_cd_skipping">Skipping</string>
+
+    <string name="music_swipe_up_for_queue">Swipe up\nfor the queue</string>
+    <string name="music_swipe_down_for_controls">Swipe down for controls.</string>
+
+    <string name="music_volume_down_short">VOL−</string>
+    <string name="music_volume_up_short">VOL+</string>
+
+    <string name="music_time_separator_with_value">• %1$s</string>
+
     <string name="phone_home_add_error_select_card">Select a card.</string>
     <string name="phone_home_add_error_not_enough_card_space">There isn\'t enough free space (2×4) on the screen.</string>
 

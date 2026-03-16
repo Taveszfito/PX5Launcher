@@ -27,8 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.data.PhoneCardType
-import com.dueboysenberry1226.px5launcher.ui.widgets.WidgetPickerScreen
-import com.dueboysenberry1226.px5launcher.ui.widgets.rememberWidgetPickerState
+import com.dueboysenberry1226.px5launcher.ui.theme.WidgetPickerScreen
+import com.dueboysenberry1226.px5launcher.ui.theme.rememberWidgetPickerState
 
 @Composable
 internal fun BubbleMenu(

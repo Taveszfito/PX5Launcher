@@ -43,7 +43,7 @@ object PhoneHomeCodec {
         if (raw.isNullOrBlank()) return emptyList()
         return raw.split(SEP).map { v ->
             val t = v.trim()
-            if (t.isBlank()) null else t
+            t.ifBlank { null }
         }
     }
 }

@@ -6,7 +6,7 @@ import android.content.Context
 import android.os.Build
 import android.provider.MediaStore
 
-class MediaStoreRepository(private val context: Context) {
+class MediaStoreRepository(context: Context) {
     private val cr: ContentResolver = context.contentResolver
 
     fun loadImages(limit: Int = 400): List<MediaEntry> {

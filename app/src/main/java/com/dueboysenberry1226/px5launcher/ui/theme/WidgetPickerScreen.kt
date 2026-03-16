@@ -1,12 +1,14 @@
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-package com.dueboysenberry1226.px5launcher.ui.widgets
+@file:OptIn(ExperimentalFoundationApi::class)
+@file:Suppress("REDUNDANT_CALL_OF_CONVERSION_METHOD")
+
+package com.dueboysenberry1226.px5launcher.ui.theme
 
 import android.appwidget.AppWidgetHostView
 import android.content.Context
-import kotlin.math.ceil
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.pm.PackageManager
+import androidx.compose.foundation.ExperimentalFoundationApi
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -41,7 +43,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.dueboysenberry1226.px5launcher.R
-import com.dueboysenberry1226.px5launcher.ui.Haptics
 import kotlin.math.max
 
 sealed class VisibleItem {
@@ -57,7 +58,7 @@ sealed class VisibleItem {
 class WidgetPickerState internal constructor(
     private val context: Context,
     val pm: PackageManager,
-    private val appWidgetManager: AppWidgetManager,
+    appWidgetManager: AppWidgetManager,
     private val cellWidthDp: Dp,
     private val cellHeightDp: Dp,
     private val cellGapXDp: Dp,
@@ -81,7 +82,7 @@ class WidgetPickerState internal constructor(
     var expandedPkgs by mutableStateOf(setOf<String>())
         private set
 
-    var selectedIndex by mutableStateOf(0)
+    var selectedIndex by mutableIntStateOf(0)
         private set
 
     val providers: List<AppWidgetProviderInfo> =
@@ -692,7 +693,7 @@ private fun inferSpan(
 private fun safeAppLabel(pm: PackageManager, pkg: String): String {
     return runCatching {
         val ai = pm.getApplicationInfo(pkg, 0)
-        pm.getApplicationLabel(ai)?.toString()?.trim().orEmpty().ifBlank { pkg }
+        pm.getApplicationLabel(ai).toString().trim().ifBlank { pkg }
     }.getOrDefault(pkg)
 }
 

@@ -13,7 +13,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.dueboysenberry1226.px5launcher.ui.PX5NotificationItem
+import com.dueboysenberry1226.px5launcher.ui.theme.PX5NotificationItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

@@ -1,5 +1,6 @@
-package com.dueboysenberry1226.px5launcher.ui
+package com.dueboysenberry1226.px5launcher.ui.theme
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Build
 import android.os.VibrationEffect
@@ -27,6 +28,7 @@ object Haptics {
     }
 
     // finom (tick) - rövid, nem durva
+    @SuppressLint("ObsoleteSdkInt")
     fun tick(context: Context) {
         val level = strengthLevel.coerceIn(0, 5)
         if (level == 0) return
@@ -51,6 +53,7 @@ object Haptics {
     }
 
     // click - picit “határozottabb”, de 5-ön sem brutál
+    @SuppressLint("ObsoleteSdkInt")
     fun click(context: Context) {
         val level = strengthLevel.coerceIn(0, 5)
         if (level == 0) return

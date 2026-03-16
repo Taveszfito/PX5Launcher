@@ -1,7 +1,8 @@
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@file:OptIn(ExperimentalFoundationApi::class)
 
-package com.dueboysenberry1226.px5launcher.ui
+package com.dueboysenberry1226.px5launcher.ui.theme
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -94,7 +95,7 @@ fun NotificationLeftSide(
                         onDelete = {
                             hClick()
                             // delete gomb:
-                            // live -> dismiss + history
+                            // live -> dismiss +
                             // history -> remove history entry
                             if (historyMode) {
                                 NotificationsRepository.removeFromHistory(item.id)
@@ -253,7 +254,6 @@ private fun FocusableCard(
                 shape = shape
             )
             .onFocusChanged {
-                focused = it.isFocused
                 onFocusChanged(it.isFocused)
             }
             .clickable(
@@ -292,7 +292,6 @@ private fun FocusableBottomButton(
                 shape = shape
             )
             .onFocusChanged {
-                focused = it.isFocused
                 onFocusChanged(it.isFocused)
             }
             .clickable(

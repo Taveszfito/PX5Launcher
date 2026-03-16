@@ -1,6 +1,8 @@
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-package com.dueboysenberry1226.px5launcher.ui
+@file:OptIn(ExperimentalFoundationApi::class)
 
+package com.dueboysenberry1226.px5launcher.ui.theme
+
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -10,6 +12,7 @@ import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -58,7 +61,6 @@ private sealed class MediaGridItem {
 
 @Composable
 fun MediaRoute(
-    pm: PackageManager,
     onRequestBackToGames: () -> Unit,
     hubSelectionEnabled: Boolean,
     registerKeyHandler: (((KeyEvent) -> Boolean)) -> Unit,
@@ -71,7 +73,7 @@ fun MediaRoute(
         if (vibrationEnabled) Haptics.click(context)
     }
 
-    var hasPerm by remember { mutableStateOf(hasAllPermissions(context, repo)) }
+    var hasPerm by remember { mutableStateOf(hasAllPermissions(context)) }
 
     val permLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -120,16 +122,17 @@ fun MediaRoute(
     var refreshTick by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(hasPerm) { if (hasPerm) refreshTick++ }
 
-    val images by produceState(initialValue = emptyList<MediaEntry>(), refreshTick) {
+    val images by produceState(initialValue = emptyList(), refreshTick) {
         value = if (!hasPerm) emptyList() else withContext(Dispatchers.Default) { repo.loadImages() }
     }
-    val videos by produceState(initialValue = emptyList<MediaEntry>(), refreshTick) {
+    val videos by produceState(initialValue = emptyList(), refreshTick) {
         value = if (!hasPerm) emptyList() else withContext(Dispatchers.Default) { repo.loadVideos() }
     }
-    val albums by produceState(initialValue = emptyList<MediaAlbum>(), refreshTick) {
+    val albums by produceState(initialValue = emptyList
+        (), refreshTick) {
         value = if (!hasPerm) emptyList() else withContext(Dispatchers.Default) { repo.loadAlbums() }
     }
-    val albumContent by produceState(initialValue = emptyList<MediaEntry>(), refreshTick, currentAlbumId) {
+    val albumContent by produceState(initialValue = emptyList(), refreshTick, currentAlbumId) {
         val bid = currentAlbumId
         value =
             if (!hasPerm || bid.isNullOrBlank()) emptyList()
@@ -469,10 +472,10 @@ fun MediaRoute(
     }
 }
 
-private fun hasAllPermissions(ctx: android.content.Context, repo: MediaStoreRepository): Boolean {
+private fun hasAllPermissions(ctx: Context): Boolean {
     val perms = MediaStoreRepository.requiredPermissions()
     return perms.all { p ->
-        ContextCompat.checkSelfPermission(ctx, p) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        ContextCompat.checkSelfPermission(ctx, p) == PackageManager.PERMISSION_GRANTED
     }
 }
 
@@ -802,7 +805,7 @@ private fun MediaThumbTile(
     )
     val bgAlpha = if (selected) 0.11f else 0.06f
 
-    val thumb: Bitmap? by produceState<Bitmap?>(initialValue = null, entry.uri) {
+    val thumb: Bitmap? by produceState(initialValue = null, entry.uri) {
         value = withContext(Dispatchers.IO) {
             runCatching {
                 context.contentResolver.openInputStream(entry.uri)?.use { input ->
@@ -872,7 +875,7 @@ private fun MediaImageViewer(
         if (vibrationEnabled) Haptics.click(context)
     }
 
-    val bmp: Bitmap? by produceState<Bitmap?>(initialValue = null, entry?.uri) {
+    val bmp: Bitmap? by produceState(initialValue = null, entry?.uri) {
         val u = entry?.uri ?: return@produceState
         value = withContext(Dispatchers.IO) {
             runCatching {

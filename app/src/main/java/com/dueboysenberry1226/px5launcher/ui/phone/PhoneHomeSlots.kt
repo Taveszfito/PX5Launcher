@@ -14,33 +14,6 @@ internal fun normalizeSlots(list: List<String?>): List<String?> {
     return out
 }
 
-internal fun nearestFreeSlot(
-    slots: List<String?>,
-    startIdx: Int,
-    visibleSlots: Int
-): Int? {
-    if (startIdx !in 0 until visibleSlots) return null
-    if (slots.getOrNull(startIdx) == null) return startIdx
-
-    val startRow = startIdx / COLS
-    val startCol = startIdx % COLS
-
-    var best: Int? = null
-    var bestDist = Int.MAX_VALUE
-
-    for (i in 0 until visibleSlots) {
-        if (slots.getOrNull(i) != null) continue
-        val r = i / COLS
-        val c = i % COLS
-        val d = abs(r - startRow) + abs(c - startCol)
-        if (d < bestDist) {
-            bestDist = d
-            best = i
-        }
-    }
-    return best
-}
-
 // ---------------------------
 // ✅ Widget area helpers
 // ---------------------------
@@ -66,8 +39,8 @@ private fun buildOccupiedMap(
         for (dy in 0 until CARD_SPAN_Y) {
             for (dx in 0 until CARD_SPAN_X) {
                 val rr = c.row + dy
-                val cc = c.col + dx
-                if (rr in 0 until rowsToShow && cc in 0 until COLS) {
+                val cc = 0 + dx
+                if (rr in 0 until rowsToShow) {
                     val idx = rr * COLS + cc
                     if (idx in 0 until visibleSlots) occ[idx] = true
                 }
@@ -190,7 +163,7 @@ internal fun isAreaFreeForCard(
         for (dy in 0 until CARD_SPAN_Y) {
             for (dx in 0 until CARD_SPAN_X) {
                 val rr = c.row + dy
-                val cc = c.col + dx
+                val cc = 0 + dx
                 if (rr in 0 until rowsToShow && cc in 0 until COLS) {
                     val idx = rr * COLS + cc
                     if (idx in 0 until visibleSlots) occ[idx] = true
@@ -222,29 +195,6 @@ internal fun isAreaFreeForCard(
         }
     }
     return true
-}
-
-internal fun nearestFreeCardRow(
-    slots: List<String?>,
-    cards: List<PhoneCardPlacement>,
-    widgets: List<WidgetPlacement>,
-    targetRow: Int,
-    rowsToShow: Int,
-    ignore: PhoneCardPlacement
-): Int? {
-    val minRow = 0
-    val maxRow = rowsToShow - CARD_SPAN_Y
-    val clamped = targetRow.coerceIn(minRow, maxRow)
-
-    if (isAreaFreeForCard(slots, cards, widgets, clamped, rowsToShow, ignore)) return clamped
-
-    for (delta in 1..maxRow) {
-        val up = clamped - delta
-        val down = clamped + delta
-        if (up >= minRow && isAreaFreeForCard(slots, cards, widgets, up, rowsToShow, ignore)) return up
-        if (down <= maxRow && isAreaFreeForCard(slots, cards, widgets, down, rowsToShow, ignore)) return down
-    }
-    return null
 }
 
 internal fun tryPlaceCard(
