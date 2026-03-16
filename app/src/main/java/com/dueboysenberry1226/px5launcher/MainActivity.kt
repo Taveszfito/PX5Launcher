@@ -66,8 +66,7 @@ class MainActivity : ComponentActivity() {
                         RootScreen.HOME -> {
                             if (isPortrait) {
                                 PhoneHomeRoute(
-                                    pm = packageManager,
-                                    onOpenSettings = { rootScreen = RootScreen.SETTINGS }
+                                    pm = packageManager
                                 )
                             } else {
                                 PSHomeRoute(

@@ -55,8 +55,7 @@ private const val WIDGET_HOST_ID = 1024
 
 @Composable
 fun PhoneHomeRoute(
-    pm: PackageManager,
-    onOpenSettings: () -> Unit
+    pm: PackageManager
 ) {
     val context = LocalContext.current
     val config = LocalConfiguration.current
@@ -118,7 +117,7 @@ fun PhoneHomeRoute(
             pm.queryIntentActivities(intent, 0)
                 .map { ri ->
                     AppItem(
-                        label = ri.loadLabel(pm)?.toString().orEmpty(),
+                        label = ri.loadLabel(pm).toString(),
                         packageName = ri.activityInfo.packageName,
                         icon = ri.loadIcon(pm)
                     )
@@ -207,7 +206,7 @@ fun PhoneHomeRoute(
 
     var homeQuickMenuOpen by remember { mutableStateOf(false) }
     var addStuffOpen by remember { mutableStateOf(false) }
-    var addStuffTab by remember { mutableStateOf(0) }
+    var addStuffTab by remember { mutableIntStateOf(0) }
     var selectedCard by remember { mutableStateOf<PhoneCardType?>(null) }
     var addError by remember { mutableStateOf<String?>(null) }
     var suppressBackgroundLongPress by remember { mutableStateOf(false) }
@@ -219,38 +218,20 @@ fun PhoneHomeRoute(
     }
 
     var dragging by remember { mutableStateOf<DragPayload?>(null) }
-    var dragPointerPx by remember { mutableStateOf(Offset.Zero) }
     var hasDragPointer by remember { mutableStateOf(false) }
     var dragPointerId by remember { mutableStateOf<PointerId?>(null) }
     var dropPreview by remember { mutableStateOf<DropPreview?>(null) }
 
     var gridTopLeftPx by remember { mutableStateOf(Offset.Zero) }
-    var cellSizePx by remember { mutableStateOf(0f) }
-    var gapHPx by remember { mutableStateOf(0f) }
-    var gapVPx by remember { mutableStateOf(0f) }
-    var rowsToShowState by remember { mutableStateOf(1) }
+    var cellSizePx by remember { mutableFloatStateOf(0f) }
+    var gapHPx by remember { mutableFloatStateOf(0f) }
+    var gapVPx by remember { mutableFloatStateOf(0f) }
+    var rowsToShowState by remember { mutableIntStateOf(1) }
 
     fun stopDrag() {
         dragging = null
         hasDragPointer = false
         dropPreview = null
-    }
-
-    fun slotIndexFromPointer(pointerPx: Offset): Int? {
-        val localX = pointerPx.x - gridTopLeftPx.x
-        val localY = pointerPx.y - gridTopLeftPx.y
-        if (localX < 0f || localY < 0f) return null
-
-        val stepX = cellSizePx + gapHPx
-        val stepY = cellSizePx + gapVPx
-
-        val col = (localX / stepX).toInt()
-        val row = (localY / stepY).toInt()
-
-        if (col !in 0 until COLS) return null
-        if (row !in 0 until rowsToShowState) return null
-
-        return row * COLS + col
     }
 
     fun cellFromPointer(pointerPx: Offset): Pair<Int, Int>? {
@@ -279,7 +260,7 @@ fun PhoneHomeRoute(
             if (ignore != null && card == ignore) return@any false
             card.col == 0 &&
                     row in card.row until (card.row + CARD_SPAN_Y) &&
-                    col in card.col until (card.col + CARD_SPAN_X)
+                    col in 0 until (0 + CARD_SPAN_X)
         }
     }
 
@@ -383,7 +364,6 @@ fun PhoneHomeRoute(
     }
 
     fun finishDragAt(pointerPx: Offset) {
-        dragPointerPx = pointerPx
         hasDragPointer = true
 
         val payload = dragging
@@ -449,7 +429,6 @@ fun PhoneHomeRoute(
     }
 
     var gridUsedWidth by remember { mutableStateOf(0.dp) }
-    var phoneCellDp by remember { mutableStateOf(96.dp) }
 
     Box(
         modifier = Modifier
@@ -484,7 +463,7 @@ fun PhoneHomeRoute(
                                 } ?: event.changes.firstOrNull()
 
                                 if (moveChange != null) {
-                                    dragPointerPx = moveChange.position
+                                    moveChange.position
                                     hasDragPointer = true
                                     dropPreview = computeDropPreview(moveChange.position)
                                 }
@@ -610,7 +589,7 @@ fun PhoneHomeRoute(
                 hasDragPointer = hasDragPointer,
                 setHasDragPointer = { hasDragPointer = it },
 
-                setDragPointer = { dragPointerPx = it },
+                setDragPointer = { },
                 updateDropPreview = { pointerPx ->
                     dropPreview = computeDropPreview(pointerPx)
                 },
@@ -623,7 +602,7 @@ fun PhoneHomeRoute(
                 setRowsToShowState = { rowsToShowState = it },
 
                 setGridUsedWidth = { gridUsedWidth = it },
-                setPhoneCellDp = { phoneCellDp = it },
+                setPhoneCellDp = { },
 
                 clearPlaceError = { clearPlaceError() },
 
@@ -819,7 +798,6 @@ fun PhoneHomeRoute(
             setDragging = { dragging = it },
 
             setDragPointer = {
-                dragPointerPx = it
                 hasDragPointer = true
             },
             setHasDragPointer = { hasDragPointer = it },
