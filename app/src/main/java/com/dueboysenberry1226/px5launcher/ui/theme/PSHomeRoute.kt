@@ -3,6 +3,7 @@
 
 package com.dueboysenberry1226.px5launcher.ui.theme
 
+
 import android.Manifest
 import android.annotation.SuppressLint
 import com.dueboysenberry1226.px5launcher.data.WidgetLayoutMode
@@ -566,6 +567,51 @@ fun PSHomeRoute(
         startY: Int,
         ignoreAppWidgetId: Int? = null
     ): Pair<Int, Int>? {
+        fun slotBaseXForCell(x: Int): Int {
+            return ((x / 2) * 2).coerceIn(0, gridSpec.cols - 2)
+        }
+
+        val slotBaseX = slotBaseXForCell(startX)
+
+        // 2x1: csak fel/le ugyanabban a 2 oszlopos slotban
+        if (spanX == 2 && spanY == 1) {
+            val candidates = listOf(
+                slotBaseX to 0,
+                slotBaseX to 1
+            )
+
+            val current = startX to startY
+            val startIdx = candidates.indexOf(current).takeIf { it >= 0 } ?: 0
+
+            for (step in 1..candidates.size) {
+                val (x, y) = candidates[(startIdx + step) % candidates.size]
+                if (canPlaceAtWidget(x, y, spanX, spanY, ignoreAppWidgetId)) {
+                    return x to y
+                }
+            }
+            return null
+        }
+
+        // 1x2: csak bal/jobb ugyanabban a 2 oszlopos slotban
+        if (spanX == 1 && spanY == 2) {
+            val candidates = listOf(
+                slotBaseX to 0,
+                (slotBaseX + 1) to 0
+            )
+
+            val current = startX to startY
+            val startIdx = candidates.indexOf(current).takeIf { it >= 0 } ?: 0
+
+            for (step in 1..candidates.size) {
+                val (x, y) = candidates[(startIdx + step) % candidates.size]
+                if (canPlaceAtWidget(x, y, spanX, spanY, ignoreAppWidgetId)) {
+                    return x to y
+                }
+            }
+            return null
+        }
+
+        // minden más marad a régi, teljes rácsos clockwise logikán
         val total = gridSpec.cols * gridSpec.rows
         val startIdx = (startY * gridSpec.cols + startX).coerceIn(0, total - 1)
 
@@ -608,7 +654,7 @@ fun PSHomeRoute(
         pendingAdd = null
     }
 
-    val configureLauncher = rememberLauncherForActivityResult(
+    rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { res ->
         val pend = pendingAdd ?: return@rememberLauncherForActivityResult
@@ -643,15 +689,8 @@ fun PSHomeRoute(
             return
         }
 
-        if (info.configure != null) {
-            val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE).apply {
-                component = info.configure
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-            }
-            configureLauncher.launch(intent)
-        } else {
-            finalizeAddWidget(appWidgetId, info, cellX, cellY)
-        }
+
+        finalizeAddWidget(appWidgetId, info, cellX, cellY)
     }
 
     val bindLauncher = rememberLauncherForActivityResult(

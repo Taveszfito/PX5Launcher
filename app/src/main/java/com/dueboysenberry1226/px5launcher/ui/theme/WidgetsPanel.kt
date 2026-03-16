@@ -1,7 +1,10 @@
+@file:OptIn(ExperimentalComposeUiApi::class)
 @file:Suppress("UnusedBoxWithConstraintsScope")
 
 package com.dueboysenberry1226.px5launcher.ui.theme
 
+import androidx.compose.ui.ExperimentalComposeUiApi
+import android.view.GestureDetector
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -36,6 +39,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -81,6 +86,10 @@ fun WidgetsPanel(
     var menuOpen by remember { mutableStateOf(false) }
     var menuTarget by remember { mutableStateOf<WidgetPlacement?>(null) }
 
+    fun canMoveWidget(p: WidgetPlacement): Boolean {
+        return !(p.spanX >= 2 && p.spanY >= 2)
+    }
+
     fun openMenuFor(p: WidgetPlacement) {
         menuTarget = p
         menuOpen = true
@@ -102,20 +111,9 @@ fun WidgetsPanel(
         placements.filter { it.layoutMode == layoutMode }
     }
 
-    // =========================================================
-    // LANDSCAPE: FIX 4 SLOT, TELJESEN ELKÜLÖNÍTETT LOGIKA
-    // =========================================================
-
-    // Slot1
     val slot1 = remember { LandscapeSlotDef(index = 0, baseX = 0, baseY = 0) }
-
-    // Slot2
     val slot2 = remember { LandscapeSlotDef(index = 1, baseX = 2, baseY = 0) }
-
-    // Slot3
     val slot3 = remember { LandscapeSlotDef(index = 2, baseX = 4, baseY = 0) }
-
-    // Slot4
     val slot4 = remember { LandscapeSlotDef(index = 3, baseX = 6, baseY = 0) }
 
     val landscapeSlots = remember {
@@ -251,10 +249,6 @@ fun WidgetsPanel(
         return p.cellX == bx && p.cellY == by && p.spanX >= 2 && p.spanY >= 2
     }
 
-    // =========================================================
-    // PORTRAIT / GENERIC
-    // =========================================================
-
     val portraitPlacements = visiblePlacements
 
     val portraitTopLeft: Map<Pair<Int, Int>, WidgetPlacement> = remember(portraitPlacements, grid.cols, grid.rows) {
@@ -340,10 +334,6 @@ fun WidgetsPanel(
         }
         return if (found >= 0) found else 0
     }
-
-    // =========================================================
-    // INPUT
-    // =========================================================
 
     LaunchedEffect(
         Unit,
@@ -682,6 +672,7 @@ fun WidgetsPanel(
         val scopeMaxW = maxWidth
         val scopeMaxH = maxHeight
         val density = LocalDensity.current
+        val context = LocalContext.current
 
         val outerGap = 18.dp
         val innerGap = 14.dp
@@ -878,6 +869,29 @@ fun WidgetsPanel(
                             label = "widgetScaleLandscape_$slotIndex"
                         )
 
+                        val longPressDetector = remember(
+                            context,
+                            p.appWidgetId,
+                            p.cellX,
+                            p.cellY,
+                            p.spanX,
+                            p.spanY
+                        ) {
+                            GestureDetector(
+                                context,
+                                object : GestureDetector.SimpleOnGestureListener() {
+                                    override fun onDown(e: android.view.MotionEvent): Boolean = true
+
+                                    override fun onLongPress(e: android.view.MotionEvent) {
+                                        selectedX = p.cellX
+                                        selectedY = p.cellY
+                                        clampSel()
+                                        openMenuFor(p)
+                                    }
+                                }
+                            )
+                        }
+
                         Box(
                             modifier = Modifier
                                 .offset(
@@ -892,16 +906,10 @@ fun WidgetsPanel(
                                     Color.White.copy(alpha = if (isSel) 0.95f else 0.18f),
                                     cellShape
                                 )
-                                .combinedClickable(
-                                    interactionSource = remember { noRipple },
-                                    indication = null,
-                                    onClick = {
-                                        selectedX = p.cellX
-                                        selectedY = p.cellY
-                                        clampSel()
-                                    },
-                                    onLongClick = { openMenuFor(p) }
-                                )
+                                .pointerInteropFilter { motionEvent ->
+                                    longPressDetector.onTouchEvent(motionEvent)
+                                    false
+                                }
                         ) {
                             renderWidget(p, Modifier.fillMaxSize())
                         }
@@ -936,49 +944,10 @@ fun WidgetsPanel(
                 val smallCell = (slotSize - innerGap - innerPad * 2) / 2
                 publishSmallCellPx(smallCell)
 
-                // Slot1
-                RenderOneLandscapeSlot(
-                    slotIndex = 0,
-                    cardX = originX,
-                    cardY = originY,
-                    slotSize = slotSize,
-                    innerPad = innerPad,
-                    innerGapPx = innerGap,
-                    smallCell = smallCell
-                )
-
-                // Slot2
-                RenderOneLandscapeSlot(
-                    slotIndex = 1,
-                    cardX = slot2X,
-                    cardY = originY,
-                    slotSize = slotSize,
-                    innerPad = innerPad,
-                    innerGapPx = innerGap,
-                    smallCell = smallCell
-                )
-
-                // Slot3
-                RenderOneLandscapeSlot(
-                    slotIndex = 2,
-                    cardX = slot3X,
-                    cardY = originY,
-                    slotSize = slotSize,
-                    innerPad = innerPad,
-                    innerGapPx = innerGap,
-                    smallCell = smallCell
-                )
-
-                // Slot4
-                RenderOneLandscapeSlot(
-                    slotIndex = 3,
-                    cardX = slot4X,
-                    cardY = originY,
-                    slotSize = slotSize,
-                    innerPad = innerPad,
-                    innerGapPx = innerGap,
-                    smallCell = smallCell
-                )
+                RenderOneLandscapeSlot(0, originX, originY, slotSize, innerPad, innerGap, smallCell)
+                RenderOneLandscapeSlot(1, slot2X, originY, slotSize, innerPad, innerGap, smallCell)
+                RenderOneLandscapeSlot(2, slot3X, originY, slotSize, innerPad, innerGap, smallCell)
+                RenderOneLandscapeSlot(3, slot4X, originY, slotSize, innerPad, innerGap, smallCell)
             } else {
                 val slotCount = portraitSlots.size
                 val cols = min(slotCount, 4).coerceAtLeast(1)
@@ -1088,6 +1057,29 @@ fun WidgetsPanel(
                                     label = "widgetScalePortrait"
                                 )
 
+                                val longPressDetector = remember(
+                                    context,
+                                    p.appWidgetId,
+                                    p.cellX,
+                                    p.cellY,
+                                    p.spanX,
+                                    p.spanY
+                                ) {
+                                    GestureDetector(
+                                        context,
+                                        object : GestureDetector.SimpleOnGestureListener() {
+                                            override fun onDown(e: android.view.MotionEvent): Boolean = true
+
+                                            override fun onLongPress(e: android.view.MotionEvent) {
+                                                selectedX = p.cellX
+                                                selectedY = p.cellY
+                                                clampSel()
+                                                openMenuFor(p)
+                                            }
+                                        }
+                                    )
+                                }
+
                                 Box(
                                     modifier = Modifier
                                         .offset(
@@ -1102,16 +1094,10 @@ fun WidgetsPanel(
                                             Color.White.copy(alpha = if (isSel) 0.95f else 0.18f),
                                             cellShape
                                         )
-                                        .combinedClickable(
-                                            interactionSource = remember { noRipple },
-                                            indication = null,
-                                            onClick = {
-                                                selectedX = p.cellX
-                                                selectedY = p.cellY
-                                                clampSel()
-                                            },
-                                            onLongClick = { openMenuFor(p) }
-                                        )
+                                        .pointerInteropFilter { motionEvent ->
+                                            longPressDetector.onTouchEvent(motionEvent)
+                                            false
+                                        }
                                 ) {
                                     renderWidget(p, Modifier.fillMaxSize())
                                 }
@@ -1122,24 +1108,29 @@ fun WidgetsPanel(
             }
 
             val target = menuTarget
+            val targetCanMove = target?.let(::canMoveWidget) == true
+
             DropdownMenu(
                 expanded = menuOpen && target != null,
                 onDismissRequest = { closeMenu() },
                 modifier = Modifier.background(Color(0xFF111827))
             ) {
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = stringResource(R.string.widgets_move),
-                            color = Color.White,
-                            fontWeight = FontWeight.Medium
-                        )
-                    },
-                    onClick = {
-                        target?.let(onMove)
-                        closeMenu()
-                    }
-                )
+                if (targetCanMove) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = stringResource(R.string.widgets_move),
+                                color = Color.White,
+                                fontWeight = FontWeight.Medium
+                            )
+                        },
+                        onClick = {
+                            target?.let(onMove)
+                            closeMenu()
+                        }
+                    )
+                }
+
                 DropdownMenuItem(
                     text = {
                         Text(

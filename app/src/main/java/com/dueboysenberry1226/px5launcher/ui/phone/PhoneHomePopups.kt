@@ -119,12 +119,9 @@ internal fun AddStuffPopup(
         cellHeightDp = cellDp,
         cellGapXDp = 12.dp,
         cellGapYDp = 12.dp,
-
-        // ✅ ÚJ: portrait home-on engedjük a nagyobb spanokat is
         maxSpanX = 4,
         maxSpanY = 5,
         filterOutOversize = false,
-
         onPick = { provider, sx, sy -> onPickWidget(provider, sx, sy) },
         onBack = { onCancel() },
         vibrationEnabled = true
@@ -153,9 +150,17 @@ internal fun AddStuffPopup(
         ) {
             Column(Modifier.padding(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    TabPill(stringResource(R.string.phone_add_popup_tab_cards), tab == 0) { onTabChange(0) }
+                    TabPill(
+                        stringResource(R.string.phone_add_popup_tab_cards),
+                        tab == 0
+                    ) { onTabChange(0) }
+
                     Spacer(Modifier.width(10.dp))
-                    TabPill(stringResource(R.string.phone_add_popup_tab_widgets), tab == 1) { onTabChange(1) }
+
+                    TabPill(
+                        stringResource(R.string.phone_add_popup_tab_widgets),
+                        tab == 1
+                    ) { onTabChange(1) }
 
                     Spacer(modifier = Modifier.weight(1f))
 
@@ -184,22 +189,29 @@ internal fun AddStuffPopup(
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
                     )
+
                     Spacer(Modifier.height(10.dp))
 
                     CardChoiceRow(
-                        stringResource(R.string.phone_card_calendar),
-                        selectedCard == PhoneCardType.CALENDAR
-                    ) { onSelectCard(PhoneCardType.CALENDAR) }
+                        title = stringResource(R.string.phone_card_calendar),
+                        selected = selectedCard == PhoneCardType.CALENDAR
+                    ) {
+                        onSelectCard(PhoneCardType.CALENDAR)
+                    }
 
                     CardChoiceRow(
-                        stringResource(R.string.phone_card_music),
-                        selectedCard == PhoneCardType.MUSIC
-                    ) { onSelectCard(PhoneCardType.MUSIC) }
+                        title = stringResource(R.string.phone_card_music),
+                        selected = selectedCard == PhoneCardType.MUSIC
+                    ) {
+                        onSelectCard(PhoneCardType.MUSIC)
+                    }
 
                     CardChoiceRow(
-                        stringResource(R.string.phone_card_notifications),
-                        selectedCard == PhoneCardType.NOTIFICATIONS
-                    ) { onSelectCard(PhoneCardType.NOTIFICATIONS) }
+                        title = stringResource(R.string.phone_card_notifications),
+                        selected = selectedCard == PhoneCardType.NOTIFICATIONS
+                    ) {
+                        onSelectCard(PhoneCardType.NOTIFICATIONS)
+                    }
 
                     if (!errorText.isNullOrBlank()) {
                         Spacer(Modifier.height(10.dp))
@@ -216,7 +228,9 @@ internal fun AddStuffPopup(
                             onClick = onCancel,
                             modifier = Modifier.weight(1f)
                         )
+
                         Spacer(Modifier.width(10.dp))
+
                         ActionPill(
                             text = stringResource(R.string.common_add),
                             onClick = { onConfirmAddCard(MAX_ROWS) },
@@ -248,7 +262,12 @@ private fun TabPill(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val bg = if (selected) Color.White.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.08f)
+    val bg = if (selected) {
+        Color.White.copy(alpha = 0.18f)
+    } else {
+        Color.White.copy(alpha = 0.08f)
+    }
+
     Card(
         colors = CardDefaults.cardColors(containerColor = bg),
         shape = RoundedCornerShape(999.dp),
@@ -261,7 +280,10 @@ private fun TabPill(
                 onLongClick = onClick
             )
     ) {
-        Box(Modifier.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.padding(horizontal = 14.dp),
+            contentAlignment = Alignment.Center
+        ) {
             Text(
                 text = text,
                 color = Color.White.copy(alpha = if (selected) 0.95f else 0.75f),
@@ -278,7 +300,12 @@ private fun CardChoiceRow(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val bg = if (selected) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.08f)
+    val bg = if (selected) {
+        Color.White.copy(alpha = 0.16f)
+    } else {
+        Color.White.copy(alpha = 0.08f)
+    }
+
     Card(
         colors = CardDefaults.cardColors(containerColor = bg),
         shape = RoundedCornerShape(18.dp),
@@ -302,9 +329,15 @@ private fun CardChoiceRow(
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold
             )
+
             Spacer(modifier = Modifier.weight(1f))
+
             Text(
-                text = if (selected) "✓" else "",
+                text = if (selected) {
+                    stringResource(R.string.common_checkmark)
+                } else {
+                    ""
+                },
                 color = Color.White.copy(alpha = 0.80f),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold
@@ -331,7 +364,10 @@ private fun ActionPill(
                 onLongClick = onClick
             )
     ) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
             Text(
                 text = text,
                 color = Color.White.copy(alpha = 0.92f),

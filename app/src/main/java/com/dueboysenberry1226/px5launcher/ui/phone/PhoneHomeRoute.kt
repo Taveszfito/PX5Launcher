@@ -2,6 +2,29 @@
 
 package com.dueboysenberry1226.px5launcher.ui.phone
 
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.layout.onSizeChanged
+import com.dueboysenberry1226.px5launcher.ui.theme.ProvidePhoneWallpaperGlassState
+import com.dueboysenberry1226.px5launcher.ui.theme.PhoneWallpaperGlassState
+import com.dueboysenberry1226.px5launcher.ui.theme.WallpaperGlassSurface
+import com.dueboysenberry1226.px5launcher.ui.theme.PhoneGlass
+import android.graphics.RenderEffect as AndroidRenderEffect
+import android.graphics.Shader
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import android.annotation.SuppressLint
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
+import android.net.Uri
+import android.os.Build
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.layout.ContentScale
+import kotlin.math.max
+import com.dueboysenberry1226.px5launcher.data.SettingsRepository
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.content.Intent
@@ -68,6 +91,7 @@ fun PhoneHomeRoute(
     val recents by repo.recentsFlow.collectAsState(initial = emptyList())
 
     val widgetsRepo = remember(context) { WidgetsRepository(context) }
+    val settingsRepo = remember(context) { SettingsRepository(context) }
 
     val currentWidgetLayoutMode = remember(isPortrait) {
         if (isPortrait) WidgetLayoutMode.PORTRAIT else WidgetLayoutMode.LANDSCAPE
@@ -86,6 +110,14 @@ fun PhoneHomeRoute(
     }
 
     val ambientColor = remember { mutableStateOf(Color(0xFF101826)) }
+
+    val wallpaperUri by settingsRepo.phoneHomeWallpaperUriFlow.collectAsState(initial = null)
+    val wallpaperScale by settingsRepo.phoneHomeWallpaperScaleFlow.collectAsState(initial = 1f)
+    val wallpaperOffsetX by settingsRepo.phoneHomeWallpaperOffsetXFlow.collectAsState(initial = 0f)
+    val wallpaperOffsetY by settingsRepo.phoneHomeWallpaperOffsetYFlow.collectAsState(initial = 0f)
+    val wallpaperApplyHome by settingsRepo.phoneHomeWallpaperApplyHomeFlow.collectAsState(initial = true)
+
+    val hasHomeWallpaper = !wallpaperUri.isNullOrBlank() && wallpaperApplyHome
 
     val baseBg = remember {
         Brush.verticalGradient(
@@ -133,7 +165,12 @@ fun PhoneHomeRoute(
         scope.launch { repo.pushRecent(pkg) }
     }
 
-    LaunchedEffect(recents, allApps) {
+    LaunchedEffect(recents, allApps, hasHomeWallpaper) {
+        if (hasHomeWallpaper) {
+            ambientColor.value = Color(0xFF101826)
+            return@LaunchedEffect
+        }
+
         val pkg = recents.firstOrNull() ?: return@LaunchedEffect
         val app = allApps.firstOrNull { it.packageName == pkg }
         setAmbientFromApp(ambientColor, app)
@@ -207,6 +244,7 @@ fun PhoneHomeRoute(
     var homeQuickMenuOpen by remember { mutableStateOf(false) }
     var addStuffOpen by remember { mutableStateOf(false) }
     var addStuffTab by remember { mutableIntStateOf(0) }
+    var showWallpaperPicker by rememberSaveable { mutableStateOf(false) }
     var selectedCard by remember { mutableStateOf<PhoneCardType?>(null) }
     var addError by remember { mutableStateOf<String?>(null) }
     var suppressBackgroundLongPress by remember { mutableStateOf(false) }
@@ -430,470 +468,680 @@ fun PhoneHomeRoute(
 
     var gridUsedWidth by remember { mutableStateOf(0.dp) }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(baseBg)
-            .combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = { },
-                onLongClick = {
-                    if (suppressBackgroundLongPress) return@combinedClickable
-                    if (!drawerOpen && dragging == null && !addStuffOpen) {
-                        homeQuickMenuOpen = true
-                    }
-                }
-            )
-    ) {
-        Box(Modifier.fillMaxSize().background(ambientOverlay))
-
-        if (dragging != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .zIndex(10_000f)
-                    .pointerInput(dragging) {
-                        awaitPointerEventScope {
-                            while (dragging != null) {
-                                val event = awaitPointerEvent(PointerEventPass.Final)
-
-                                val moveChange = dragPointerId?.let { id ->
-                                    event.changes.firstOrNull { it.id == id }
-                                } ?: event.changes.firstOrNull()
-
-                                if (moveChange != null) {
-                                    moveChange.position
-                                    hasDragPointer = true
-                                    dropPreview = computeDropPreview(moveChange.position)
-                                }
-
-                                val upChange = dragPointerId?.let { id ->
-                                    event.changes.firstOrNull { it.id == id && it.changedToUp() }
-                                } ?: event.changes.firstOrNull { it.changedToUp() }
-
-                                if (upChange != null) {
-                                    finishDragAt(upChange.position)
-                                    break
-                                }
-                            }
-                        }
-                    }
-            )
-        }
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .padding(horizontal = 14.dp, vertical = 10.dp)
-        ) {
-            val hintAreaHeight = 52.dp
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(hintAreaHeight)
-            ) {
-                if (editMode) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.08f)),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        Row(
-                            Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(
-                                    text = stringResource(R.string.phone_home_edit_mode),
-                                    color = Color.White.copy(alpha = 0.85f),
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-
-                                val err = placeError
-                                if (!err.isNullOrBlank()) {
-                                    Spacer(Modifier.height(2.dp))
-                                    Text(
-                                        text = err,
-                                        color = Color(0xFFFF6B6B),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.weight(1f))
-
-                            Text(
-                                text = stringResource(R.string.common_done),
-                                color = Color.White.copy(alpha = 0.92f),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .combinedClickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null,
-                                        onClick = { exitEditMode() },
-                                        onLongClick = { exitEditMode() }
-                                    )
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
-                            )
-                        }
-                    }
-                }
+    val wallpaperBitmap by produceState<ImageBitmap?>(initialValue = null, wallpaperUri, hasHomeWallpaper) {
+        val current = wallpaperUri
+        value = if (!hasHomeWallpaper || current.isNullOrBlank()) {
+            null
+        } else {
+            withContext(Dispatchers.IO) {
+                loadPhoneWallpaperBitmap(context, Uri.parse(current))
             }
-
-            Spacer(Modifier.height(10.dp))
-
-            PhoneHomeGrid(
-                modifier = Modifier.weight(1f),
-
-                slots = slots,
-                cards = cards,
-                widgets = widgets,
-
-                appWidgetHost = appWidgetHost,
-                appWidgetManager = appWidgetManager,
-
-                editMode = editMode,
-                dropPreview = dropPreview,
-                resolveLabelForSlot = { resolveLabelForSlot(it) },
-                resolveIconForSlot = { resolveIconForSlot(it) },
-                onRemoveFromHome = { removeFromHome(it) },
-                onLaunch = { launch(it) },
-
-                onDeleteWidget = { widgetId ->
-                    scope.launch {
-                        deleteWidget(widgetId)
-                    }
-                },
-
-                dragging = dragging,
-                setDragging = { payload ->
-                    if (payload is DragPayload.App || payload is DragPayload.Widget || payload is DragPayload.Card) {
-                        homeQuickMenuOpen = false
-                        addStuffOpen = false
-                        drawerOpen = false
-                        clearPlaceError()
-                        editMode = true
-                        suppressBackgroundLongPress = true
-                    }
-                    dragging = payload
-                    dropPreview = null
-                },
-                hasDragPointer = hasDragPointer,
-                setHasDragPointer = { hasDragPointer = it },
-
-                setDragPointer = { },
-                updateDropPreview = { pointerPx ->
-                    dropPreview = computeDropPreview(pointerPx)
-                },
-                finishDragAt = { finishDragAt(it) },
-
-                setGridTopLeftPx = { gridTopLeftPx = it },
-                setCellSizePx = { cellSizePx = it },
-                setGapHPx = { gapHPx = it },
-                setGapVPx = { gapVPx = it },
-                setRowsToShowState = { rowsToShowState = it },
-
-                setGridUsedWidth = { gridUsedWidth = it },
-                setPhoneCellDp = { },
-
-                clearPlaceError = { clearPlaceError() },
-
-                onDeleteCard = { card ->
-                    cards.remove(card)
-                    persistCards()
-                },
-
-                addStuffOpen = addStuffOpen,
-                addStuffContent = { rowsToShow, cellDp ->
-                    AddStuffPopup(
-                        tab = addStuffTab,
-                        onTabChange = {
-                            addStuffTab = it
-                            addError = null
-                        },
-                        selectedCard = selectedCard,
-                        onSelectCard = {
-                            selectedCard = it
-                            addError = null
-                        },
-                        errorText = addError,
-                        onCancel = {
-                            addStuffOpen = false
-                            selectedCard = null
-                            addError = null
-                        },
-                        onConfirmAddCard = { _ ->
-                            val t = selectedCard
-                            if (t == null) {
-                                addError = context.getString(R.string.phone_home_add_error_select_card)
-                                return@AddStuffPopup
-                            }
-
-                            val ok = tryPlaceCard(
-                                slots = slots,
-                                cards = cards,
-                                type = t,
-                                rowsToShow = rowsToShow
-                            )
-
-                            if (!ok) {
-                                addError = context.getString(R.string.phone_home_add_error_not_enough_card_space)
-                                return@AddStuffPopup
-                            }
-
-                            persistCards()
-                            addStuffOpen = false
-                            selectedCard = null
-                            addError = null
-                        },
-                        pm = pm,
-                        cellDp = cellDp,
-                        onPickWidget = { providerInfo, rawSpanX, rawSpanY ->
-                            scope.launch {
-                                val maxX = if (isPortrait) 4 else 2
-                                val maxY = if (isPortrait) 5 else 2
-                                val spanX = rawSpanX.coerceIn(1, maxX)
-                                val spanY = rawSpanY.coerceIn(1, maxY)
-
-                                val widgetId = appWidgetHost.allocateAppWidgetId()
-                                val provider = providerInfo.provider ?: run {
-                                    placeError = context.getString(R.string.phone_home_widget_provider_error)
-                                    return@launch
-                                }
-
-                                val bound = runCatching {
-                                    appWidgetManager.bindAppWidgetIdIfAllowed(widgetId, provider)
-                                }.getOrDefault(false)
-
-                                if (!bound) {
-                                    runCatching { appWidgetHost.deleteAppWidgetId(widgetId) }
-                                    placeError = context.getString(R.string.phone_home_widget_bind_error)
-                                    return@launch
-                                }
-
-                                val best = nearestFreeWidgetCell(
-                                    slots = slots,
-                                    cards = cards,
-                                    widgets = widgets,
-                                    startCellX = 0,
-                                    startCellY = 0,
-                                    spanX = spanX,
-                                    spanY = spanY,
-                                    rowsToShow = rowsToShowState,
-                                    ignoreWidgetId = null
-                                )
-
-                                if (best == null) {
-                                    runCatching { appWidgetHost.deleteAppWidgetId(widgetId) }
-                                    placeError = context.getString(R.string.phone_home_widget_no_space)
-                                    return@launch
-                                }
-
-                                val (bx, by) = best
-                                upsertWidget(
-                                    WidgetPlacement(
-                                        appWidgetId = widgetId,
-                                        provider = provider.flattenToString(),
-                                        cellX = bx,
-                                        cellY = by,
-                                        spanX = spanX,
-                                        spanY = spanY,
-                                        layoutMode = if (isPortrait) {
-                                            WidgetLayoutMode.PORTRAIT
-                                        } else {
-                                            WidgetLayoutMode.LANDSCAPE
-                                        }
-                                    )
-                                )
-
-                                addStuffOpen = false
-                                selectedCard = null
-                                addError = null
-                                clearPlaceError()
-                                editMode = true
-                            }
-                        }
-                    )
-                }
-            )
         }
+    }
 
+    var routeRootSizePx by remember { mutableStateOf(IntSize.Zero) }
+
+    ProvidePhoneWallpaperGlassState(
+        state = PhoneWallpaperGlassState(
+            imageBitmap = wallpaperBitmap,
+            hasWallpaper = hasHomeWallpaper && wallpaperBitmap != null,
+            rootSizePx = routeRootSizePx,
+            userScale = wallpaperScale,
+            offsetX = wallpaperOffsetX,
+            offsetY = wallpaperOffsetY
+        )
+    ) {
         Box(
             modifier = Modifier
+                .onSizeChanged { routeRootSizePx = it }
                 .fillMaxSize()
-                .navigationBarsPadding()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            contentAlignment = Alignment.BottomCenter
-        ) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.10f)),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier
-                    .then(
-                        if (gridUsedWidth.value > 0f) Modifier.width(gridUsedWidth)
-                        else Modifier.fillMaxWidth()
-                    )
-                    .height(58.dp)
-                    .pointerInput(Unit) {
-                        detectVerticalDragGestures { _, dragAmount ->
-                            if (dragAmount < -20f) drawerOpen = true
-                        }
-                    }
-                    .combinedClickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { drawerOpen = true },
-                        onLongClick = { drawerOpen = true }
-                    )
-            ) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = stringResource(R.string.phone_drawer_title),
-                        color = Color.White.copy(alpha = 0.92f),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-        }
-
-        if (homeQuickMenuOpen) {
-            BubbleMenu(
-                title = stringResource(R.string.phone_home_quick_menu_title),
-                onDismiss = { homeQuickMenuOpen = false },
-                items = listOf(
-                    stringResource(R.string.phone_home_quick_menu_add_cards) to {
-                        homeQuickMenuOpen = false
-                        addError = null
-                        selectedCard = null
-                        addStuffTab = 0
-                        addStuffOpen = true
-                    },
-                    stringResource(R.string.phone_home_edit_mode) to {
-                        homeQuickMenuOpen = false
-                        if (!drawerOpen && !addStuffOpen) {
-                            editMode = true
+                .background(baseBg)
+                .combinedClickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = { },
+                    onLongClick = {
+                        if (suppressBackgroundLongPress) return@combinedClickable
+                        if (!drawerOpen && dragging == null && !addStuffOpen) {
+                            homeQuickMenuOpen = true
                         }
                     }
                 )
-            )
-        }
-
-        PhoneHomeDrawer(
-            open = drawerOpen,
-            dragActive = drawerDragActive,
-            onOpenChange = { drawerOpen = it },
-            onDragActiveChange = { drawerDragActive = it },
-
-            allApps = allApps,
-
-            setDragging = { dragging = it },
-
-            setDragPointer = {
-                hasDragPointer = true
-            },
-            setHasDragPointer = { hasDragPointer = it },
-
-            updateDropPreview = { pointer ->
-                dropPreview = computeDropPreview(pointer)
-            },
-
-            onBeginEditDrag = {
-                dragPointerId = null
-                hasDragPointer = false
-
-                homeQuickMenuOpen = false
-                addStuffOpen = false
-                clearPlaceError()
-
-                editMode = true
-                suppressBackgroundLongPress = true
-            },
-            onEndEditDrag = {
-                suppressBackgroundLongPress = false
-            },
-
-            onLaunch = { launch(it) },
-
-            clearPlaceError = { clearPlaceError() },
-            finishDragAt = { finishDragAt(it) }
-        )
-
-        val rootPreview = dropPreview
-        if (
-            drawerDragActive &&
-            dragging is DragPayload.App &&
-            rootPreview != null &&
-            hasDragPointer
         ) {
-            val density = LocalDensity.current
-
-            val px = (
-                    gridTopLeftPx.x +
-                            rootPreview.cellX * (cellSizePx + gapHPx)
-                    ).roundToInt()
-
-            val py = (
-                    gridTopLeftPx.y +
-                            rootPreview.cellY * (cellSizePx + gapVPx)
-                    ).roundToInt()
-
-            val pw = (
-                    rootPreview.spanX * cellSizePx +
-                            (rootPreview.spanX - 1) * gapHPx
-                    ).roundToInt()
-
-            val ph = (
-                    rootPreview.spanY * cellSizePx +
-                            (rootPreview.spanY - 1) * gapVPx
-                    ).roundToInt()
-
-            val ghostBorder = if (rootPreview.isValid) {
-                Color.LightGray.copy(alpha = 0.95f)
-            } else {
-                Color(0xFFFF5A5A).copy(alpha = 0.98f)
+            if (hasHomeWallpaper && wallpaperBitmap != null) {
+                PhoneHomeWallpaperLayer(
+                    imageBitmap = wallpaperBitmap!!,
+                    userScale = wallpaperScale,
+                    offsetX = wallpaperOffsetX,
+                    offsetY = wallpaperOffsetY,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
 
-            val ghostFill = if (rootPreview.isValid) {
-                Color.LightGray.copy(alpha = 0.18f)
-            } else {
-                Color(0xFFFF5A5A).copy(alpha = 0.18f)
+            if (!hasHomeWallpaper) {
+                Box(Modifier.fillMaxSize().background(ambientOverlay))
+            }
+
+            if (dragging != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(10_000f)
+                        .pointerInput(dragging) {
+                            awaitPointerEventScope {
+                                while (dragging != null) {
+                                    val event = awaitPointerEvent(PointerEventPass.Final)
+
+                                    val moveChange = dragPointerId?.let { id ->
+                                        event.changes.firstOrNull { it.id == id }
+                                    } ?: event.changes.firstOrNull()
+
+                                    if (moveChange != null) {
+                                        moveChange.position
+                                        hasDragPointer = true
+                                        dropPreview = computeDropPreview(moveChange.position)
+                                    }
+
+                                    val upChange = dragPointerId?.let { id ->
+                                        event.changes.firstOrNull { it.id == id && it.changedToUp() }
+                                    } ?: event.changes.firstOrNull { it.changedToUp() }
+
+                                    if (upChange != null) {
+                                        finishDragAt(upChange.position)
+                                        break
+                                    }
+                                }
+                            }
+                        }
+                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
+            ) {
+                val hintAreaHeight = 52.dp
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(hintAreaHeight)
+                ) {
+                    if (editMode) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.08f)),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Row(
+                                Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = stringResource(R.string.phone_home_edit_mode),
+                                        color = Color.White.copy(alpha = 0.85f),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+
+                                    val err = placeError
+                                    if (!err.isNullOrBlank()) {
+                                        Spacer(Modifier.height(2.dp))
+                                        Text(
+                                            text = err,
+                                            color = Color(0xFFFF6B6B),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.weight(1f))
+
+                                Text(
+                                    text = stringResource(R.string.common_done),
+                                    color = Color.White.copy(alpha = 0.92f),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .combinedClickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                            onClick = { exitEditMode() },
+                                            onLongClick = { exitEditMode() }
+                                        )
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                PhoneHomeGrid(
+                    modifier = Modifier.weight(1f),
+
+                    slots = slots,
+                    cards = cards,
+                    widgets = widgets,
+
+                    appWidgetHost = appWidgetHost,
+                    appWidgetManager = appWidgetManager,
+
+                    editMode = editMode,
+                    dropPreview = dropPreview,
+                    resolveLabelForSlot = { resolveLabelForSlot(it) },
+                    resolveIconForSlot = { resolveIconForSlot(it) },
+                    onRemoveFromHome = { removeFromHome(it) },
+                    onLaunch = { launch(it) },
+
+                    onDeleteWidget = { widgetId ->
+                        scope.launch {
+                            deleteWidget(widgetId)
+                        }
+                    },
+
+                    dragging = dragging,
+                    setDragging = { payload ->
+                        if (payload is DragPayload.App || payload is DragPayload.Widget || payload is DragPayload.Card) {
+                            homeQuickMenuOpen = false
+                            addStuffOpen = false
+                            drawerOpen = false
+                            clearPlaceError()
+                            editMode = true
+                            suppressBackgroundLongPress = true
+                        }
+                        dragging = payload
+                        dropPreview = null
+                    },
+                    hasDragPointer = hasDragPointer,
+                    setHasDragPointer = { hasDragPointer = it },
+
+                    setDragPointer = { },
+                    updateDropPreview = { pointerPx ->
+                        dropPreview = computeDropPreview(pointerPx)
+                    },
+                    finishDragAt = { finishDragAt(it) },
+
+                    setGridTopLeftPx = { gridTopLeftPx = it },
+                    setCellSizePx = { cellSizePx = it },
+                    setGapHPx = { gapHPx = it },
+                    setGapVPx = { gapVPx = it },
+                    setRowsToShowState = { rowsToShowState = it },
+
+                    setGridUsedWidth = { gridUsedWidth = it },
+                    setPhoneCellDp = { },
+
+                    clearPlaceError = { clearPlaceError() },
+
+                    onDeleteCard = { card ->
+                        cards.remove(card)
+                        persistCards()
+                    },
+
+                    addStuffOpen = addStuffOpen,
+                    addStuffContent = { rowsToShow, cellDp ->
+                        AddStuffPopup(
+                            tab = addStuffTab,
+                            onTabChange = {
+                                addStuffTab = it
+                                addError = null
+                            },
+                            selectedCard = selectedCard,
+                            onSelectCard = {
+                                selectedCard = it
+                                addError = null
+                            },
+                            errorText = addError,
+                            onCancel = {
+                                addStuffOpen = false
+                                selectedCard = null
+                                addError = null
+                            },
+                            onConfirmAddCard = { _ ->
+                                val t = selectedCard
+                                if (t == null) {
+                                    addError = context.getString(R.string.phone_home_add_error_select_card)
+                                    return@AddStuffPopup
+                                }
+
+                                val ok = tryPlaceCard(
+                                    slots = slots,
+                                    cards = cards,
+                                    type = t,
+                                    rowsToShow = rowsToShow
+                                )
+
+                                if (!ok) {
+                                    addError = context.getString(R.string.phone_home_add_error_not_enough_card_space)
+                                    return@AddStuffPopup
+                                }
+
+                                persistCards()
+                                addStuffOpen = false
+                                selectedCard = null
+                                addError = null
+                            },
+                            pm = pm,
+                            cellDp = cellDp,
+                            onPickWidget = { providerInfo, rawSpanX, rawSpanY ->
+                                scope.launch {
+                                    val maxX = if (isPortrait) 4 else 2
+                                    val maxY = if (isPortrait) 5 else 2
+                                    val spanX = rawSpanX.coerceIn(1, maxX)
+                                    val spanY = rawSpanY.coerceIn(1, maxY)
+
+                                    val widgetId = appWidgetHost.allocateAppWidgetId()
+                                    val provider = providerInfo.provider ?: run {
+                                        placeError = context.getString(R.string.phone_home_widget_provider_error)
+                                        return@launch
+                                    }
+
+                                    val bound = runCatching {
+                                        appWidgetManager.bindAppWidgetIdIfAllowed(widgetId, provider)
+                                    }.getOrDefault(false)
+
+                                    if (!bound) {
+                                        runCatching { appWidgetHost.deleteAppWidgetId(widgetId) }
+                                        placeError = context.getString(R.string.phone_home_widget_bind_error)
+                                        return@launch
+                                    }
+
+                                    val best = nearestFreeWidgetCell(
+                                        slots = slots,
+                                        cards = cards,
+                                        widgets = widgets,
+                                        startCellX = 0,
+                                        startCellY = 0,
+                                        spanX = spanX,
+                                        spanY = spanY,
+                                        rowsToShow = rowsToShowState,
+                                        ignoreWidgetId = null
+                                    )
+
+                                    if (best == null) {
+                                        runCatching { appWidgetHost.deleteAppWidgetId(widgetId) }
+                                        placeError = context.getString(R.string.phone_home_widget_no_space)
+                                        return@launch
+                                    }
+
+                                    val (bx, by) = best
+                                    upsertWidget(
+                                        WidgetPlacement(
+                                            appWidgetId = widgetId,
+                                            provider = provider.flattenToString(),
+                                            cellX = bx,
+                                            cellY = by,
+                                            spanX = spanX,
+                                            spanY = spanY,
+                                            layoutMode = if (isPortrait) {
+                                                WidgetLayoutMode.PORTRAIT
+                                            } else {
+                                                WidgetLayoutMode.LANDSCAPE
+                                            }
+                                        )
+                                    )
+
+                                    addStuffOpen = false
+                                    selectedCard = null
+                                    addError = null
+                                    clearPlaceError()
+                                    editMode = true
+                                }
+                            }
+                        )
+                    }
+                )
             }
 
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .zIndex(20_000f)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                contentAlignment = Alignment.BottomCenter
             ) {
+                PortraitBlurDrawerButtonCard(
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier
+                        .then(
+                            if (gridUsedWidth.value > 0f) Modifier.width(gridUsedWidth)
+                            else Modifier.fillMaxWidth()
+                        )
+                        .height(58.dp)
+                        .pointerInput(Unit) {
+                            detectVerticalDragGestures { _, dragAmount ->
+                                if (dragAmount < -20f) drawerOpen = true
+                            }
+                        }
+                        .combinedClickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { drawerOpen = true },
+                            onLongClick = { drawerOpen = true }
+                        )
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.phone_drawer_title),
+                            color = Color.White.copy(alpha = 0.92f),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            if (homeQuickMenuOpen) {
+                BubbleMenu(
+                    title = stringResource(R.string.phone_home_quick_menu_title),
+                    onDismiss = { homeQuickMenuOpen = false },
+                    items = listOf(
+                        stringResource(R.string.phone_home_quick_menu_add_cards) to {
+                            homeQuickMenuOpen = false
+                            addError = null
+                            selectedCard = null
+                            addStuffTab = 0
+                            addStuffOpen = true
+                        },
+                        stringResource(R.string.phone_home_edit_mode) to {
+                            homeQuickMenuOpen = false
+                            if (!drawerOpen && !addStuffOpen) {
+                                editMode = true
+                            }
+                        },
+                        stringResource(R.string.phone_home_menu_change_wallpaper) to {
+                            homeQuickMenuOpen = false
+                            addStuffOpen = false
+                            drawerOpen = false
+                            clearPlaceError()
+                            showWallpaperPicker = true
+                        }
+                    )
+                )
+            }
+
+            if (showWallpaperPicker) {
+                WallpaperPickerScreen(
+                    initialImageUri = wallpaperUri,
+                    initialUserScale = wallpaperScale,
+                    initialOffsetX = wallpaperOffsetX,
+                    initialOffsetY = wallpaperOffsetY,
+                    initialApplyHome = wallpaperApplyHome,
+                    initialApplyLock = false,
+                    onCancel = {
+                        showWallpaperPicker = false
+                    },
+                    onClear = {
+                        scope.launch {
+                            settingsRepo.clearPhoneHomeWallpaper()
+                        }
+                    },
+                    onApply = { result ->
+                        scope.launch {
+                            settingsRepo.setPhoneHomeWallpaper(
+                                uri = result.imageUri,
+                                scale = result.userScale,
+                                offsetX = result.offsetX,
+                                offsetY = result.offsetY,
+                                applyHome = result.applyHome,
+                                applyLock = result.applyLock
+                            )
+                            showWallpaperPicker = false
+                        }
+                    }
+                )
+            }
+
+            PhoneHomeDrawer(
+                open = drawerOpen,
+                dragActive = drawerDragActive,
+                onOpenChange = { drawerOpen = it },
+                onDragActiveChange = { drawerDragActive = it },
+
+                allApps = allApps,
+
+                setDragging = { dragging = it },
+
+                setDragPointer = {
+                    hasDragPointer = true
+                },
+                setHasDragPointer = { hasDragPointer = it },
+
+                updateDropPreview = { pointer ->
+                    dropPreview = computeDropPreview(pointer)
+                },
+
+                onBeginEditDrag = {
+                    dragPointerId = null
+                    hasDragPointer = false
+
+                    homeQuickMenuOpen = false
+                    addStuffOpen = false
+                    clearPlaceError()
+
+                    editMode = true
+                    suppressBackgroundLongPress = true
+                },
+                onEndEditDrag = {
+                    suppressBackgroundLongPress = false
+                },
+
+                onLaunch = { launch(it) },
+
+                clearPlaceError = { clearPlaceError() },
+                finishDragAt = { finishDragAt(it) }
+            )
+
+            val rootPreview = dropPreview
+            if (
+                drawerDragActive &&
+                dragging is DragPayload.App &&
+                rootPreview != null &&
+                hasDragPointer
+            ) {
+                val density = LocalDensity.current
+
+                val px = (
+                        gridTopLeftPx.x +
+                                rootPreview.cellX * (cellSizePx + gapHPx)
+                        ).roundToInt()
+
+                val py = (
+                        gridTopLeftPx.y +
+                                rootPreview.cellY * (cellSizePx + gapVPx)
+                        ).roundToInt()
+
+                val pw = (
+                        rootPreview.spanX * cellSizePx +
+                                (rootPreview.spanX - 1) * gapHPx
+                        ).roundToInt()
+
+                val ph = (
+                        rootPreview.spanY * cellSizePx +
+                                (rootPreview.spanY - 1) * gapVPx
+                        ).roundToInt()
+
+                val ghostBorder = if (rootPreview.isValid) {
+                    Color.LightGray.copy(alpha = 0.95f)
+                } else {
+                    Color(0xFFFF5A5A).copy(alpha = 0.98f)
+                }
+
+                val ghostFill = if (rootPreview.isValid) {
+                    Color.LightGray.copy(alpha = 0.18f)
+                } else {
+                    Color(0xFFFF5A5A).copy(alpha = 0.18f)
+                }
+
                 Box(
                     modifier = Modifier
-                        .offset { IntOffset(px, py) }
-                        .size(
-                            width = with(density) { pw.toDp() },
-                            height = with(density) { ph.toDp() }
-                        )
-                        .border(
-                            width = 2.dp,
-                            color = ghostBorder,
-                            shape = RoundedCornerShape(22.dp)
-                        )
-                        .padding(2.dp)
+                        .fillMaxSize()
+                        .zIndex(20_000f)
                 ) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = ghostFill),
-                        shape = RoundedCornerShape(20.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) { }
+                    Box(
+                        modifier = Modifier
+                            .offset { IntOffset(px, py) }
+                            .size(
+                                width = with(density) { pw.toDp() },
+                                height = with(density) { ph.toDp() }
+                            )
+                            .border(
+                                width = 2.dp,
+                                color = ghostBorder,
+                                shape = RoundedCornerShape(22.dp)
+                            )
+                            .padding(2.dp)
+                    ) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = ghostFill),
+                            shape = RoundedCornerShape(20.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) { }
+                    }
                 }
             }
         }
     }
+}
+@SuppressLint("UnusedBoxWithConstraintsScope")
+@Composable
+private fun PhoneHomeWallpaperLayer(
+    imageBitmap: ImageBitmap,
+    userScale: Float,
+    offsetX: Float,
+    offsetY: Float,
+    modifier: Modifier = Modifier
+) {
+    BoxWithConstraints(modifier = modifier) {
+        val frameWidth = constraints.maxWidth.toFloat().coerceAtLeast(1f)
+        val frameHeight = constraints.maxHeight.toFloat().coerceAtLeast(1f)
+
+        val bitmapWidth = imageBitmap.width.toFloat().coerceAtLeast(1f)
+        val bitmapHeight = imageBitmap.height.toFloat().coerceAtLeast(1f)
+
+        val baseFillScale = max(
+            frameWidth / bitmapWidth,
+            frameHeight / bitmapHeight
+        )
+
+        val currentUserScale = userScale.coerceIn(1f, 6f)
+        val effectiveScale = baseFillScale * currentUserScale
+
+        val drawnWidth = bitmapWidth * effectiveScale
+        val drawnHeight = bitmapHeight * effectiveScale
+
+        val maxOffsetX = ((drawnWidth - frameWidth) / 2f).coerceAtLeast(0f)
+        val maxOffsetY = ((drawnHeight - frameHeight) / 2f).coerceAtLeast(0f)
+
+        val normalizedOffsetX = offsetX.coerceIn(-1f, 1f)
+        val normalizedOffsetY = offsetY.coerceIn(-1f, 1f)
+
+        val appliedOffsetX = normalizedOffsetX * maxOffsetX
+        val appliedOffsetY = normalizedOffsetY * maxOffsetY
+
+        Image(
+            bitmap = imageBitmap,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = currentUserScale
+                    scaleY = currentUserScale
+                    translationX = appliedOffsetX
+                    translationY = appliedOffsetY
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        renderEffect = AndroidRenderEffect.createBlurEffect(
+                            0f,
+                            0f,
+                            Shader.TileMode.DECAL
+                        ).asComposeRenderEffect()
+                    }
+                }
+        )
+    }
+}
+
+private fun loadPhoneWallpaperBitmap(
+    context: android.content.Context,
+    uri: Uri
+): ImageBitmap? {
+    return runCatching {
+        val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val source = ImageDecoder.createSource(context.contentResolver, uri)
+            ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                val srcW = info.size.width.coerceAtLeast(1)
+                val srcH = info.size.height.coerceAtLeast(1)
+                val longest = max(srcW, srcH)
+                if (longest > 4096) {
+                    val factor = longest / 4096f
+                    decoder.setTargetSize(
+                        (srcW / factor).toInt().coerceAtLeast(1),
+                        (srcH / factor).toInt().coerceAtLeast(1)
+                    )
+                }
+                decoder.isMutableRequired = false
+            }
+        } else {
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+                BitmapFactory.decodeStream(stream)?.let { scalePhoneWallpaperBitmapDownIfNeeded(it) }
+            }
+        } ?: return null
+
+        bitmap.asImageBitmap()
+    }.getOrNull()
+}
+
+private fun scalePhoneWallpaperBitmapDownIfNeeded(bitmap: Bitmap): Bitmap {
+    val longest = max(bitmap.width, bitmap.height)
+    if (longest <= 4096) return bitmap
+
+    val factor = longest / 4096f
+    val targetW = (bitmap.width / factor).toInt().coerceAtLeast(1)
+    val targetH = (bitmap.height / factor).toInt().coerceAtLeast(1)
+
+    return Bitmap.createScaledBitmap(bitmap, targetW, targetH, true)
+}
+
+@Composable
+private fun PortraitBlurDrawerButtonCard(
+    modifier: Modifier = Modifier,
+    shape: RoundedCornerShape = RoundedCornerShape(20.dp),
+    content: @Composable BoxScope.() -> Unit
+) {
+    val isPortrait = LocalConfiguration.current.orientation == Configuration.ORIENTATION_PORTRAIT
+
+    WallpaperGlassSurface(
+        modifier = modifier,
+        shape = shape,
+        baseContainerColor = Color.White.copy(alpha = 0.10f),
+        enableBlur = isPortrait,
+        blurRadiusPx = if (isPortrait) {
+            PhoneGlass.PORTRAIT_BLUR_RADIUS
+        } else {
+            PhoneGlass.LANDSCAPE_BLUR_RADIUS
+        },
+        dimAlpha = if (isPortrait) {
+            PhoneGlass.PORTRAIT_DIM_ALPHA
+        } else {
+            0f
+        },
+        overlayAlpha = if (isPortrait) {
+            PhoneGlass.PORTRAIT_OVERLAY_ALPHA
+        } else {
+            PhoneGlass.LANDSCAPE_OVERLAY_ALPHA
+        },
+        content = content
+    )
 }

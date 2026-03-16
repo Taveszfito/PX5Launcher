@@ -1,6 +1,11 @@
 package com.dueboysenberry1226.px5launcher.ui.theme
 
+import com.dueboysenberry1226.px5launcher.ui.theme.WallpaperGlassSurface
+import com.dueboysenberry1226.px5launcher.ui.theme.PhoneGlass
 import android.content.res.Configuration
+import android.graphics.RenderEffect as AndroidRenderEffect
+import android.graphics.Shader
+import android.os.Build
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ScrollState
@@ -22,6 +27,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -66,7 +73,6 @@ fun CalendarPanelCard(
         if (vibrationEnabled) Haptics.click(context)
     }
 
-    // ✅ “lapozó mód” (controller ENTER + touch tap) — PORTRAITBAN OFF
     var pagingMode by remember { mutableStateOf(false) }
 
     val confirmCodes = remember {
@@ -97,11 +103,9 @@ fun CalendarPanelCard(
 
     val scrollState = rememberScrollState()
 
-    // child számolja: 1 sor lépés px-ben + autofollow target
     var rowStepPx by remember { mutableFloatStateOf(220f) }
     var autoFollowTargetPx by remember { mutableIntStateOf(0) }
 
-    // ✅ auto-follow: ha nem pagingMode, animáltan a mai sorhoz
     LaunchedEffect(today, pagingMode, autoFollowTargetPx) {
         if (pagingMode) return@LaunchedEffect
         val target = max(0, autoFollowTargetPx)
@@ -109,14 +113,12 @@ fun CalendarPanelCard(
         scrollState.animateScrollTo(clamped)
     }
 
-    // ✅ key handler: pagingMode alatt fel/le animált scroll + ENTER toggle
     LaunchedEffect(Unit) {
         registerKeyHandler { e ->
             val nk = e.nativeKeyEvent
             if (nk.action != AndroidKeyEvent.ACTION_DOWN) return@registerKeyHandler false
             val code = nk.keyCode
 
-            // ✅ Portrait: touch-only -> ne legyen "belépés"
             if (isPortrait) return@registerKeyHandler false
 
             if (code in confirmCodes) {
@@ -156,15 +158,13 @@ fun CalendarPanelCard(
         label = "calBorderAlpha"
     )
 
-    // =========================
-    // ✅ PORTRAIT UI (touch-only)
-    // - nincs controller hint
-    // - nincs "belépés lapozásba"
-    // - nincs nagy nap
-    // - nincs év
-    // - hónap felül vékony sávban
-    // - grid alul ül
-    // =========================
+
+    val portraitBlurRadius = PhoneGlass.PORTRAIT_BLUR_RADIUS
+    val portraitDimAlpha = PhoneGlass.PORTRAIT_DIM_ALPHA
+
+    val landscapeBlurRadius = PhoneGlass.LANDSCAPE_BLUR_RADIUS
+    val landscapeDimAlpha = PhoneGlass.LANDSCAPE_DIM_ALPHA
+
     if (isPortrait) {
         val monthNameOnly = remember(month) {
             month.month.getDisplayName(TextStyle.FULL, hu)
@@ -173,125 +173,165 @@ fun CalendarPanelCard(
 
         pagingMode = false
 
-        Column(
+        GlassCardContainer(
             modifier = modifier
                 .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-                .fillMaxSize()
-                .clip(shape)
-                .background(Color.White.copy(alpha = 0.06f))
-                .border(2.dp, Color.White.copy(alpha = 0.18f), shape)
-                .padding(horizontal = 14.dp, vertical = 6.dp) // ✅ kevesebb felső tér
+                .fillMaxSize(),
+            shape = shape,
+            borderAlpha = 0.18f,
+            enableFullCardBlur = true,
+            blurRadiusPx = portraitBlurRadius,
+            fullCardDimAlpha = portraitDimAlpha
         ) {
-            // ✅ hónap fentebb + kisebb sáv
-            Box(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(18.dp),
-                contentAlignment = Alignment.TopCenter
+                    .fillMaxSize()
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
             ) {
-                Text(
-                    text = monthNameOnly,
-                    color = Color.White.copy(alpha = 0.82f),
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1
-                )
-            }
-
-            // ✅ grid alul ül
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.BottomCenter
-            ) {
-                CalendarGridMonthScrollable(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 150.dp),
-                    dates = gridDates,
-                    today = today,
-                    currentMonth = YearMonth.from(today),
-                    pagingMode = false,
-                    setPagingMode = { /* no-op */ },
-                    scrollState = scrollState,
-                    onRowStepPx = { rowStepPx = it },
-                    onAutoFollowTargetPx = { autoFollowTargetPx = it },
-                    compact = true,
-                    touchScrollOnly = true
-                )
+                        .height(18.dp),
+                    contentAlignment = Alignment.TopCenter
+                ) {
+                    Text(
+                        text = monthNameOnly,
+                        color = Color.White.copy(alpha = 0.82f),
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    CalendarGridMonthScrollable(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 150.dp),
+                        dates = gridDates,
+                        today = today,
+                        currentMonth = YearMonth.from(today),
+                        pagingMode = false,
+                        setPagingMode = { },
+                        scrollState = scrollState,
+                        onRowStepPx = { rowStepPx = it },
+                        onAutoFollowTargetPx = { autoFollowTargetPx = it },
+                        compact = true,
+                        touchScrollOnly = true
+                    )
+                }
             }
         }
 
         return
     }
 
-    // =========================
-    // ✅ LANDSCAPE UI (eredeti)
-    // =========================
-    Row(
+    GlassCardContainer(
         modifier = modifier
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .fillMaxSize()
-            .clip(shape)
-            .background(Color.White.copy(alpha = 0.06f))
-            .border(2.dp, Color.White.copy(alpha = borderAlpha), shape)
-            .padding(18.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .fillMaxSize(),
+        shape = shape,
+        borderAlpha = borderAlpha,
+        enableFullCardBlur = false, // landscape kinézet maradjon eredeti
+        blurRadiusPx = landscapeBlurRadius,
+        fullCardDimAlpha = 0f // landscape-ben most nincs sötétítés
     ) {
-        Column(
+        Row(
             modifier = Modifier
-                .fillMaxHeight()
-                .weight(0.26f),
-            verticalArrangement = Arrangement.Center
+                .fillMaxSize()
+                .padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = dayBig,
-                color = Color.White.copy(alpha = 0.95f),
-                fontWeight = FontWeight.Bold,
-                fontSize = 72.sp,
-                lineHeight = 72.sp
-            )
-            Spacer(Modifier.height(12.dp))
-            Text(
-                text = monthTitle,
-                color = Color.White.copy(alpha = 0.78f),
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 16.sp
-            )
-            Spacer(Modifier.height(10.dp))
-            Text(
-                text = if (pagingMode)
-                    stringResource(R.string.calendar_hint_paging_mode)
-                else
-                    stringResource(R.string.calendar_hint_enter_paging),
-                color = Color.White.copy(alpha = 0.45f),
-                fontWeight = FontWeight.Medium,
-                fontSize = 12.sp
+            Column(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .weight(0.26f),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = dayBig,
+                    color = Color.White.copy(alpha = 0.95f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 72.sp,
+                    lineHeight = 72.sp
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = monthTitle,
+                    color = Color.White.copy(alpha = 0.78f),
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = if (pagingMode)
+                        stringResource(R.string.calendar_hint_paging_mode)
+                    else
+                        stringResource(R.string.calendar_hint_enter_paging),
+                    color = Color.White.copy(alpha = 0.45f),
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 12.sp
+                )
+            }
+
+            Spacer(Modifier.width(18.dp))
+
+            CalendarGridMonthScrollable(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .weight(0.74f),
+                dates = gridDates,
+                today = today,
+                currentMonth = YearMonth.from(today),
+                pagingMode = pagingMode,
+                setPagingMode = { newValue ->
+                    if (newValue != pagingMode) hClick()
+                    pagingMode = newValue
+                },
+                scrollState = scrollState,
+                onRowStepPx = { rowStepPx = it },
+                onAutoFollowTargetPx = { autoFollowTargetPx = it },
+                compact = false
             )
         }
-
-        Spacer(Modifier.width(18.dp))
-
-        CalendarGridMonthScrollable(
-            modifier = Modifier
-                .fillMaxHeight()
-                .weight(0.74f),
-            dates = gridDates,
-            today = today,
-            currentMonth = YearMonth.from(today),
-            pagingMode = pagingMode,
-            setPagingMode = { newValue ->
-                if (newValue != pagingMode) hClick()
-                pagingMode = newValue
-            },
-            scrollState = scrollState,
-            onRowStepPx = { rowStepPx = it },
-            onAutoFollowTargetPx = { autoFollowTargetPx = it },
-            compact = false
-        )
     }
+}
+
+@Composable
+private fun GlassCardContainer(
+    modifier: Modifier,
+    shape: RoundedCornerShape,
+    borderAlpha: Float,
+    enableFullCardBlur: Boolean,
+    blurRadiusPx: Float,
+    fullCardDimAlpha: Float,
+    content: @Composable BoxScope.() -> Unit
+) {
+    val isPortrait =
+        LocalConfiguration.current.orientation == Configuration.ORIENTATION_PORTRAIT
+
+    WallpaperGlassSurface(
+        modifier = modifier,
+        shape = shape,
+        baseContainerColor = Color.White.copy(alpha = 0.06f),
+        borderColor = Color.White.copy(alpha = borderAlpha),
+        borderWidth = 2.dp,
+        enableBlur = enableFullCardBlur && isPortrait,
+        blurRadiusPx = blurRadiusPx,
+        dimAlpha = fullCardDimAlpha,
+        overlayAlpha = if (enableFullCardBlur && isPortrait) {
+            PhoneGlass.PORTRAIT_OVERLAY_ALPHA
+        } else {
+            PhoneGlass.LANDSCAPE_OVERLAY_ALPHA
+        },
+        content = content
+    )
 }
 
 @Composable
@@ -312,18 +352,14 @@ private fun CalendarGridMonthScrollable(
         val availW = this@BoxWithConstraints.maxWidth.coerceAtLeast(1.dp)
         val availH = this@BoxWithConstraints.maxHeight.coerceAtLeast(1.dp)
 
-        // ✅ KÖTELEZŐ: 7 oszlop
         val cols = 7
         val rows = 6
 
-        // ✅ kevesebb hézag
         val headerH = if (compact) 16.dp else 22.dp
         val headerGap = if (compact) 6.dp else 12.dp
         val gapX = if (compact) 6.dp else 14.dp
         val gapY = if (compact) 6.dp else 14.dp
 
-        // ✅ FONTOS FIX: ne legyen olyan "minimum cella", ami túlcsordítja a 7 oszlopot.
-        // Csak MAX-ot clampelünk, hogy mindig beférjen 7 egy sorba és ne nyomódjon a 7. nap.
         val cellFromW = (availW - gapX * (cols - 1)) / cols
         val cellMax = if (compact) 78.dp else 92.dp
         val cell = cellFromW.coerceAtMost(cellMax)
@@ -341,7 +377,6 @@ private fun CalendarGridMonthScrollable(
             else -> 14.sp
         }
 
-        // ✅ ez innentől garantáltan <= availW
         val gridW = cell * cols + gapX * (cols - 1)
         val fullGridH = cell * rows + gapY * (rows - 1)
 
@@ -354,7 +389,6 @@ private fun CalendarGridMonthScrollable(
 
         LaunchedEffect(rowStepPx) { onRowStepPx(rowStepPx) }
 
-        // ✅ Auto-follow target: a mai sor kb középre (landscape)
         LaunchedEffect(today, cell, scrollViewportH, rowStepPx) {
             val idx = dates.indexOfFirst { it == today }
             if (idx < 0) {
@@ -378,7 +412,6 @@ private fun CalendarGridMonthScrollable(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.Center
         ) {
-            // ✅ Weekday header: ugyanakkora cellák, ugyanazzal a gapX-szel -> pixelpontos igazítás
             Row(
                 modifier = Modifier
                     .width(gridW)
@@ -443,7 +476,6 @@ private fun CalendarGridMonthScrollable(
 
                                 val dist = abs(totalDx) + abs(totalDy)
 
-                                // ✅ Portrait: mindig drag-to-scroll
                                 if (touchScrollOnly) {
                                     if (!isDragging && dist > tapSlopPx) isDragging = true
                                     if (isDragging) {
@@ -454,7 +486,6 @@ private fun CalendarGridMonthScrollable(
                                     continue
                                 }
 
-                                // ✅ Landscape: pagingMode ON alatt drag scroll + consume
                                 if (!pagingMode) {
                                     if (dist > tapSlopPx) return@awaitEachGesture
                                 } else {
@@ -467,7 +498,6 @@ private fun CalendarGridMonthScrollable(
                                 }
                             }
 
-                            // Tap: csak landscape toggle
                             val wasTap = (abs(totalDx) + abs(totalDy)) <= tapSlopPx
                             if (wasTap && !touchScrollOnly) {
                                 setPagingMode(!pagingMode)
@@ -537,6 +567,6 @@ private fun buildMonthGrid6Weeks(month: YearMonth): List<LocalDate> {
 }
 
 private fun mondayOfWeek(d: LocalDate): LocalDate {
-    val dow = d.dayOfWeek.value // MON=1.SUN=7
+    val dow = d.dayOfWeek.value
     return d.minusDays((dow - DayOfWeek.MONDAY.value).toLong())
 }

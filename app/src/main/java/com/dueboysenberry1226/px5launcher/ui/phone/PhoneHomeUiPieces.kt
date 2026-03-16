@@ -2,13 +2,20 @@
 
 package com.dueboysenberry1226.px5launcher.ui.phone
 
+import com.dueboysenberry1226.px5launcher.ui.theme.WallpaperGlassSurface
+import com.dueboysenberry1226.px5launcher.ui.theme.PhoneGlass
+import android.content.res.Configuration
+import android.graphics.RenderEffect as AndroidRenderEffect
+import android.graphics.Shader
+import android.graphics.drawable.Drawable
+import android.os.Build
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
-import androidx.compose.ui.input.pointer.pointerInput
-import android.graphics.drawable.Drawable
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -21,11 +28,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -35,6 +47,45 @@ import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.data.PhoneCardType
 import com.dueboysenberry1226.px5launcher.ui.theme.CalendarPanelCard
 import com.dueboysenberry1226.px5launcher.ui.theme.MusicControlPanelCard
+
+@Composable
+private fun PortraitGlassCard(
+    modifier: Modifier = Modifier,
+    shape: RoundedCornerShape,
+    baseContainerColor: Color,
+    borderColor: Color = Color.Transparent,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    content: @Composable BoxScope.() -> Unit
+) {
+    val isPortrait =
+        LocalConfiguration.current.orientation == Configuration.ORIENTATION_PORTRAIT
+
+    WallpaperGlassSurface(
+        modifier = modifier,
+        shape = shape,
+        baseContainerColor = baseContainerColor,
+        borderColor = borderColor,
+        borderWidth = if (borderColor.alpha > 0f) 1.dp else 0.dp,
+        contentPadding = contentPadding,
+        enableBlur = isPortrait,
+        blurRadiusPx = if (isPortrait) {
+            PhoneGlass.PORTRAIT_BLUR_RADIUS
+        } else {
+            PhoneGlass.LANDSCAPE_BLUR_RADIUS
+        },
+        dimAlpha = if (isPortrait) {
+            PhoneGlass.PORTRAIT_DIM_ALPHA
+        } else {
+            0f
+        },
+        overlayAlpha = if (isPortrait) {
+            PhoneGlass.PORTRAIT_OVERLAY_ALPHA
+        } else {
+            PhoneGlass.LANDSCAPE_OVERLAY_ALPHA
+        },
+        content = content
+    )
+}
 
 @Composable
 internal fun PhoneHomeCard(
@@ -59,15 +110,15 @@ internal fun PhoneHomeCard(
             )
         }
         PhoneCardType.NOTIFICATIONS -> {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.10f)),
+            PortraitGlassCard(
+                modifier = modifier,
                 shape = RoundedCornerShape(22.dp),
-                modifier = modifier
+                baseContainerColor = Color.White.copy(alpha = 0.10f),
+                contentPadding = PaddingValues(14.dp)
             ) {
                 Column(
                     Modifier
                         .fillMaxSize()
-                        .padding(14.dp)
                 ) {
                     Text(
                         text = stringResource(R.string.notifications_title),
@@ -180,13 +231,16 @@ internal fun HomeSlot(
             )
     }
 
-    Card(
-        colors = CardDefaults.cardColors(containerColor = bg),
-        shape = RoundedCornerShape(22.dp),
-        modifier = base
-    ) {
-        if (isInvisibleEmpty) return@Card
+    if (isInvisibleEmpty) {
+        Box(modifier = base)
+        return
+    }
 
+    PortraitGlassCard(
+        modifier = base,
+        shape = RoundedCornerShape(22.dp),
+        baseContainerColor = bg
+    ) {
         Box(Modifier.fillMaxSize()) {
             if (showDelete && id != null) {
                 DeleteBadge(
@@ -320,87 +374,87 @@ internal fun DrawerRow(
     var rowTopLeftPx by remember { mutableStateOf(Offset.Zero) }
     var lastRootPointer by remember { mutableStateOf(Offset.Zero) }
 
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = if (drawerDragActive) {
-                Color.Transparent
-            } else {
-                Color.White.copy(alpha = 0.08f)
-            }
-        ),
-        shape = RoundedCornerShape(18.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(58.dp)
-            .onGloballyPositioned { coords ->
-                val pos = coords.positionInRoot()
-                rowTopLeftPx = Offset(pos.x, pos.y)
-            }
-            .pointerInput(app.packageName) {
-                val moveSlop = 18.dp.toPx()
+    val rowModifier = Modifier
+        .fillMaxWidth()
+        .height(58.dp)
+        .onGloballyPositioned { coords ->
+            val pos = coords.positionInRoot()
+            rowTopLeftPx = Offset(pos.x, pos.y)
+        }
+        .pointerInput(app.packageName) {
+            val moveSlop = 18.dp.toPx()
 
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    var dragStarted = false
-                    var longPressReached = false
-                    val pointerId = down.id
-                    var currentPos = down.position
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                var dragStarted = false
+                var longPressReached = false
+                val pointerId = down.id
+                var currentPos = down.position
+                lastRootPointer = rowTopLeftPx + currentPos
+
+                val longPress = awaitLongPressOrCancellation(down.id)
+
+                if (longPress != null) {
+                    longPressReached = true
+                    currentPos = longPress.position
                     lastRootPointer = rowTopLeftPx + currentPos
+                }
 
-                    val longPress = awaitLongPressOrCancellation(down.id)
+                if (!longPressReached) {
+                    return@awaitEachGesture
+                }
 
-                    if (longPress != null) {
-                        longPressReached = true
-                        currentPos = longPress.position
-                        lastRootPointer = rowTopLeftPx + currentPos
-                    }
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == pointerId } ?: break
 
-                    if (!longPressReached) {
-                        return@awaitEachGesture
-                    }
-
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull { it.id == pointerId } ?: break
-
-                        if (!change.pressed) {
-                            if (dragStarted) {
-                                onEndDrag(lastRootPointer)
-                            }
-                            break
+                    if (!change.pressed) {
+                        if (dragStarted) {
+                            onEndDrag(lastRootPointer)
                         }
+                        break
+                    }
 
-                        currentPos = change.position
-                        val root = rowTopLeftPx + currentPos
-                        lastRootPointer = root
+                    currentPos = change.position
+                    val root = rowTopLeftPx + currentPos
+                    lastRootPointer = root
 
-                        val moved = currentPos - down.position
-                        val movedDistance = kotlin.math.hypot(
-                            moved.x.toDouble(),
-                            moved.y.toDouble()
-                        ).toFloat()
+                    val moved = currentPos - down.position
+                    val movedDistance = kotlin.math.hypot(
+                        moved.x.toDouble(),
+                        moved.y.toDouble()
+                    ).toFloat()
 
-                        if (!dragStarted) {
-                            if (movedDistance >= moveSlop) {
-                                dragStarted = true
-                                onStartDrag(root)
-                                change.consume()
-                            }
-                        } else {
-                            onDragMove(root)
+                    if (!dragStarted) {
+                        if (movedDistance >= moveSlop) {
+                            dragStarted = true
+                            onStartDrag(root)
                             change.consume()
                         }
+                    } else {
+                        onDragMove(root)
+                        change.consume()
                     }
                 }
             }
-            .combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = { if (!drawerDragActive) onClick() },
-                onLongClick = { /* a pointerInput kezeli */ }
-            )
+        }
+        .combinedClickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onClick = { if (!drawerDragActive) onClick() },
+            onLongClick = { /* a pointerInput kezeli */ }
+        )
+
+    PortraitGlassCard(
+        modifier = rowModifier,
+        shape = RoundedCornerShape(18.dp),
+        baseContainerColor = if (drawerDragActive) {
+            Color.Transparent
+        } else {
+            Color.White.copy(alpha = 0.08f)
+        }
     ) {
-        if (drawerDragActive) return@Card
+        if (drawerDragActive) return@PortraitGlassCard
 
         Row(
             Modifier

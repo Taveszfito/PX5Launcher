@@ -2,6 +2,8 @@
 
 package com.dueboysenberry1226.px5launcher.ui.theme
 
+import com.dueboysenberry1226.px5launcher.ui.theme.WallpaperGlassSurface
+import com.dueboysenberry1226.px5launcher.ui.theme.PhoneGlass
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
@@ -678,13 +680,10 @@ fun MusicControlPanelCard(
         val hintHeight = 16.dp
         val seekHeight = 38.dp
 
-        Column(
+        MusicGlassShell(
             modifier = modifier
                 .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
                 .fillMaxSize()
-                .clip(shape)
-                .background(Color.White.copy(alpha = 0.06f))
-                .border(2.dp, Color.White.copy(alpha = borderAlpha), shape)
                 .pointerInput(showQueue, portraitPage) {
                     if (!showQueue || portraitPage != PortraitPage.CONTROLS) return@pointerInput
 
@@ -712,9 +711,13 @@ fun MusicControlPanelCard(
                             clampListIndexSkippingCurrent()
                         }
                     }
-                }
-                .padding(0.dp)
+                },
+            shape = shape,
+            borderAlpha = borderAlpha,
+            isPortrait = true
         ) {
+
+
             AnimatedContent(
                 targetState = portraitPage,
                 modifier = Modifier.fillMaxSize(),
@@ -889,18 +892,21 @@ fun MusicControlPanelCard(
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
                             Text(
                                 text = formatMs(context, positionMs),
-                                color = Color.White.copy(alpha = 0.55f),
+                                color = Color.White.copy(alpha = 0.62f),
                                 fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.SemiBold
                             )
 
                             if (durationMs > 0L) {
                                 Spacer(Modifier.width(10.dp))
                                 Text(
-                                    text = stringResource(R.string.music_time_separator_with_value, formatMs(context, durationMs)),
-                                    color = Color.White.copy(alpha = 0.55f),
+                                    text = stringResource(
+                                        R.string.music_time_separator_with_value,
+                                        formatMs(context, durationMs)
+                                    ),
+                                    color = Color.White.copy(alpha = 0.62f),
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
+                                    fontWeight = FontWeight.SemiBold
                                 )
                             }
                         }
@@ -949,216 +955,225 @@ fun MusicControlPanelCard(
         return
     }
 
-    Row(
+    MusicGlassShell(
         modifier = modifier
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .fillMaxSize()
-            .clip(shape)
-            .background(Color.White.copy(alpha = 0.06f))
-            .border(2.dp, Color.White.copy(alpha = borderAlpha), shape)
-            .padding(18.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
+            .fillMaxSize(),
+        shape = shape,
+        borderAlpha = borderAlpha,
+        isPortrait = false
     ) {
-        Column(
+
+        Row(
             modifier = Modifier
-                .weight(if (showQueue) 2f else 1f)
-                .fillMaxHeight(),
-            verticalArrangement = Arrangement.Center
+                .fillMaxSize()
+                .padding(18.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(
-                text = title,
-                color = Color.White.copy(alpha = 0.92f),
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(Modifier.height(4.dp))
-
-            Text(
-                text = when {
-                    hasPermissionIssue -> stringResource(R.string.music_hint_enable_permission)
-                    autoSkipActive -> stringResource(R.string.music_hint_skipping_cancel)
-                    seekMode -> stringResource(R.string.music_hint_seek_mode)
-                    showQueue && !canSkipToQueueItem -> stringResource(R.string.music_hint_queue_autoskip)
-                    showQueue -> stringResource(R.string.music_hint_queue_next_songs)
-                    else -> stringResource(R.string.music_hint_strip_seek_mode)
-                },
-                color = Color.White.copy(alpha = 0.45f),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = if (hasPermissionIssue) {
-                    Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .combinedClickable(
-                            interactionSource = noRipple,
-                            indication = null,
-                            onClick = {
-                                hClick()
-                                openNotificationListenerSettings(context)
-                            }
-                        )
-                        .padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 0.dp)
-                } else Modifier
-            )
-
-            if (!hasPermissionIssue && artist.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
+            Column(
+                modifier = Modifier
+                    .weight(if (showQueue) 2f else 1f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.Center
+            ) {
                 Text(
-                    text = artist,
-                    color = Color.White.copy(alpha = 0.62f),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
+                    text = title,
+                    color = Color.White.copy(alpha = 0.92f),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-            }
 
-            Spacer(Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                ControlChip(
-                    icon = Icons.Filled.SkipPrevious,
-                    contentDescription = stringResource(R.string.music_cd_previous),
-                    selected = selected == Selected.PREV,
-                    onClick = {
-                        hClick()
-                        if (hasPermissionIssue) openNotificationListenerSettings(context)
-                        else controller?.transportControls?.skipToPrevious()
-                    }
-                )
-
-                ControlChip(
-                    icon = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    contentDescription = stringResource(R.string.music_cd_play_pause),
-                    selected = selected == Selected.PLAY_PAUSE,
-                    onClick = {
-                        hClick()
-                        if (hasPermissionIssue) openNotificationListenerSettings(context)
-                        else {
-                            val c = controller
-                            if (c != null) {
-                                if (isPlaying) c.transportControls.pause() else c.transportControls.play()
-                            } else tryAttachController()
-                        }
-                    }
-                )
-
-                ControlChip(
-                    icon = Icons.Filled.SkipNext,
-                    contentDescription = stringResource(R.string.music_cd_next),
-                    selected = selected == Selected.NEXT,
-                    onClick = {
-                        hClick()
-                        if (hasPermissionIssue) openNotificationListenerSettings(context)
-                        else controller?.transportControls?.skipToNext()
-                    }
-                )
-
-                Spacer(Modifier.weight(1f))
-
-                ControlChip(
-                    label = stringResource(R.string.music_volume_down_short),
-                    selected = selected == Selected.VOL_DOWN,
-                    onClick = {
-                        hTick()
-                        adjustVolume(-1)
-                    }
-                )
+                Spacer(Modifier.height(4.dp))
 
                 Text(
-                    text = stringResource(R.string.music_volume_format, volNow, volMax),
-                    color = Color.White.copy(alpha = 0.65f),
+                    text = when {
+                        hasPermissionIssue -> stringResource(R.string.music_hint_enable_permission)
+                        autoSkipActive -> stringResource(R.string.music_hint_skipping_cancel)
+                        seekMode -> stringResource(R.string.music_hint_seek_mode)
+                        showQueue && !canSkipToQueueItem -> stringResource(R.string.music_hint_queue_autoskip)
+                        showQueue -> stringResource(R.string.music_hint_queue_next_songs)
+                        else -> stringResource(R.string.music_hint_strip_seek_mode)
+                    },
+                    color = Color.White.copy(alpha = 0.45f),
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 2.dp)
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = if (hasPermissionIssue) {
+                        Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .combinedClickable(
+                                interactionSource = noRipple,
+                                indication = null,
+                                onClick = {
+                                    hClick()
+                                    openNotificationListenerSettings(context)
+                                }
+                            )
+                            .padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 0.dp)
+                    } else Modifier
                 )
 
-                ControlChip(
-                    label = stringResource(R.string.music_volume_up_short),
-                    selected = selected == Selected.VOL_UP,
-                    onClick = {
-                        hTick()
-                        adjustVolume(+1)
-                    }
-                )
-            }
-
-            Spacer(Modifier.height(14.dp))
-
-            SeekBar(
-                modifier = Modifier.fillMaxWidth(),
-                selected = selected == Selected.SEEK,
-                seekMode = seekMode,
-                hasPermissionIssue = hasPermissionIssue,
-                positionMs = positionMs,
-                durationMs = durationMs,
-                onRequestPermission = {
-                    hClick()
-                    openNotificationListenerSettings(context)
-                },
-                onSeekToFraction = { frac ->
-                    hTick()
-                    val c = controller ?: return@SeekBar
-                    val d = durationMs
-                    if (d <= 0L) return@SeekBar
-                    val target = (d * frac).toLong().coerceIn(0L, d)
-                    c.transportControls.seekTo(target)
-                    positionMs = target
-                },
-                onToggleSeekMode = {
-                    hClick()
-                    seekMode = !seekMode
-                }
-            )
-
-            Spacer(Modifier.height(10.dp))
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
-                Text(
-                    text = formatMs(context, positionMs),
-                    color = Color.White.copy(alpha = 0.55f),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
-                )
-
-                if (durationMs > 0L) {
-                    Spacer(Modifier.width(10.dp))
+                if (!hasPermissionIssue && artist.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
                     Text(
-                        text = stringResource(R.string.music_time_separator_with_value, formatMs(context, durationMs)),
-                        color = Color.White.copy(alpha = 0.55f),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
+                        text = artist,
+                        color = Color.White.copy(alpha = 0.62f),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
-            }
-        }
 
-        if (showQueue) {
-            QueuePanel(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-                selected = selected == Selected.LIST,
-                busy = autoSkipActive,
-                items = queueItems,
-                index = listIndex,
-                currentIndex = currentIndex,
-                listState = listState,
-                onClickItem = { i ->
-                    hClick()
-                    selected = Selected.LIST
-                    listIndex = i.coerceIn(0, queueItems.lastIndex)
-                    playQueueItemOrAutoSkip(listIndex)
+                Spacer(Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ControlChip(
+                        icon = Icons.Filled.SkipPrevious,
+                        contentDescription = stringResource(R.string.music_cd_previous),
+                        selected = selected == Selected.PREV,
+                        onClick = {
+                            hClick()
+                            if (hasPermissionIssue) openNotificationListenerSettings(context)
+                            else controller?.transportControls?.skipToPrevious()
+                        }
+                    )
+
+                    ControlChip(
+                        icon = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = stringResource(R.string.music_cd_play_pause),
+                        selected = selected == Selected.PLAY_PAUSE,
+                        onClick = {
+                            hClick()
+                            if (hasPermissionIssue) openNotificationListenerSettings(context)
+                            else {
+                                val c = controller
+                                if (c != null) {
+                                    if (isPlaying) c.transportControls.pause() else c.transportControls.play()
+                                } else tryAttachController()
+                            }
+                        }
+                    )
+
+                    ControlChip(
+                        icon = Icons.Filled.SkipNext,
+                        contentDescription = stringResource(R.string.music_cd_next),
+                        selected = selected == Selected.NEXT,
+                        onClick = {
+                            hClick()
+                            if (hasPermissionIssue) openNotificationListenerSettings(context)
+                            else controller?.transportControls?.skipToNext()
+                        }
+                    )
+
+                    Spacer(Modifier.weight(1f))
+
+                    ControlChip(
+                        label = stringResource(R.string.music_volume_down_short),
+                        selected = selected == Selected.VOL_DOWN,
+                        onClick = {
+                            hTick()
+                            adjustVolume(-1)
+                        }
+                    )
+
+                    Text(
+                        text = stringResource(R.string.music_volume_format, volNow, volMax),
+                        color = Color.White.copy(alpha = 0.72f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 2.dp)
+                    )
+
+                    ControlChip(
+                        label = stringResource(R.string.music_volume_up_short),
+                        selected = selected == Selected.VOL_UP,
+                        onClick = {
+                            hTick()
+                            adjustVolume(+1)
+                        }
+                    )
                 }
-            )
+
+                Spacer(Modifier.height(14.dp))
+
+                SeekBar(
+                    modifier = Modifier.fillMaxWidth(),
+                    selected = selected == Selected.SEEK,
+                    seekMode = seekMode,
+                    hasPermissionIssue = hasPermissionIssue,
+                    positionMs = positionMs,
+                    durationMs = durationMs,
+                    onRequestPermission = {
+                        hClick()
+                        openNotificationListenerSettings(context)
+                    },
+                    onSeekToFraction = { frac ->
+                        hTick()
+                        val c = controller ?: return@SeekBar
+                        val d = durationMs
+                        if (d <= 0L) return@SeekBar
+                        val target = (d * frac).toLong().coerceIn(0L, d)
+                        c.transportControls.seekTo(target)
+                        positionMs = target
+                    },
+                    onToggleSeekMode = {
+                        hClick()
+                        seekMode = !seekMode
+                    }
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+                    Text(
+                        text = formatMs(context, positionMs),
+                        color = Color.White.copy(alpha = 0.62f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    if (durationMs > 0L) {
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = stringResource(
+                                R.string.music_time_separator_with_value,
+                                formatMs(context, durationMs)
+                            ),
+                            color = Color.White.copy(alpha = 0.62f),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            if (showQueue) {
+                QueuePanel(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    selected = selected == Selected.LIST,
+                    busy = autoSkipActive,
+                    items = queueItems,
+                    index = listIndex,
+                    currentIndex = currentIndex,
+                    listState = listState,
+                    onClickItem = { i ->
+                        hClick()
+                        selected = Selected.LIST
+                        listIndex = i.coerceIn(0, queueItems.lastIndex)
+                        playQueueItemOrAutoSkip(listIndex)
+                    }
+                )
+            }
         }
     }
 }
@@ -1266,6 +1281,19 @@ private fun Modifier.queueBlurIf(active: Boolean): Modifier {
         this.graphicsLayer {
             renderEffect = AndroidRenderEffect
                 .createBlurEffect(18f, 18f, Shader.TileMode.CLAMP)
+                .asComposeRenderEffect()
+        }
+    } else {
+        this
+    }
+}
+
+private fun Modifier.cardBlurIf(active: Boolean, radius: Float = 28f): Modifier {
+    if (!active) return this
+    return if (Build.VERSION.SDK_INT >= 31) {
+        this.graphicsLayer {
+            renderEffect = AndroidRenderEffect
+                .createBlurEffect(radius, radius, Shader.TileMode.CLAMP)
                 .asComposeRenderEffect()
         }
     } else {
@@ -1680,4 +1708,38 @@ private fun PortraitQueueList(
             }
         }
     }
+}
+@Composable
+private fun MusicGlassShell(
+    modifier: Modifier,
+    shape: RoundedCornerShape,
+    borderAlpha: Float,
+    isPortrait: Boolean,
+    content: @Composable BoxScope.() -> Unit
+) {
+    WallpaperGlassSurface(
+        modifier = modifier
+            .clip(shape)
+            .background(Color.White.copy(alpha = 0.05f))
+            .border(2.dp, Color.White.copy(alpha = borderAlpha), shape),
+        shape = shape,
+        baseContainerColor = Color.Transparent,
+        enableBlur = isPortrait,
+        blurRadiusPx = if (isPortrait) {
+            PhoneGlass.PORTRAIT_BLUR_RADIUS
+        } else {
+            PhoneGlass.LANDSCAPE_BLUR_RADIUS
+        },
+        dimAlpha = if (isPortrait) {
+            PhoneGlass.PORTRAIT_DIM_ALPHA
+        } else {
+            PhoneGlass.LANDSCAPE_DIM_ALPHA
+        },
+        overlayAlpha = if (isPortrait) {
+            PhoneGlass.PORTRAIT_OVERLAY_ALPHA
+        } else {
+            PhoneGlass.LANDSCAPE_OVERLAY_ALPHA
+        },
+        content = content
+    )
 }

@@ -1,5 +1,6 @@
 package com.dueboysenberry1226.px5launcher.data
 
+
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -20,6 +21,19 @@ private val PREF_VIBRATION_ENABLED = booleanPreferencesKey("settings_vibration_e
 private val PREF_VIBRATION_STRENGTH = intPreferencesKey("settings_vibration_strength") // 0..5
 
 private val PREF_ALLAPPS_COLUMNS = intPreferencesKey("settings_allapps_columns")
+
+private val PREF_PHONE_HOME_WALLPAPER_URI =
+    stringPreferencesKey("phone_home_wallpaper_uri")
+private val PREF_PHONE_HOME_WALLPAPER_SCALE =
+    stringPreferencesKey("phone_home_wallpaper_scale")
+private val PREF_PHONE_HOME_WALLPAPER_OFFSET_X =
+    stringPreferencesKey("phone_home_wallpaper_offset_x")
+private val PREF_PHONE_HOME_WALLPAPER_OFFSET_Y =
+    stringPreferencesKey("phone_home_wallpaper_offset_y")
+private val PREF_PHONE_HOME_WALLPAPER_APPLY_HOME =
+    booleanPreferencesKey("phone_home_wallpaper_apply_home")
+private val PREF_PHONE_HOME_WALLPAPER_APPLY_LOCK =
+    booleanPreferencesKey("phone_home_wallpaper_apply_lock")
 
 enum class ButtonLayout { PS, XBOX, TV }
 
@@ -57,6 +71,30 @@ class SettingsRepository(private val context: Context) {
     val allAppsColumnsFlow: Flow<Int> =
         context.px5DataStore.data.map { (it[PREF_ALLAPPS_COLUMNS] ?: 4).coerceIn(2, 5) }
 
+    val phoneHomeWallpaperUriFlow: Flow<String?> =
+        context.px5DataStore.data.map { it[PREF_PHONE_HOME_WALLPAPER_URI] }
+
+    val phoneHomeWallpaperScaleFlow: Flow<Float> =
+        context.px5DataStore.data.map {
+            (it[PREF_PHONE_HOME_WALLPAPER_SCALE] ?: "1.0").toFloatOrNull() ?: 1f
+        }
+
+    val phoneHomeWallpaperOffsetXFlow: Flow<Float> =
+        context.px5DataStore.data.map {
+            (it[PREF_PHONE_HOME_WALLPAPER_OFFSET_X] ?: "0.0").toFloatOrNull() ?: 0f
+        }
+
+    val phoneHomeWallpaperOffsetYFlow: Flow<Float> =
+        context.px5DataStore.data.map {
+            (it[PREF_PHONE_HOME_WALLPAPER_OFFSET_Y] ?: "0.0").toFloatOrNull() ?: 0f
+        }
+
+    val phoneHomeWallpaperApplyHomeFlow: Flow<Boolean> =
+        context.px5DataStore.data.map { it[PREF_PHONE_HOME_WALLPAPER_APPLY_HOME] ?: true }
+
+    val phoneHomeWallpaperApplyLockFlow: Flow<Boolean> =
+        context.px5DataStore.data.map { it[PREF_PHONE_HOME_WALLPAPER_APPLY_LOCK] ?: false }
+
     // --- setters ---
     suspend fun setClock24h(value: Boolean) = setBool(PREF_CLOCK_24H, value)
     suspend fun setShowBigAppName(value: Boolean) = setBool(PREF_SHOW_BIG_APP_NAME, value)
@@ -73,6 +111,35 @@ class SettingsRepository(private val context: Context) {
     // ✅ NEW: 2..5
     suspend fun setAllAppsColumns(value: Int) =
         setInt(PREF_ALLAPPS_COLUMNS, value.coerceIn(2, 5))
+
+    suspend fun setPhoneHomeWallpaper(
+        uri: String,
+        scale: Float,
+        offsetX: Float,
+        offsetY: Float,
+        applyHome: Boolean,
+        applyLock: Boolean
+    ) {
+        context.px5DataStore.edit {
+            it[PREF_PHONE_HOME_WALLPAPER_URI] = uri
+            it[PREF_PHONE_HOME_WALLPAPER_SCALE] = scale.toString()
+            it[PREF_PHONE_HOME_WALLPAPER_OFFSET_X] = offsetX.toString()
+            it[PREF_PHONE_HOME_WALLPAPER_OFFSET_Y] = offsetY.toString()
+            it[PREF_PHONE_HOME_WALLPAPER_APPLY_HOME] = applyHome
+            it[PREF_PHONE_HOME_WALLPAPER_APPLY_LOCK] = applyLock
+        }
+    }
+
+    suspend fun clearPhoneHomeWallpaper() {
+        context.px5DataStore.edit { prefs ->
+            prefs -= PREF_PHONE_HOME_WALLPAPER_URI
+            prefs -= PREF_PHONE_HOME_WALLPAPER_SCALE
+            prefs -= PREF_PHONE_HOME_WALLPAPER_OFFSET_X
+            prefs -= PREF_PHONE_HOME_WALLPAPER_OFFSET_Y
+            prefs -= PREF_PHONE_HOME_WALLPAPER_APPLY_HOME
+            prefs -= PREF_PHONE_HOME_WALLPAPER_APPLY_LOCK
+        }
+    }
 
     private suspend fun setBool(
         key: androidx.datastore.preferences.core.Preferences.Key<Boolean>,

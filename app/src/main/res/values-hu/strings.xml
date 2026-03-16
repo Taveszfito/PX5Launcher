@@ -447,6 +447,9 @@ Itt később megjelenhetnek a felhasznált könyvtárak, assetek és egyéb kös
     <string name="music_volume_down_short">HANG−</string>
     <string name="music_volume_up_short">HANG+</string>
 
+    <string name="common_checkmark">✓</string>
+    <string name="phone_home_menu_change_wallpaper">Háttérkép módosítása</string>
+
     <string name="music_time_separator_with_value">• %1$s</string>
 
     <string name="phone_home_add_error_select_card">Válassz ki egy kártyát.</string>
