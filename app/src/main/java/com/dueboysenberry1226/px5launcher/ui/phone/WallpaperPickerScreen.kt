@@ -451,9 +451,13 @@ private fun PhoneWallpaperPreview(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .pointerInput(imageBitmap, userScale, offsetX, offsetY) {
+                            .pointerInput(imageBitmap) {
+                                var gestureScale = currentUserScale
+                                var gestureOffsetX = appliedOffsetX
+                                var gestureOffsetY = appliedOffsetY
+
                                 detectTransformGestures { _, pan, zoom, _ ->
-                                    val nextUserScale = (currentUserScale * zoom).coerceIn(1f, 6f)
+                                    val nextUserScale = (gestureScale * zoom).coerceIn(1f, 6f)
                                     val nextEffectiveScale = baseFillScale * nextUserScale
 
                                     val nextWidth = bitmapWidth * nextEffectiveScale
@@ -464,27 +468,28 @@ private fun PhoneWallpaperPreview(
                                     val nextMaxOffsetY =
                                         ((nextHeight - frameHeight) / 2f).coerceAtLeast(0f)
 
-                                    val nextAppliedOffsetX =
-                                        (appliedOffsetX + pan.x).coerceIn(-nextMaxOffsetX, nextMaxOffsetX)
-                                    val nextAppliedOffsetY =
-                                        (appliedOffsetY + pan.y).coerceIn(-nextMaxOffsetY, nextMaxOffsetY)
+                                    gestureOffsetX =
+                                        (gestureOffsetX + pan.x).coerceIn(-nextMaxOffsetX, nextMaxOffsetX)
+                                    gestureOffsetY =
+                                        (gestureOffsetY + pan.y).coerceIn(-nextMaxOffsetY, nextMaxOffsetY)
+                                    gestureScale = nextUserScale
 
                                     val nextNormalizedOffsetX =
                                         if (nextMaxOffsetX > 0f) {
-                                            (nextAppliedOffsetX / nextMaxOffsetX).coerceIn(-1f, 1f)
+                                            (gestureOffsetX / nextMaxOffsetX).coerceIn(-1f, 1f)
                                         } else {
                                             0f
                                         }
 
                                     val nextNormalizedOffsetY =
                                         if (nextMaxOffsetY > 0f) {
-                                            (nextAppliedOffsetY / nextMaxOffsetY).coerceIn(-1f, 1f)
+                                            (gestureOffsetY / nextMaxOffsetY).coerceIn(-1f, 1f)
                                         } else {
                                             0f
                                         }
 
                                     onTransform(
-                                        nextUserScale,
+                                        gestureScale,
                                         nextNormalizedOffsetX,
                                         nextNormalizedOffsetY
                                     )

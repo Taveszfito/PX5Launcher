@@ -4,12 +4,13 @@
 package com.dueboysenberry1226.px5launcher.ui.theme
 
 import android.appwidget.AppWidgetHostView
-import android.content.Context
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
+import android.content.Context
 import android.content.pm.PackageManager
-import androidx.compose.foundation.ExperimentalFoundationApi
 import android.view.KeyEvent as AndroidKeyEvent
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -63,14 +64,9 @@ class WidgetPickerState internal constructor(
     private val cellHeightDp: Dp,
     private val cellGapXDp: Dp,
     private val cellGapYDp: Dp,
-
-    // ✅ új: mennyi a maximum engedett span (külön portrait/landscape)
     private val maxSpanX: Int,
     private val maxSpanY: Int,
-
-    // ✅ új: landscape-ban kiszűrjük a túl nagy widgeteket (portraitban nem)
     private val filterOutOversize: Boolean,
-
     private val onPick: (AppWidgetProviderInfo, Int, Int) -> Unit,
     private val onBack: () -> Unit,
     private val hapticClick: () -> Unit,
@@ -112,7 +108,6 @@ class WidgetPickerState internal constructor(
     val visibleItems: List<VisibleItem> by derivedStateOf {
         buildList {
             filtered.forEach { (pkg, list) ->
-                // a header count-ot úgy számoljuk, hogy a ténylegesen listázott widgetek száma legyen
                 val eligible = list.map { p ->
                     val (sx, sy) = inferSpan(
                         context = context,
@@ -127,7 +122,7 @@ class WidgetPickerState internal constructor(
                     Triple(p, sx, sy)
                 }.filter { (_, sx, sy) ->
                     if (!filterOutOversize) true
-                    else (sx <= maxSpanX && sy <= maxSpanY) // itt igazából mindig igaz, mert clamp-elt, de hagyjuk érthetően
+                    else (sx <= maxSpanX && sy <= maxSpanY)
                 }
 
                 add(VisibleItem.Header(pkg = pkg, count = eligible.size))
@@ -136,8 +131,6 @@ class WidgetPickerState internal constructor(
                     eligible
                         .sortedBy { (p, _, _) -> safeWidgetLabel(pm, p, widgetFallbackLabel).lowercase() }
                         .forEach { (p, sx, sy) ->
-                            // ✅ ha landscape filterOutOversize = true és valamiért mégis túl nagy lenne,
-                            // akkor itt vágjuk ki (biztonsági)
                             if (filterOutOversize && (sx > maxSpanX || sy > maxSpanY)) return@forEach
                             add(VisibleItem.Widget(pkg = pkg, provider = p, spanX = sx, spanY = sy))
                         }
@@ -152,7 +145,6 @@ class WidgetPickerState internal constructor(
     }
 
     fun toggleExpanded(pkg: String) {
-        // ✅ haptic amikor kinyitsz/összecsuksz egy appot
         hapticClick()
         expandedPkgs = if (expandedPkgs.contains(pkg)) expandedPkgs - pkg else expandedPkgs + pkg
     }
@@ -162,7 +154,6 @@ class WidgetPickerState internal constructor(
     }
 
     fun back() {
-        // ✅ haptic X / back
         hapticClick()
         onBack()
     }
@@ -172,7 +163,6 @@ class WidgetPickerState internal constructor(
         when (item) {
             is VisibleItem.Header -> toggleExpanded(item.pkg)
             is VisibleItem.Widget -> {
-                // ✅ haptic widget kiválasztáskor
                 hapticClick()
                 onPick(item.provider, item.spanX, item.spanY)
             }
@@ -231,7 +221,6 @@ class WidgetPickerState internal constructor(
                     }
                 } else if (item is VisibleItem.Header) {
                     if (expandedPkgs.contains(item.pkg)) {
-                        // balra: összecsukás -> haptic
                         hapticClick()
                         expandedPkgs = expandedPkgs - item.pkg
                         return true
@@ -243,7 +232,6 @@ class WidgetPickerState internal constructor(
                 val item = visibleItems.getOrNull(selectedIndex)
                 if (item is VisibleItem.Header) {
                     if (!expandedPkgs.contains(item.pkg)) {
-                        // jobbra: kinyitás -> haptic
                         hapticClick()
                         expandedPkgs = expandedPkgs + item.pkg
                         return true
@@ -264,14 +252,9 @@ fun rememberWidgetPickerState(
     cellHeightDp: Dp,
     cellGapXDp: Dp,
     cellGapYDp: Dp,
-
-    // ✅ új paraméterek:
-    // - landscape: maxSpanX=2, maxSpanY=2, filterOutOversize=true
-    // - portrait : maxSpanX=4, maxSpanY=5, filterOutOversize=false
     maxSpanX: Int,
     maxSpanY: Int,
     filterOutOversize: Boolean,
-
     onPick: (provider: AppWidgetProviderInfo, spanX: Int, spanY: Int) -> Unit,
     onBack: () -> Unit,
     vibrationEnabled: Boolean = true
@@ -320,11 +303,12 @@ fun rememberWidgetPickerState(
 @Composable
 fun WidgetPickerScreen(
     state: WidgetPickerState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    embeddedInPhonePopup: Boolean = false
 ) {
     val listState = rememberLazyListState()
     val cs = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(if (embeddedInPhonePopup) 24.dp else 18.dp)
 
     LaunchedEffect(state.selectedIndex, state.visibleItems.size) {
         if (state.visibleItems.isNotEmpty()) {
@@ -335,66 +319,81 @@ fun WidgetPickerScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(cs.background)
+            .background(if (embeddedInPhonePopup) Color.Transparent else cs.background)
             .onPreviewKeyEvent { state.handleKey(it) }
-            .padding(16.dp)
+            .padding(if (embeddedInPhonePopup) 14.dp else 16.dp)
     ) {
-        // ---- HEADER: cím + jobb felső X ----
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.widget_picker_title),
-                style = MaterialTheme.typography.titleLarge,
-                color = cs.onBackground,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f)
-            )
-
-            val interaction = remember { MutableInteractionSource() }
-
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(cs.surfaceVariant.copy(alpha = 0.6f))
-                    .combinedClickable(
-                        interactionSource = interaction,
-                        indication = null,
-                        onClick = { state.back() } // ✅ haptic benne van
-                    ),
-                contentAlignment = Alignment.Center
+        if (!embeddedInPhonePopup) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "✕", // ez szimbólum, nem kell fordítani
-                    color = cs.onSurface,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold
+                    text = stringResource(R.string.widget_picker_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = cs.onBackground,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
                 )
-            }
-        }
 
-        Spacer(Modifier.height(12.dp))
+                val interaction = remember { MutableInteractionSource() }
+
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(cs.surfaceVariant.copy(alpha = 0.6f))
+                        .combinedClickable(
+                            interactionSource = interaction,
+                            indication = null,
+                            onClick = { state.back() }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "✕",
+                        color = cs.onSurface,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+        }
 
         SearchBarLike(
             value = state.query,
             onValueChange = state::updateQuery,
             placeholder = stringResource(R.string.common_search),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            embeddedInPhonePopup = embeddedInPhonePopup
         )
 
         Spacer(Modifier.height(12.dp))
 
         Card(
             shape = shape,
-            colors = CardDefaults.cardColors(containerColor = cs.surface),
-            border = CardDefaults.outlinedCardBorder(),
+            colors = CardDefaults.cardColors(
+                containerColor = if (embeddedInPhonePopup) {
+                    Color.White.copy(alpha = 0.035f)
+                } else {
+                    cs.surface
+                }
+            ),
+            border = BorderStroke(
+                1.dp,
+                if (embeddedInPhonePopup) {
+                    Color.White.copy(alpha = 0.14f)
+                } else {
+                    cs.outline.copy(alpha = 0.35f)
+                }
+            ),
             modifier = Modifier.fillMaxSize()
         ) {
             LazyColumn(
                 state = listState,
-                contentPadding = PaddingValues(vertical = 8.dp),
+                contentPadding = PaddingValues(vertical = 10.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
                 itemsIndexed(state.visibleItems) { index, item ->
@@ -407,9 +406,10 @@ fun WidgetPickerScreen(
                                 count = item.count,
                                 expanded = state.expandedPkgs.contains(item.pkg),
                                 selected = selected,
+                                embeddedInPhonePopup = embeddedInPhonePopup,
                                 onClick = {
                                     state.selectIndex(index)
-                                    state.activateAt(index) // ✅ haptic header toggle
+                                    state.activateAt(index)
                                 }
                             )
                         }
@@ -421,9 +421,10 @@ fun WidgetPickerScreen(
                                 spanX = item.spanX,
                                 spanY = item.spanY,
                                 selected = selected,
+                                embeddedInPhonePopup = embeddedInPhonePopup,
                                 onClick = {
                                     state.selectIndex(index)
-                                    state.activateAt(index) // ✅ haptic pick
+                                    state.activateAt(index)
                                 }
                             )
                         }
@@ -439,23 +440,59 @@ private fun SearchBarLike(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    embeddedInPhonePopup: Boolean = false
 ) {
     val cs = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(999.dp)
+    val shape = RoundedCornerShape(22.dp)
 
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         singleLine = true,
-        placeholder = { Text(placeholder) },
-        leadingIcon = { Text("🔍") }, // ikon, nem fordítandó
+        placeholder = {
+            Text(
+                text = placeholder,
+                color = if (embeddedInPhonePopup) {
+                    Color.White.copy(alpha = 0.58f)
+                } else {
+                    cs.onSurface.copy(alpha = 0.58f)
+                }
+            )
+        },
+        leadingIcon = {
+            Text(
+                text = "🔍",
+                fontSize = if (embeddedInPhonePopup) 16.sp else 16.sp
+            )
+        },
         shape = shape,
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = cs.surface,
-            unfocusedContainerColor = cs.surface
+            focusedTextColor = if (embeddedInPhonePopup) Color.White else cs.onSurface,
+            unfocusedTextColor = if (embeddedInPhonePopup) Color.White else cs.onSurface,
+            focusedBorderColor = if (embeddedInPhonePopup) {
+                Color.White.copy(alpha = 0.22f)
+            } else {
+                cs.outline
+            },
+            unfocusedBorderColor = if (embeddedInPhonePopup) {
+                Color.White.copy(alpha = 0.16f)
+            } else {
+                cs.outline.copy(alpha = 0.7f)
+            },
+            focusedContainerColor = if (embeddedInPhonePopup) {
+                Color.White.copy(alpha = 0.035f)
+            } else {
+                cs.surface
+            },
+            unfocusedContainerColor = if (embeddedInPhonePopup) {
+                Color.White.copy(alpha = 0.035f)
+            } else {
+                cs.surface
+            },
+            cursorColor = if (embeddedInPhonePopup) Color.White else cs.primary
         ),
-        modifier = modifier
+        modifier = modifier.height(if (embeddedInPhonePopup) 54.dp else 56.dp)
     )
 }
 
@@ -466,21 +503,27 @@ private fun AppHeaderRow(
     count: Int,
     expanded: Boolean,
     selected: Boolean,
+    embeddedInPhonePopup: Boolean,
     onClick: () -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(if (embeddedInPhonePopup) 18.dp else 14.dp)
     val interaction = remember { MutableInteractionSource() }
 
     val appLabel = remember(pkg) { safeAppLabel(pm, pkg) }
     val iconBmp = remember(pkg) { safeAppIconBitmap(pm, pkg) }
 
-    val bg = if (selected) cs.primary.copy(alpha = 0.10f) else Color.Transparent
+    val bg = when {
+        embeddedInPhonePopup && selected -> Color.White.copy(alpha = 0.10f)
+        embeddedInPhonePopup -> Color.White.copy(alpha = 0.03f)
+        selected -> cs.primary.copy(alpha = 0.10f)
+        else -> Color.Transparent
+    }
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .padding(horizontal = if (embeddedInPhonePopup) 10.dp else 10.dp, vertical = 4.dp)
             .fillMaxWidth()
             .background(bg, shape)
             .combinedClickable(
@@ -488,48 +531,71 @@ private fun AppHeaderRow(
                 indication = null,
                 onClick = onClick
             )
-            .padding(horizontal = 10.dp, vertical = 10.dp)
+            .padding(horizontal = 12.dp, vertical = if (embeddedInPhonePopup) 10.dp else 10.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
-                .background(cs.surfaceVariant, CircleShape),
+                .size(if (embeddedInPhonePopup) 42.dp else 40.dp)
+                .background(
+                    if (embeddedInPhonePopup) {
+                        Color.White.copy(alpha = 0.08f)
+                    } else {
+                        cs.surfaceVariant
+                    },
+                    CircleShape
+                ),
             contentAlignment = Alignment.Center
         ) {
             if (iconBmp != null) {
                 Image(
                     bitmap = iconBmp.asImageBitmap(),
                     contentDescription = null,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(if (embeddedInPhonePopup) 22.dp else 24.dp)
                 )
             } else {
-                Text("□", color = cs.onSurfaceVariant) // ikon, nem fordítandó
+                Text(
+                    text = "□",
+                    color = if (embeddedInPhonePopup) {
+                        Color.White.copy(alpha = 0.75f)
+                    } else {
+                        cs.onSurfaceVariant
+                    }
+                )
             }
         }
 
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(10.dp))
 
         Column(Modifier.weight(1f)) {
             Text(
                 text = appLabel,
-                style = MaterialTheme.typography.titleMedium,
-                color = cs.onSurface,
+                color = if (embeddedInPhonePopup) Color.White.copy(alpha = 0.96f) else cs.onSurface,
+                fontSize = if (embeddedInPhonePopup) 15.sp else MaterialTheme.typography.titleMedium.fontSize,
+                fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = stringResource(R.string.widget_count, count),
-                style = MaterialTheme.typography.bodySmall,
-                color = cs.onSurface.copy(alpha = 0.75f)
+                color = if (embeddedInPhonePopup) {
+                    Color.White.copy(alpha = 0.64f)
+                } else {
+                    cs.onSurface.copy(alpha = 0.75f)
+                },
+                fontSize = if (embeddedInPhonePopup) 12.sp else MaterialTheme.typography.bodySmall.fontSize
             )
         }
 
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(10.dp))
 
         Text(
-            text = if (expanded) "▴" else "▾", // ikon, nem fordítandó
-            color = cs.onSurface.copy(alpha = 0.75f),
-            style = MaterialTheme.typography.titleMedium
+            text = if (expanded) "▴" else "▾",
+            color = if (embeddedInPhonePopup) {
+                Color.White.copy(alpha = 0.74f)
+            } else {
+                cs.onSurface.copy(alpha = 0.75f)
+            },
+            fontSize = if (embeddedInPhonePopup) 16.sp else MaterialTheme.typography.titleMedium.fontSize
         )
     }
 }
@@ -541,10 +607,11 @@ private fun WidgetRow(
     spanX: Int,
     spanY: Int,
     selected: Boolean,
+    embeddedInPhonePopup: Boolean,
     onClick: () -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(if (embeddedInPhonePopup) 16.dp else 14.dp)
     val interaction = remember { MutableInteractionSource() }
 
     val fallback = stringResource(R.string.common_widget)
@@ -558,12 +625,17 @@ private fun WidgetRow(
     val pkg = provider.provider.packageName
     val iconBmp = remember(pkg) { safeAppIconBitmap(pm, pkg) }
 
-    val bg = if (selected) cs.primary.copy(alpha = 0.10f) else Color.Transparent
+    val bg = when {
+        embeddedInPhonePopup && selected -> Color.White.copy(alpha = 0.08f)
+        embeddedInPhonePopup -> Color.White.copy(alpha = 0.025f)
+        selected -> cs.primary.copy(alpha = 0.10f)
+        else -> Color.Transparent
+    }
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .padding(horizontal = 22.dp, vertical = 4.dp)
+            .padding(horizontal = if (embeddedInPhonePopup) 12.dp else 22.dp, vertical = 3.dp)
             .fillMaxWidth()
             .background(bg, shape)
             .combinedClickable(
@@ -571,39 +643,58 @@ private fun WidgetRow(
                 indication = null,
                 onClick = onClick
             )
-            .padding(horizontal = 10.dp, vertical = 10.dp)
+            .padding(horizontal = 12.dp, vertical = if (embeddedInPhonePopup) 9.dp else 10.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(42.dp)
-                .background(cs.surfaceVariant, RoundedCornerShape(12.dp)),
+                .size(if (embeddedInPhonePopup) 40.dp else 42.dp)
+                .background(
+                    if (embeddedInPhonePopup) {
+                        Color.White.copy(alpha = 0.07f)
+                    } else {
+                        cs.surfaceVariant
+                    },
+                    RoundedCornerShape(12.dp)
+                ),
             contentAlignment = Alignment.Center
         ) {
             if (iconBmp != null) {
                 Image(
                     bitmap = iconBmp.asImageBitmap(),
                     contentDescription = null,
-                    modifier = Modifier.size(26.dp)
+                    modifier = Modifier.size(if (embeddedInPhonePopup) 20.dp else 26.dp)
                 )
             } else {
-                Text("▦", color = cs.onSurfaceVariant)
+                Text(
+                    text = "▦",
+                    color = if (embeddedInPhonePopup) {
+                        Color.White.copy(alpha = 0.72f)
+                    } else {
+                        cs.onSurfaceVariant
+                    }
+                )
             }
         }
 
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(10.dp))
 
         Column(Modifier.weight(1f)) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.titleSmall,
-                color = cs.onSurface,
+                color = if (embeddedInPhonePopup) Color.White.copy(alpha = 0.95f) else cs.onSurface,
+                fontSize = if (embeddedInPhonePopup) 14.sp else MaterialTheme.typography.titleSmall.fontSize,
+                fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = sizeText,
-                style = MaterialTheme.typography.bodySmall,
-                color = cs.onSurface.copy(alpha = 0.75f)
+                color = if (embeddedInPhonePopup) {
+                    Color.White.copy(alpha = 0.60f)
+                } else {
+                    cs.onSurface.copy(alpha = 0.75f)
+                },
+                fontSize = if (embeddedInPhonePopup) 11.sp else MaterialTheme.typography.bodySmall.fontSize
             )
         }
     }
@@ -611,7 +702,7 @@ private fun WidgetRow(
 
 /**
  * span becslés a provider minWidth/minHeight alapján, a cella dp-hez képest.
- * ✅ NEM vágjuk le 2×2-re, hanem clamp maxSpanX/maxSpanY-ig.
+ * NEM vágjuk le 2×2-re, hanem clamp maxSpanX/maxSpanY-ig.
  */
 private fun inferSpan(
     context: Context,
@@ -623,7 +714,6 @@ private fun inferSpan(
     maxSpanX: Int,
     maxSpanY: Int
 ): Pair<Int, Int> {
-
     val safeMaxX = maxSpanX.coerceAtLeast(1)
     val safeMaxY = maxSpanY.coerceAtLeast(1)
 
@@ -635,13 +725,11 @@ private fun inferSpan(
         null
     )
 
-    // px → dp konverzió
     val horizontalPadding =
         (defaultPadding.left + defaultPadding.right) / density
 
     val verticalPadding =
         (defaultPadding.top + defaultPadding.bottom) / density
-
 
     val rawMinWidth = when {
         info.minResizeWidth > 0 -> info.minResizeWidth / density

@@ -154,7 +154,7 @@ internal fun PhoneHomeDrawer(
 
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFF0B1020).copy(alpha = 0.96f)
+                    Color(0xFF2A2A2A).copy(alpha = 0.9f)
                 ),
                 shape = RoundedCornerShape(24.dp),
                 modifier = Modifier

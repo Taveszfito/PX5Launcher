@@ -2,62 +2,90 @@
 
 package com.dueboysenberry1226.px5launcher.ui.phone
 
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.layout.onSizeChanged
-import com.dueboysenberry1226.px5launcher.ui.theme.ProvidePhoneWallpaperGlassState
-import com.dueboysenberry1226.px5launcher.ui.theme.PhoneWallpaperGlassState
-import com.dueboysenberry1226.px5launcher.ui.theme.WallpaperGlassSurface
-import com.dueboysenberry1226.px5launcher.ui.theme.PhoneGlass
-import android.graphics.RenderEffect as AndroidRenderEffect
-import android.graphics.Shader
-import androidx.compose.ui.graphics.asComposeRenderEffect
+
 import android.annotation.SuppressLint
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.ImageDecoder
-import android.net.Uri
-import android.os.Build
-import androidx.compose.foundation.Image
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.ui.layout.ContentScale
-import kotlin.math.max
-import com.dueboysenberry1226.px5launcher.data.SettingsRepository
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
+import android.graphics.RenderEffect as AndroidRenderEffect
+import android.graphics.Shader
+import android.net.Uri
+import android.os.Build
+import android.os.SystemClock
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -65,17 +93,58 @@ import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.data.LauncherRepository
 import com.dueboysenberry1226.px5launcher.data.PhoneCardPlacement
 import com.dueboysenberry1226.px5launcher.data.PhoneCardType
+import com.dueboysenberry1226.px5launcher.data.SettingsRepository
 import com.dueboysenberry1226.px5launcher.data.WidgetLayoutMode
 import com.dueboysenberry1226.px5launcher.data.WidgetPlacement
 import com.dueboysenberry1226.px5launcher.data.WidgetsRepository
+import com.dueboysenberry1226.px5launcher.ui.theme.PhoneGlass
+import com.dueboysenberry1226.px5launcher.ui.theme.PhoneWallpaperGlassState
+import com.dueboysenberry1226.px5launcher.ui.theme.ProvidePhoneWallpaperGlassState
+import com.dueboysenberry1226.px5launcher.ui.theme.WallpaperGlassSurface
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 private const val WIDGET_HOST_ID = 1024
+private const val PHONE_HOME_PAGE_COUNT = 4
+private const val PHONE_HOME_SWIPE_SWITCH_THRESHOLD_PX = 180f
+private const val PHONE_HOME_EDGE_SWITCH_THRESHOLD_PX = 42f
+private const val PHONE_HOME_EDGE_SWITCH_COOLDOWN_MS = 420L
 
+@Composable
+private fun PhoneHomePageDots(
+    pageCount: Int,
+    currentPage: Int,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        for (i in 0 until pageCount) {
+            val active = i == currentPage
+            Box(
+                modifier = Modifier
+                    .size(if (active) 10.dp else 7.dp)
+                    .clip(RoundedCornerShape(99.dp))
+                    .background(
+                        if (active) {
+                            Color.White.copy(alpha = 0.95f)
+                        } else {
+                            Color.White.copy(alpha = 0.34f)
+                        }
+                    )
+            )
+        }
+    }
+}
+
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun PhoneHomeRoute(
     pm: PackageManager
@@ -83,7 +152,6 @@ fun PhoneHomeRoute(
     val context = LocalContext.current
     val config = LocalConfiguration.current
     val isPortrait = config.orientation == Configuration.ORIENTATION_PORTRAIT
-
     val scopeLocale = remember { Locale.getDefault() }
     val scope = rememberCoroutineScope()
 
@@ -176,15 +244,41 @@ fun PhoneHomeRoute(
         setAmbientFromApp(ambientColor, app)
     }
 
-    val storedSlots by repo.phoneHomeSlotsFlow.collectAsState(initial = emptyList())
+    val storedSlotPages by repo.phoneHomeSlotsPagesFlow.collectAsState(
+        initial = List(PHONE_HOME_PAGE_COUNT) { emptyList<String?>() }
+    )
     val storedCards by repo.phoneHomeCardsFlow.collectAsState(initial = emptyList())
 
-    val slots = remember { mutableStateListOf<String?>() }
+    var slotPages by remember { mutableStateOf<List<List<String?>>>(emptyList()) }
     val cards = remember { mutableStateListOf<PhoneCardPlacement>() }
 
+    var currentPage by rememberSaveable { mutableIntStateOf(0) }
+    val pageDragOffsetPx = remember { Animatable(0f) }
+
+    fun pageTemplate(): List<String?> =
+        normalizeSlots(emptyList())
+
+    fun normalizedPage(page: List<String?>): List<String?> =
+        normalizeSlots(page)
+
+    fun normalizedPages(input: List<List<String?>>): List<List<String?>> {
+        val out = input.map { normalizedPage(it) }.toMutableList()
+        while (out.size < PHONE_HOME_PAGE_COUNT) {
+            out.add(pageTemplate())
+        }
+        return out.take(PHONE_HOME_PAGE_COUNT)
+    }
+
+    fun ensurePageStorage() {
+        if (slotPages.size < PHONE_HOME_PAGE_COUNT) {
+            slotPages = normalizedPages(slotPages)
+        }
+    }
+
     fun persistSlots() {
-        val snap = slots.take(SLOTS).toList()
-        scope.launch { repo.savePhoneHomeSlots(snap) }
+        val snap = normalizedPages(slotPages)
+        slotPages = snap
+        scope.launch { repo.savePhoneHomeSlotsPages(snap) }
     }
 
     fun persistCards() {
@@ -192,10 +286,28 @@ fun PhoneHomeRoute(
         scope.launch { repo.savePhoneHomeCards(snap) }
     }
 
-    LaunchedEffect(storedSlots) {
-        val norm = normalizeSlots(storedSlots)
-        slots.clear()
-        slots.addAll(norm)
+    fun slotsForPage(pageIndex: Int): List<String?> {
+        ensurePageStorage()
+        return slotPages[pageIndex.coerceIn(0, PHONE_HOME_PAGE_COUNT - 1)]
+    }
+
+    fun cardsForPage(pageIndex: Int): List<PhoneCardPlacement> =
+        cards.filter { it.pageIndex == pageIndex }
+
+    fun widgetsForPage(pageIndex: Int): List<WidgetPlacement> =
+        widgets.filter { it.pageIndex == pageIndex }
+
+
+
+    LaunchedEffect(storedSlotPages) {
+        val normPages = normalizedPages(storedSlotPages)
+
+        slotPages = normPages
+        currentPage = currentPage.coerceIn(0, PHONE_HOME_PAGE_COUNT - 1)
+
+        if (storedSlotPages.size in 1 until PHONE_HOME_PAGE_COUNT) {
+            persistSlots()
+        }
     }
 
     LaunchedEffect(storedCards) {
@@ -203,18 +315,28 @@ fun PhoneHomeRoute(
         cards.addAll(storedCards)
     }
 
-    LaunchedEffect(allApps) {
-        if (allApps.isEmpty() || slots.isEmpty()) return@LaunchedEffect
+    LaunchedEffect(allApps, slotPages) {
+        if (allApps.isEmpty() || slotPages.isEmpty()) return@LaunchedEffect
+
         val valid = allApps.asSequence().map { it.packageName }.toHashSet()
         var changed = false
-        for (i in 0 until slots.size) {
-            val id = slots[i]
-            if (id != null && id !in valid) {
-                slots[i] = null
-                changed = true
+
+        val rebuiltPages = slotPages.map { page ->
+            val rebuilt = normalizeSlots(page).toMutableList()
+            for (i in rebuilt.indices) {
+                val id = rebuilt[i]
+                if (id != null && id !in valid) {
+                    rebuilt[i] = null
+                    changed = true
+                }
             }
+            rebuilt.toList()
         }
-        if (changed) persistSlots()
+
+        if (changed) {
+            slotPages = rebuiltPages
+            persistSlots()
+        }
     }
 
     fun resolveLabelForSlot(id: String?): String {
@@ -226,9 +348,20 @@ fun PhoneHomeRoute(
         if (id == null) null else allApps.firstOrNull { it.packageName == id }?.icon
 
     fun removeFromHome(id: String) {
-        val idx = slots.indexOfFirst { it == id }
-        if (idx != -1) {
-            slots[idx] = null
+        var changed = false
+        val rebuiltPages = slotPages.map { page ->
+            val rebuilt = page.toMutableList()
+            for (i in rebuilt.indices) {
+                if (rebuilt[i] == id) {
+                    rebuilt[i] = null
+                    changed = true
+                }
+            }
+            normalizeSlots(rebuilt)
+        }
+
+        if (changed) {
+            slotPages = rebuiltPages
             persistSlots()
         }
     }
@@ -265,11 +398,23 @@ fun PhoneHomeRoute(
     var gapHPx by remember { mutableFloatStateOf(0f) }
     var gapVPx by remember { mutableFloatStateOf(0f) }
     var rowsToShowState by remember { mutableIntStateOf(1) }
+    var gridUsedWidth by remember { mutableStateOf(0.dp) }
+    var routeRootSizePx by remember { mutableStateOf(IntSize.Zero) }
+    var lastEdgePageTurnAt by remember { mutableLongStateOf(0L) }
 
     fun stopDrag() {
         dragging = null
         hasDragPointer = false
         dropPreview = null
+        lastEdgePageTurnAt = 0L
+    }
+
+    fun setPage(newPage: Int) {
+        val clamped = newPage.coerceIn(0, PHONE_HOME_PAGE_COUNT - 1)
+        if (clamped == currentPage) return
+        currentPage = clamped
+        dropPreview = null
+        clearPlaceError()
     }
 
     fun cellFromPointer(pointerPx: Offset): Pair<Int, Int>? {
@@ -290,42 +435,50 @@ fun PhoneHomeRoute(
     }
 
     fun isCellCoveredByCard(
+        pageIndex: Int,
         row: Int,
         col: Int,
         ignore: PhoneCardPlacement? = null
     ): Boolean {
-        return cards.any { card ->
+        return cardsForPage(pageIndex).any { card ->
             if (ignore != null && card == ignore) return@any false
             card.col == 0 &&
                     row in card.row until (card.row + CARD_SPAN_Y) &&
-                    col in 0 until (0 + CARD_SPAN_X)
+                    col in 0 until CARD_SPAN_X
         }
     }
 
     fun isCellCoveredByWidget(
+        pageIndex: Int,
         row: Int,
         col: Int,
         ignoreWidgetId: Int? = null
     ): Boolean {
-        return widgets.any { w ->
-            if (ignoreWidgetId != null && w.appWidgetId == ignoreWidgetId) return@any false
-            row in w.cellY until (w.cellY + w.spanY) &&
-                    col in w.cellX until (w.cellX + w.spanX)
+        return widgetsForPage(pageIndex).any { widget ->
+            if (ignoreWidgetId != null && widget.appWidgetId == ignoreWidgetId) return@any false
+            row in widget.cellY until (widget.cellY + widget.spanY) &&
+                    col in widget.cellX until (widget.cellX + widget.spanX)
         }
     }
 
     fun computeDropPreview(pointerPx: Offset): DropPreview? {
         val payload = dragging ?: return null
         val targetCell = cellFromPointer(pointerPx) ?: return null
-        val (targetX, targetY) = targetCell
+        val targetX = targetCell.first
+        val targetY = targetCell.second
+
+        val pageIndex = currentPage
+        val pageSlots = slotsForPage(pageIndex)
+        val pageCards = cardsForPage(pageIndex)
+        val pageWidgets = widgetsForPage(pageIndex)
 
         return when (payload) {
             is DragPayload.App -> {
                 val idx = targetY * COLS + targetX
-                val slotPkg = slots.getOrNull(idx)
+                val slotPkg = pageSlots.getOrNull(idx)
                 val occupiedByOtherApp = slotPkg != null && slotPkg != payload.pkg
-                val coveredByCard = isCellCoveredByCard(targetY, targetX)
-                val coveredByWidget = isCellCoveredByWidget(targetY, targetX)
+                val coveredByCard = isCellCoveredByCard(pageIndex, targetY, targetX)
+                val coveredByWidget = isCellCoveredByWidget(pageIndex, targetY, targetX)
 
                 DropPreview(
                     cellX = targetX,
@@ -338,9 +491,9 @@ fun PhoneHomeRoute(
 
             is DragPayload.Widget -> {
                 val valid = isAreaFreeForWidget(
-                    slots = slots,
-                    cards = cards,
-                    widgets = widgets,
+                    slots = pageSlots,
+                    cards = pageCards,
+                    widgets = pageWidgets,
                     cellX = targetX,
                     cellY = targetY,
                     spanX = payload.spanX,
@@ -360,9 +513,9 @@ fun PhoneHomeRoute(
 
             is DragPayload.Card -> {
                 val valid = isAreaFreeForCard(
-                    slots = slots,
-                    cards = cards,
-                    widgets = widgets,
+                    slots = pageSlots,
+                    cards = pageCards,
+                    widgets = pageWidgets,
                     targetRow = targetY,
                     rowsToShow = rowsToShowState,
                     ignore = payload.placement
@@ -379,16 +532,56 @@ fun PhoneHomeRoute(
         }
     }
 
-    fun moveAppToIndex(pkg: String, toIndex: Int, visibleSlots: Int) {
+    fun maybeAutoTurnPage(pointerPx: Offset) {
+        val now = SystemClock.uptimeMillis()
+        if (now - lastEdgePageTurnAt < PHONE_HOME_EDGE_SWITCH_COOLDOWN_MS) return
+        if (routeRootSizePx.width <= 0) return
+
+        val x = pointerPx.x
+        val width = routeRootSizePx.width.toFloat()
+
+        when {
+            x <= PHONE_HOME_EDGE_SWITCH_THRESHOLD_PX && currentPage > 0 -> {
+                lastEdgePageTurnAt = now
+                setPage(currentPage - 1)
+                dropPreview = null
+            }
+
+            x >= width - PHONE_HOME_EDGE_SWITCH_THRESHOLD_PX && currentPage < PHONE_HOME_PAGE_COUNT - 1 -> {
+                lastEdgePageTurnAt = now
+                setPage(currentPage + 1)
+                dropPreview = null
+            }
+        }
+    }
+
+    fun moveAppToIndex(pageIndex: Int, pkg: String, toIndex: Int, visibleSlots: Int) {
         if (toIndex !in 0 until visibleSlots) return
 
-        val existing = slots.getOrNull(toIndex)
+        ensurePageStorage()
+
+        val targetPageIndex = pageIndex.coerceIn(0, PHONE_HOME_PAGE_COUNT - 1)
+        val currentTargetPage = slotsForPage(targetPageIndex)
+        val existing = currentTargetPage.getOrNull(toIndex)
         if (existing != null && existing != pkg) return
 
-        val oldIdx = slots.indexOfFirst { it == pkg }
-        if (oldIdx != -1) slots[oldIdx] = null
+        val rebuiltPages = slotPages.mapIndexed { idx, page ->
+            val rebuilt = page.toMutableList()
 
-        slots[toIndex] = pkg
+            for (i in rebuilt.indices) {
+                if (rebuilt[i] == pkg) {
+                    rebuilt[i] = null
+                }
+            }
+
+            if (idx == targetPageIndex) {
+                rebuilt[toIndex] = pkg
+            }
+
+            normalizeSlots(rebuilt)
+        }
+
+        slotPages = rebuiltPages
         persistSlots()
     }
 
@@ -424,16 +617,24 @@ fun PhoneHomeRoute(
             is DragPayload.App -> {
                 val targetIdx = preview.cellY * COLS + preview.cellX
                 val visibleSlots = rowsToShowState * COLS
-                moveAppToIndex(payload.pkg, targetIdx, visibleSlots)
+                moveAppToIndex(currentPage, payload.pkg, targetIdx, visibleSlots)
                 clearPlaceError()
             }
 
             is DragPayload.Widget -> {
                 scope.launch {
+                    val providerString =
+                        widgets.firstOrNull { it.appWidgetId == payload.widgetId }?.provider
+                            ?: widgetsRepo.widgetsFlow
+                                .firstOrNull()
+                                ?.firstOrNull { it.appWidgetId == payload.widgetId }
+                                ?.provider
+                            ?: ""
+
                     upsertWidget(
                         WidgetPlacement(
                             appWidgetId = payload.widgetId,
-                            provider = widgets.firstOrNull { it.appWidgetId == payload.widgetId }?.provider ?: "",
+                            provider = providerString,
                             cellX = preview.cellX,
                             cellY = preview.cellY,
                             spanX = payload.spanX,
@@ -442,7 +643,8 @@ fun PhoneHomeRoute(
                                 WidgetLayoutMode.PORTRAIT
                             } else {
                                 WidgetLayoutMode.LANDSCAPE
-                            }
+                            },
+                            pageIndex = currentPage
                         )
                     )
                 }
@@ -452,7 +654,11 @@ fun PhoneHomeRoute(
             is DragPayload.Card -> {
                 val idx = cards.indexOfFirst { it == payload.placement }
                 if (idx != -1) {
-                    cards[idx] = payload.placement.copy(row = preview.cellY, col = 0)
+                    cards[idx] = payload.placement.copy(
+                        row = preview.cellY,
+                        col = 0,
+                        pageIndex = currentPage
+                    )
                     persistCards()
                     clearPlaceError()
                 } else {
@@ -466,8 +672,6 @@ fun PhoneHomeRoute(
         suppressBackgroundLongPress = false
     }
 
-    var gridUsedWidth by remember { mutableStateOf(0.dp) }
-
     val wallpaperBitmap by produceState<ImageBitmap?>(initialValue = null, wallpaperUri, hasHomeWallpaper) {
         val current = wallpaperUri
         value = if (!hasHomeWallpaper || current.isNullOrBlank()) {
@@ -478,8 +682,6 @@ fun PhoneHomeRoute(
             }
         }
     }
-
-    var routeRootSizePx by remember { mutableStateOf(IntSize.Zero) }
 
     ProvidePhoneWallpaperGlassState(
         state = PhoneWallpaperGlassState(
@@ -537,8 +739,8 @@ fun PhoneHomeRoute(
                                     } ?: event.changes.firstOrNull()
 
                                     if (moveChange != null) {
-                                        moveChange.position
                                         hasDragPointer = true
+                                        maybeAutoTurnPage(moveChange.position)
                                         dropPreview = computeDropPreview(moveChange.position)
                                     }
 
@@ -602,6 +804,13 @@ fun PhoneHomeRoute(
 
                                 Spacer(modifier = Modifier.weight(1f))
 
+                                PhoneHomePageDots(
+                                    pageCount = PHONE_HOME_PAGE_COUNT,
+                                    currentPage = currentPage
+                                )
+
+                                Spacer(modifier = Modifier.weight(1f))
+
                                 Text(
                                     text = stringResource(R.string.common_done),
                                     color = Color.White.copy(alpha = 0.92f),
@@ -619,185 +828,322 @@ fun PhoneHomeRoute(
                                 )
                             }
                         }
+                    } else {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            PhoneHomePageDots(
+                                pageCount = PHONE_HOME_PAGE_COUNT,
+                                currentPage = currentPage
+                            )
+                        }
                     }
                 }
 
                 Spacer(Modifier.height(10.dp))
 
-                PhoneHomeGrid(
-                    modifier = Modifier.weight(1f),
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) {
+                    val pageWidthPx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
 
-                    slots = slots,
-                    cards = cards,
-                    widgets = widgets,
+                    val density = LocalDensity.current
+                    val pageWidthDp = with(density) { constraints.maxWidth.toDp() }
 
-                    appWidgetHost = appWidgetHost,
-                    appWidgetManager = appWidgetManager,
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(dragging, drawerOpen, addStuffOpen, currentPage) {
+                                if (!isPortrait) return@pointerInput
 
-                    editMode = editMode,
-                    dropPreview = dropPreview,
-                    resolveLabelForSlot = { resolveLabelForSlot(it) },
-                    resolveIconForSlot = { resolveIconForSlot(it) },
-                    onRemoveFromHome = { removeFromHome(it) },
-                    onLaunch = { launch(it) },
+                                detectHorizontalDragGestures(
+                                    onDragStart = {
+                                        scope.launch {
+                                            pageDragOffsetPx.stop()
+                                            pageDragOffsetPx.snapTo(0f)
+                                        }
+                                    },
+                                    onHorizontalDrag = { change, dragAmount ->
+                                        if (dragging != null) return@detectHorizontalDragGestures
+                                        if (drawerOpen || addStuffOpen) return@detectHorizontalDragGestures
 
-                    onDeleteWidget = { widgetId ->
-                        scope.launch {
-                            deleteWidget(widgetId)
-                        }
-                    },
+                                        val raw = pageDragOffsetPx.value + dragAmount
 
-                    dragging = dragging,
-                    setDragging = { payload ->
-                        if (payload is DragPayload.App || payload is DragPayload.Widget || payload is DragPayload.Card) {
-                            homeQuickMenuOpen = false
-                            addStuffOpen = false
-                            drawerOpen = false
-                            clearPlaceError()
-                            editMode = true
-                            suppressBackgroundLongPress = true
-                        }
-                        dragging = payload
-                        dropPreview = null
-                    },
-                    hasDragPointer = hasDragPointer,
-                    setHasDragPointer = { hasDragPointer = it },
+                                        val clamped = when {
+                                            currentPage == 0 -> raw.coerceAtMost(0f)
+                                            currentPage == PHONE_HOME_PAGE_COUNT - 1 -> raw.coerceAtLeast(0f)
+                                            else -> raw
+                                        }
 
-                    setDragPointer = { },
-                    updateDropPreview = { pointerPx ->
-                        dropPreview = computeDropPreview(pointerPx)
-                    },
-                    finishDragAt = { finishDragAt(it) },
+                                        change.consume()
+                                        scope.launch {
+                                            pageDragOffsetPx.snapTo(clamped)
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        scope.launch {
+                                            val targetPage = when {
+                                                pageDragOffsetPx.value > PHONE_HOME_SWIPE_SWITCH_THRESHOLD_PX && currentPage > 0 -> currentPage - 1
+                                                pageDragOffsetPx.value < -PHONE_HOME_SWIPE_SWITCH_THRESHOLD_PX && currentPage < PHONE_HOME_PAGE_COUNT - 1 -> currentPage + 1
+                                                else -> currentPage
+                                            }
 
-                    setGridTopLeftPx = { gridTopLeftPx = it },
-                    setCellSizePx = { cellSizePx = it },
-                    setGapHPx = { gapHPx = it },
-                    setGapVPx = { gapVPx = it },
-                    setRowsToShowState = { rowsToShowState = it },
-
-                    setGridUsedWidth = { gridUsedWidth = it },
-                    setPhoneCellDp = { },
-
-                    clearPlaceError = { clearPlaceError() },
-
-                    onDeleteCard = { card ->
-                        cards.remove(card)
-                        persistCards()
-                    },
-
-                    addStuffOpen = addStuffOpen,
-                    addStuffContent = { rowsToShow, cellDp ->
-                        AddStuffPopup(
-                            tab = addStuffTab,
-                            onTabChange = {
-                                addStuffTab = it
-                                addError = null
-                            },
-                            selectedCard = selectedCard,
-                            onSelectCard = {
-                                selectedCard = it
-                                addError = null
-                            },
-                            errorText = addError,
-                            onCancel = {
-                                addStuffOpen = false
-                                selectedCard = null
-                                addError = null
-                            },
-                            onConfirmAddCard = { _ ->
-                                val t = selectedCard
-                                if (t == null) {
-                                    addError = context.getString(R.string.phone_home_add_error_select_card)
-                                    return@AddStuffPopup
-                                }
-
-                                val ok = tryPlaceCard(
-                                    slots = slots,
-                                    cards = cards,
-                                    type = t,
-                                    rowsToShow = rowsToShow
-                                )
-
-                                if (!ok) {
-                                    addError = context.getString(R.string.phone_home_add_error_not_enough_card_space)
-                                    return@AddStuffPopup
-                                }
-
-                                persistCards()
-                                addStuffOpen = false
-                                selectedCard = null
-                                addError = null
-                            },
-                            pm = pm,
-                            cellDp = cellDp,
-                            onPickWidget = { providerInfo, rawSpanX, rawSpanY ->
-                                scope.launch {
-                                    val maxX = if (isPortrait) 4 else 2
-                                    val maxY = if (isPortrait) 5 else 2
-                                    val spanX = rawSpanX.coerceIn(1, maxX)
-                                    val spanY = rawSpanY.coerceIn(1, maxY)
-
-                                    val widgetId = appWidgetHost.allocateAppWidgetId()
-                                    val provider = providerInfo.provider ?: run {
-                                        placeError = context.getString(R.string.phone_home_widget_provider_error)
-                                        return@launch
-                                    }
-
-                                    val bound = runCatching {
-                                        appWidgetManager.bindAppWidgetIdIfAllowed(widgetId, provider)
-                                    }.getOrDefault(false)
-
-                                    if (!bound) {
-                                        runCatching { appWidgetHost.deleteAppWidgetId(widgetId) }
-                                        placeError = context.getString(R.string.phone_home_widget_bind_error)
-                                        return@launch
-                                    }
-
-                                    val best = nearestFreeWidgetCell(
-                                        slots = slots,
-                                        cards = cards,
-                                        widgets = widgets,
-                                        startCellX = 0,
-                                        startCellY = 0,
-                                        spanX = spanX,
-                                        spanY = spanY,
-                                        rowsToShow = rowsToShowState,
-                                        ignoreWidgetId = null
-                                    )
-
-                                    if (best == null) {
-                                        runCatching { appWidgetHost.deleteAppWidgetId(widgetId) }
-                                        placeError = context.getString(R.string.phone_home_widget_no_space)
-                                        return@launch
-                                    }
-
-                                    val (bx, by) = best
-                                    upsertWidget(
-                                        WidgetPlacement(
-                                            appWidgetId = widgetId,
-                                            provider = provider.flattenToString(),
-                                            cellX = bx,
-                                            cellY = by,
-                                            spanX = spanX,
-                                            spanY = spanY,
-                                            layoutMode = if (isPortrait) {
-                                                WidgetLayoutMode.PORTRAIT
+                                            val direction = targetPage - currentPage
+                                            val targetOffset = if (direction == 0) {
+                                                0f
                                             } else {
-                                                WidgetLayoutMode.LANDSCAPE
+                                                -direction * pageWidthPx
+                                            }
+
+                                            pageDragOffsetPx.animateTo(
+                                                targetValue = targetOffset,
+                                                animationSpec = tween(durationMillis = 220)
+                                            )
+
+                                            setPage(targetPage)
+                                            pageDragOffsetPx.snapTo(0f)
+                                        }
+                                    },
+                                    onDragCancel = {
+                                        scope.launch {
+                                            pageDragOffsetPx.animateTo(
+                                                targetValue = 0f,
+                                                animationSpec = tween(durationMillis = 220)
+                                            )
+                                        }
+                                    }
+                                )
+                            }
+                            .clip(RoundedCornerShape(28.dp))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(pageWidthDp * PHONE_HOME_PAGE_COUNT)
+                                .fillMaxHeight()
+                                .offset {
+                                    IntOffset(
+                                        x = (-currentPage * pageWidthPx + pageDragOffsetPx.value).roundToInt(),
+                                        y = 0
+                                    )
+                                }
+                        ) {
+                            repeat(PHONE_HOME_PAGE_COUNT) { pageIndex ->
+                                val pageSlots = slotsForPage(pageIndex).toList()
+                                val pageCards = cardsForPage(pageIndex)
+                                val pageWidgets = widgetsForPage(pageIndex)
+
+                                key(
+                                    pageIndex,
+                                    pageSlots,
+                                    pageCards,
+                                    pageWidgets
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .offset(x = pageWidthDp * pageIndex)
+                                            .width(pageWidthDp)
+                                            .fillMaxHeight()
+                                    ) {
+                                        PhoneHomeGrid(
+                                            modifier = Modifier.fillMaxSize(),
+                                            slots = pageSlots,
+                                            cards = pageCards,
+                                            widgets = pageWidgets,
+                                            appWidgetHost = appWidgetHost,
+                                            appWidgetManager = appWidgetManager,
+                                            editMode = editMode,
+                                            dropPreview = if (pageIndex == currentPage) dropPreview else null,
+                                            resolveLabelForSlot = { id -> resolveLabelForSlot(id) },
+                                            resolveIconForSlot = { id -> resolveIconForSlot(id) },
+                                            onRemoveFromHome = { id ->
+                                                removeFromHome(id)
+                                            },
+                                            onLaunch = { pkg -> launch(pkg) },
+                                            onDeleteWidget = { widgetId ->
+                                                scope.launch { deleteWidget(widgetId) }
+                                            },
+                                            dragging = dragging,
+                                            setDragging = { payload ->
+                                                if (
+                                                    payload is DragPayload.App ||
+                                                    payload is DragPayload.Widget ||
+                                                    payload is DragPayload.Card
+                                                ) {
+                                                    homeQuickMenuOpen = false
+                                                    addStuffOpen = false
+                                                    drawerOpen = false
+                                                    clearPlaceError()
+                                                    editMode = true
+                                                    suppressBackgroundLongPress = true
+                                                }
+                                                dragging = payload
+                                                dropPreview = null
+                                            },
+                                            hasDragPointer = hasDragPointer,
+                                            setHasDragPointer = { value -> hasDragPointer = value },
+                                            setDragPointer = { },
+                                            updateDropPreview = { pointerPx ->
+                                                dropPreview = computeDropPreview(pointerPx)
+                                            },
+                                            finishDragAt = { pointerPx ->
+                                                finishDragAt(pointerPx)
+                                            },
+                                            setGridTopLeftPx = { value ->
+                                                if (pageIndex == currentPage) gridTopLeftPx = value
+                                            },
+                                            setCellSizePx = { value ->
+                                                if (pageIndex == currentPage) cellSizePx = value
+                                            },
+                                            setGapHPx = { value ->
+                                                if (pageIndex == currentPage) gapHPx = value
+                                            },
+                                            setGapVPx = { value ->
+                                                if (pageIndex == currentPage) gapVPx = value
+                                            },
+                                            setRowsToShowState = { value ->
+                                                if (pageIndex == currentPage) rowsToShowState = value
+                                            },
+                                            setGridUsedWidth = { value ->
+                                                if (pageIndex == currentPage) gridUsedWidth = value
+                                            },
+                                            setPhoneCellDp = { },
+                                            clearPlaceError = { clearPlaceError() },
+                                            onDeleteCard = { card ->
+                                                cards.remove(card)
+                                                persistCards()
+                                            },
+                                            addStuffOpen = addStuffOpen && pageIndex == currentPage,
+                                            addStuffContent = { rowsToShow, cellDp ->
+                                                if (pageIndex != currentPage) return@PhoneHomeGrid
+
+                                                AddStuffPopup(
+                                                    tab = addStuffTab,
+                                                    onTabChange = { tabIndex ->
+                                                        addStuffTab = tabIndex
+                                                        addError = null
+                                                    },
+                                                    selectedCard = selectedCard,
+                                                    onSelectCard = { cardType ->
+                                                        selectedCard = cardType
+                                                        addError = null
+                                                    },
+                                                    errorText = addError,
+                                                    onCancel = {
+                                                        addStuffOpen = false
+                                                        selectedCard = null
+                                                        addError = null
+                                                    },
+                                                    onConfirmAddCard = {
+                                                        val selectedType = selectedCard
+                                                        if (selectedType == null) {
+                                                            addError = context.getString(R.string.phone_home_add_error_select_card)
+                                                            return@AddStuffPopup
+                                                        }
+
+                                                        val pageCardList = cardsForPage(currentPage).toMutableList()
+
+                                                        val ok = tryPlaceCard(
+                                                            slots = slotsForPage(currentPage),
+                                                            cards = pageCardList,
+                                                            type = selectedType,
+                                                            rowsToShow = rowsToShow,
+                                                            pageIndex = currentPage
+                                                        )
+
+                                                        if (ok) {
+                                                            cards.removeAll { it.pageIndex == currentPage }
+                                                            cards.addAll(pageCardList)
+                                                        }
+
+                                                        if (!ok) {
+                                                            addError = context.getString(R.string.phone_home_add_error_not_enough_card_space)
+                                                            return@AddStuffPopup
+                                                        }
+
+                                                        persistCards()
+                                                        addStuffOpen = false
+                                                        selectedCard = null
+                                                        addError = null
+                                                    },
+                                                    pm = pm,
+                                                    cellDp = cellDp,
+                                                    onPickWidget = { providerInfo, rawSpanX, rawSpanY ->
+                                                        scope.launch {
+                                                            val maxX = if (isPortrait) 4 else 2
+                                                            val maxY = if (isPortrait) 5 else 2
+                                                            val spanX = rawSpanX.coerceIn(1, maxX)
+                                                            val spanY = rawSpanY.coerceIn(1, maxY)
+
+                                                            val widgetId = appWidgetHost.allocateAppWidgetId()
+                                                            val provider = providerInfo.provider ?: run {
+                                                                placeError = context.getString(R.string.phone_home_widget_provider_error)
+                                                                return@launch
+                                                            }
+
+                                                            val bound = runCatching {
+                                                                appWidgetManager.bindAppWidgetIdIfAllowed(widgetId, provider)
+                                                            }.getOrDefault(false)
+
+                                                            if (!bound) {
+                                                                runCatching { appWidgetHost.deleteAppWidgetId(widgetId) }
+                                                                placeError = context.getString(R.string.phone_home_widget_bind_error)
+                                                                return@launch
+                                                            }
+
+                                                            val best = nearestFreeWidgetCell(
+                                                                slots = slotsForPage(currentPage),
+                                                                cards = cardsForPage(currentPage),
+                                                                widgets = widgetsForPage(currentPage),
+                                                                startCellX = 0,
+                                                                startCellY = 0,
+                                                                spanX = spanX,
+                                                                spanY = spanY,
+                                                                rowsToShow = rowsToShowState,
+                                                                ignoreWidgetId = null
+                                                            )
+
+                                                            if (best == null) {
+                                                                runCatching { appWidgetHost.deleteAppWidgetId(widgetId) }
+                                                                placeError = context.getString(R.string.phone_home_widget_no_space)
+                                                                return@launch
+                                                            }
+
+                                                            upsertWidget(
+                                                                WidgetPlacement(
+                                                                    appWidgetId = widgetId,
+                                                                    provider = provider.flattenToString(),
+                                                                    cellX = best.first,
+                                                                    cellY = best.second,
+                                                                    spanX = spanX,
+                                                                    spanY = spanY,
+                                                                    layoutMode = if (isPortrait) {
+                                                                        WidgetLayoutMode.PORTRAIT
+                                                                    } else {
+                                                                        WidgetLayoutMode.LANDSCAPE
+                                                                    },
+                                                                    pageIndex = currentPage
+                                                                )
+                                                            )
+
+                                                            addStuffOpen = false
+                                                            selectedCard = null
+                                                            addError = null
+                                                            clearPlaceError()
+                                                            editMode = true
+                                                        }
+                                                    }
+                                                )
                                             }
                                         )
-                                    )
-
-                                    addStuffOpen = false
-                                    selectedCard = null
-                                    addError = null
-                                    clearPlaceError()
-                                    editMode = true
+                                    }
                                 }
                             }
-                        )
+                        }
                     }
-                )
+                }
             }
 
             Box(
@@ -842,32 +1188,56 @@ fun PhoneHomeRoute(
             }
 
             if (homeQuickMenuOpen) {
-                BubbleMenu(
-                    title = stringResource(R.string.phone_home_quick_menu_title),
-                    onDismiss = { homeQuickMenuOpen = false },
-                    items = listOf(
-                        stringResource(R.string.phone_home_quick_menu_add_cards) to {
-                            homeQuickMenuOpen = false
-                            addError = null
-                            selectedCard = null
-                            addStuffTab = 0
-                            addStuffOpen = true
-                        },
-                        stringResource(R.string.phone_home_edit_mode) to {
-                            homeQuickMenuOpen = false
-                            if (!drawerOpen && !addStuffOpen) {
-                                editMode = true
-                            }
-                        },
-                        stringResource(R.string.phone_home_menu_change_wallpaper) to {
-                            homeQuickMenuOpen = false
-                            addStuffOpen = false
-                            drawerOpen = false
-                            clearPlaceError()
-                            showWallpaperPicker = true
-                        }
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(9000f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(Color.Black.copy(alpha = 0.58f))
+                            .combinedClickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = { homeQuickMenuOpen = false },
+                                onLongClick = { homeQuickMenuOpen = false }
+                            )
                     )
-                )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(9001f)
+                ) {
+                    BubbleMenu(
+                        title = stringResource(R.string.phone_home_quick_menu_title),
+                        onDismiss = { homeQuickMenuOpen = false },
+                        items = listOf(
+                            stringResource(R.string.phone_home_quick_menu_add_cards) to {
+                                homeQuickMenuOpen = false
+                                addError = null
+                                selectedCard = null
+                                addStuffTab = 0
+                                addStuffOpen = true
+                            },
+                            stringResource(R.string.phone_home_edit_mode) to {
+                                homeQuickMenuOpen = false
+                                if (!drawerOpen && !addStuffOpen) {
+                                    editMode = true
+                                }
+                            },
+                            stringResource(R.string.phone_home_menu_change_wallpaper) to {
+                                homeQuickMenuOpen = false
+                                addStuffOpen = false
+                                drawerOpen = false
+                                clearPlaceError()
+                                showWallpaperPicker = true
+                            }
+                        )
+                    )
+                }
             }
 
             if (showWallpaperPicker) {
@@ -905,41 +1275,32 @@ fun PhoneHomeRoute(
             PhoneHomeDrawer(
                 open = drawerOpen,
                 dragActive = drawerDragActive,
-                onOpenChange = { drawerOpen = it },
-                onDragActiveChange = { drawerDragActive = it },
-
+                onOpenChange = { open -> drawerOpen = open },
+                onDragActiveChange = { active -> drawerDragActive = active },
                 allApps = allApps,
-
-                setDragging = { dragging = it },
-
-                setDragPointer = {
+                setDragging = { payload -> dragging = payload },
+                setDragPointer = { _ ->
                     hasDragPointer = true
                 },
-                setHasDragPointer = { hasDragPointer = it },
-
+                setHasDragPointer = { value -> hasDragPointer = value },
                 updateDropPreview = { pointer ->
                     dropPreview = computeDropPreview(pointer)
                 },
-
                 onBeginEditDrag = {
                     dragPointerId = null
                     hasDragPointer = false
-
                     homeQuickMenuOpen = false
                     addStuffOpen = false
                     clearPlaceError()
-
                     editMode = true
                     suppressBackgroundLongPress = true
                 },
                 onEndEditDrag = {
                     suppressBackgroundLongPress = false
                 },
-
-                onLaunch = { launch(it) },
-
+                onLaunch = { pkg -> launch(pkg) },
                 clearPlaceError = { clearPlaceError() },
-                finishDragAt = { finishDragAt(it) }
+                finishDragAt = { pointer -> finishDragAt(pointer) }
             )
 
             val rootPreview = dropPreview
@@ -1006,13 +1367,14 @@ fun PhoneHomeRoute(
                             colors = CardDefaults.cardColors(containerColor = ghostFill),
                             shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.fillMaxSize()
-                        ) { }
+                        ) {}
                     }
                 }
             }
         }
     }
 }
+
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 private fun PhoneHomeWallpaperLayer(
@@ -1095,7 +1457,9 @@ private fun loadPhoneWallpaperBitmap(
             }
         } else {
             context.contentResolver.openInputStream(uri)?.use { stream ->
-                BitmapFactory.decodeStream(stream)?.let { scalePhoneWallpaperBitmapDownIfNeeded(it) }
+                BitmapFactory.decodeStream(stream)?.let { bitmap ->
+                    scalePhoneWallpaperBitmapDownIfNeeded(bitmap)
+                }
             }
         } ?: return null
 

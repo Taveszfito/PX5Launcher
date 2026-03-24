@@ -18,6 +18,7 @@ enum class WidgetLayoutMode {
  * cellX/cellY: bal-felső cella a rácson
  * spanX/spanY: widget méret cellákban
  * layoutMode: melyik orientációs layoutba lett lerakva
+ * pageIndex: portré főképernyő melyik oldala
  */
 data class WidgetPlacement(
     val appWidgetId: Int,
@@ -26,7 +27,8 @@ data class WidgetPlacement(
     val cellY: Int,
     val spanX: Int,
     val spanY: Int,
-    val layoutMode: WidgetLayoutMode = WidgetLayoutMode.LANDSCAPE
+    val layoutMode: WidgetLayoutMode = WidgetLayoutMode.LANDSCAPE,
+    val pageIndex: Int = 0
 )
 
 /** Egyszerű rács specifikáció. */

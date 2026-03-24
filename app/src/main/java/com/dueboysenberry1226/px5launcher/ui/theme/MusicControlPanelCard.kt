@@ -2,8 +2,9 @@
 
 package com.dueboysenberry1226.px5launcher.ui.theme
 
-import com.dueboysenberry1226.px5launcher.ui.theme.WallpaperGlassSurface
-import com.dueboysenberry1226.px5launcher.ui.theme.PhoneGlass
+import android.media.session.MediaSession
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
@@ -103,6 +104,9 @@ fun MusicControlPanelCard(
 
     var controller by remember { mutableStateOf<MediaController?>(null) }
     var hasPermissionIssue by remember { mutableStateOf(false) }
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    var mediaCallback: MediaController.Callback? by remember { mutableStateOf(null) }
+
 
     var selected by remember { mutableStateOf(Selected.SEEK) }
     var lastControlSelected by remember { mutableStateOf(Selected.PLAY_PAUSE) }
@@ -168,10 +172,18 @@ fun MusicControlPanelCard(
     }
 
     fun tryAttachController() {
+        val old = controller
+
         controller = null
 
         if (!hasNotificationListenerAccess(context)) {
             hasPermissionIssue = true
+            try {
+                mediaCallback?.let { cb ->
+                    old?.unregisterCallback(cb)
+                }
+            } catch (_: Throwable) {
+            }
             return
         }
         hasPermissionIssue = false
@@ -181,15 +193,37 @@ fun MusicControlPanelCard(
             val sessions = msm.getActiveSessions(
                 ComponentName(context, PX5NotificationListener::class.java)
             )
+
             val best =
                 sessions.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
                     ?: sessions.firstOrNull()
 
+            if (old?.sessionToken != best?.sessionToken) {
+                try {
+                    mediaCallback?.let { cb ->
+                        old?.unregisterCallback(cb)
+                    }
+                } catch (_: Throwable) {
+                }
+            }
+
             controller = best
         } catch (_: SecurityException) {
             hasPermissionIssue = true
+            try {
+                mediaCallback?.let { cb ->
+                    old?.unregisterCallback(cb)
+                }
+            } catch (_: Throwable) {
+            }
             controller = null
         } catch (_: Throwable) {
+            try {
+                mediaCallback?.let { cb ->
+                    old?.unregisterCallback(cb)
+                }
+            } catch (_: Throwable) {
+            }
             controller = null
         }
     }
@@ -359,13 +393,57 @@ fun MusicControlPanelCard(
         if (isPortrait && queueItems.isEmpty()) portraitPage = PortraitPage.CONTROLS
     }
 
+    mediaCallback = remember {
+        object : MediaController.Callback() {
+            override fun onPlaybackStateChanged(state: PlaybackState?) {
+                mainHandler.post { pullFromController(controller) }
+            }
+
+            override fun onMetadataChanged(metadata: MediaMetadata?) {
+                mainHandler.post { pullFromController(controller) }
+            }
+
+            override fun onQueueChanged(queue: List<MediaSession.QueueItem>?) {
+                mainHandler.post { pullFromController(controller) }
+            }
+
+            override fun onSessionDestroyed() {
+                mainHandler.post {
+                    controller = null
+                    tryAttachController()
+                    pullFromController(controller)
+                }
+            }
+        }
+    }
+
+    DisposableEffect(controller, mediaCallback) {
+        val c = controller
+        val cb = mediaCallback
+
+        if (c != null && cb != null) {
+            try {
+                c.registerCallback(cb, mainHandler)
+                pullFromController(c)
+            } catch (_: Throwable) {
+            }
+        }
+
+        onDispose {
+            try {
+                if (cb != null) c?.unregisterCallback(cb)
+            } catch (_: Throwable) {
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         tryAttachController()
         pullFromController(controller)
         refreshVolume()
 
         while (true) {
-            if (controller == null) tryAttachController()
+            tryAttachController()
             pullFromController(controller)
             refreshVolume()
             delay(500)
@@ -1281,19 +1359,6 @@ private fun Modifier.queueBlurIf(active: Boolean): Modifier {
         this.graphicsLayer {
             renderEffect = AndroidRenderEffect
                 .createBlurEffect(18f, 18f, Shader.TileMode.CLAMP)
-                .asComposeRenderEffect()
-        }
-    } else {
-        this
-    }
-}
-
-private fun Modifier.cardBlurIf(active: Boolean, radius: Float = 28f): Modifier {
-    if (!active) return this
-    return if (Build.VERSION.SDK_INT >= 31) {
-        this.graphicsLayer {
-            renderEffect = AndroidRenderEffect
-                .createBlurEffect(radius, radius, Shader.TileMode.CLAMP)
                 .asComposeRenderEffect()
         }
     } else {

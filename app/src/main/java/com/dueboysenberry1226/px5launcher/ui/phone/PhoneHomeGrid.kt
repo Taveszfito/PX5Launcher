@@ -3,6 +3,7 @@
 
 package com.dueboysenberry1226.px5launcher.ui.phone
 
+import androidx.compose.ui.draw.alpha
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.view.ViewGroup
@@ -192,44 +193,74 @@ internal fun PhoneHomeGrid(
                             val coveredByWidget = isCoveredByWidget(r, c)
                             val covered = coveredByCard || coveredByWidget
 
-                            HomeSlot(
-                                id = id,
-                                label = resolveLabelForSlot(id),
-                                icon = resolveIconForSlot(id),
-                                isEmpty = isEmpty,
-                                showPlaceholder = (editMode) && !covered,
-                                modifier = Modifier.size(cellSize),
+                            val draggingApp = dragging as? DragPayload.App
+                            val showTemporaryEmptySlot =
+                                draggingApp != null &&
+                                        draggingApp.pkg == id &&
+                                        draggingApp.fromIndex == idx
 
-                                showDelete = editMode && id != null && !covered,
-                                onDelete = { if (id != null) onRemoveFromHome(id) },
+                            Box(modifier = Modifier.size(cellSize)) {
+                                if (showTemporaryEmptySlot) {
+                                    HomeSlot(
+                                        id = null,
+                                        label = "",
+                                        icon = null,
+                                        isEmpty = true,
+                                        showPlaceholder = true,
+                                        modifier = Modifier.matchParentSize(),
 
-                                canDrag = !covered && id != null,
-                                onStartDrag = { rootPointer ->
-                                    if (id == null) return@HomeSlot
-                                    clearPlaceError()
-                                    setDragging(DragPayload.App(pkg = id, fromIndex = idx))
-                                    setDragPointer(rootPointer)
-                                    setHasDragPointer(true)
-                                    updateDropPreview(rootPointer)
-                                },
-                                onDragMove = { rootPointer ->
-                                    setDragPointer(rootPointer)
-                                    setHasDragPointer(true)
-                                    updateDropPreview(rootPointer)
-                                },
-                                onEndDrag = { rootPointer ->
-                                    setDragPointer(rootPointer)
-                                    setHasDragPointer(true)
-                                    finishDragAt(rootPointer)
-                                    updateDropPreview(rootPointer)
-                                },
+                                        showDelete = false,
+                                        onDelete = { },
 
-                                onClick = {
-                                    if (editMode) return@HomeSlot
-                                    if (covered) return@HomeSlot
-                                    if (id != null) onLaunch(id)
+                                        canDrag = false,
+                                        onStartDrag = { },
+                                        onDragMove = { },
+                                        onEndDrag = { },
+
+                                        onClick = { }
+                                    )
                                 }
-                            )
+
+                                HomeSlot(
+                                    id = id,
+                                    label = resolveLabelForSlot(id),
+                                    icon = resolveIconForSlot(id),
+                                    isEmpty = isEmpty,
+                                    showPlaceholder = (editMode) && !covered,
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .alpha(if (showTemporaryEmptySlot) 0f else 1f),
+
+                                    showDelete = editMode && id != null && !covered,
+                                    onDelete = { if (id != null) onRemoveFromHome(id) },
+
+                                    canDrag = !covered && id != null,
+                                    onStartDrag = { rootPointer ->
+                                        if (id == null) return@HomeSlot
+                                        clearPlaceError()
+                                        setDragging(DragPayload.App(pkg = id, fromIndex = idx))
+                                        setDragPointer(rootPointer)
+                                        setHasDragPointer(true)
+                                        updateDropPreview(rootPointer)
+                                    },
+                                    onDragMove = { rootPointer ->
+                                        setDragPointer(rootPointer)
+                                        setHasDragPointer(true)
+                                        updateDropPreview(rootPointer)
+                                    },
+                                    onEndDrag = { rootPointer ->
+                                        setDragPointer(rootPointer)
+                                        setHasDragPointer(true)
+                                        finishDragAt(rootPointer)
+                                    },
+
+                                    onClick = {
+                                        if (editMode) return@HomeSlot
+                                        if (covered) return@HomeSlot
+                                        if (id != null) onLaunch(id)
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -276,7 +307,6 @@ internal fun PhoneHomeGrid(
                             setDragPointer(rootPointer)
                             setHasDragPointer(true)
                             finishDragAt(rootPointer)
-                            updateDropPreview(rootPointer)
                         },
                         modifier = Modifier
                             .offset { IntOffset(ox, oy) }

@@ -52,18 +52,29 @@ class LauncherRepository(
         }
 
     // =========================
-    // ✅ PHONE HOME: slots
+    // ✅ PHONE HOME: slots (multi-page)
     // =========================
-    val phoneHomeSlotsFlow: Flow<List<String?>> =
+    val phoneHomeSlotsPagesFlow: Flow<List<List<String?>>> =
         context.px5DataStore.data.map { prefs ->
-            PhoneHomeCodec.decodeSlots(prefs[PREF_PHONE_HOME_SLOTS])
+            PhoneHomeCodec.decodeSlotsPages(prefs[PREF_PHONE_HOME_SLOTS])
         }
 
-    suspend fun savePhoneHomeSlots(slots: List<String?>) {
-        val encoded = PhoneHomeCodec.encodeSlots(slots)
+    // kompatibilitás: a régi hívási helyek az első oldalt kapják
+    val phoneHomeSlotsFlow: Flow<List<String?>> =
+        phoneHomeSlotsPagesFlow.map { pages ->
+            pages.firstOrNull().orEmpty()
+        }
+
+    suspend fun savePhoneHomeSlotsPages(pages: List<List<String?>>) {
+        val encoded = PhoneHomeCodec.encodeSlotsPages(pages)
         context.px5DataStore.edit { prefs ->
             prefs[PREF_PHONE_HOME_SLOTS] = encoded
         }
+    }
+
+    // kompatibilitás: ha valahol még a régi mentés futna, 1 oldalként mentjük
+    suspend fun savePhoneHomeSlots(slots: List<String?>) {
+        savePhoneHomeSlotsPages(listOf(slots))
     }
 
     // =========================
