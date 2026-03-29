@@ -106,6 +106,12 @@ import kotlin.math.max
 private enum class HomeSection { TOPBAR, TOP, ACTIONS, WIDGETS, NOTIFS }
 private enum class BottomPanel { WIDGETS, CALENDAR, MUSIC }
 
+private data class BottomPanelPosition(
+    val panel: BottomPanel,
+    val col: Int,
+    val row: Int
+)
+
 private const val WIDGET_HOST_ID = 1024
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -137,6 +143,7 @@ fun PSHomeRoute(
     val qsState = QuickSettingsRepository.state.collectAsState().value
 
     var notifHistoryMode by rememberSaveable { mutableStateOf(false) }
+    var notifEnterFocusTick by rememberSaveable { mutableIntStateOf(0) }
 
     var notifUpFromLeftButtonsAllowed by rememberSaveable { mutableStateOf(false) }
     var notifUpFromQsTopRowAllowed by rememberSaveable { mutableStateOf(false) }
@@ -146,6 +153,7 @@ fun PSHomeRoute(
     var widgetsKeyHandler by remember { mutableStateOf<((KeyEvent) -> Boolean)?>(null) }
     var calendarKeyHandler by remember { mutableStateOf<((KeyEvent) -> Boolean)?>(null) }
     var musicKeyHandler by remember { mutableStateOf<((KeyEvent) -> Boolean)?>(null) }
+    var notifKeyHandler by remember { mutableStateOf<((KeyEvent) -> Boolean)?>(null) }
 
     val widgetsRepo = remember(context) { WidgetsRepository(context) }
     val widgetHost = remember(context) { AppWidgetHost(context, WIDGET_HOST_ID) }
@@ -257,12 +265,52 @@ fun PSHomeRoute(
         bottomPanel = next
     }
 
-    fun stepBottomPanel(delta: Int) {
-        val order = listOf(BottomPanel.WIDGETS, BottomPanel.CALENDAR, BottomPanel.MUSIC)
-        val idx = order.indexOf(bottomPanel).takeIf { it >= 0 } ?: 0
-        val size = order.size
-        val nextIdx = ((idx + delta) % size + size) % size
-        setBottomPanel(order[nextIdx])
+    val bottomPanelPositions = remember {
+        listOf(
+            BottomPanelPosition(BottomPanel.WIDGETS, col = 0, row = 0),
+            BottomPanelPosition(BottomPanel.CALENDAR, col = 1, row = 0),
+            BottomPanelPosition(BottomPanel.MUSIC, col = 2, row = 0),
+        )
+    }
+
+    fun adjacentBottomPanel(from: BottomPanel, dir: Int): BottomPanel? {
+        val current = bottomPanelPositions.firstOrNull { it.panel == from } ?: return null
+
+        return bottomPanelPositions
+            .asSequence()
+            .filter { it.row == current.row }
+            .filter {
+                if (dir < 0) it.col < current.col else it.col > current.col
+            }
+            .minByOrNull { abs(it.col - current.col) }
+            ?.panel
+    }
+
+    var pendingBottomPanelFocus by remember { mutableStateOf<BottomPanel?>(null) }
+
+    fun moveBottomPanelHorizontal(dir: Int): Boolean {
+        val next = adjacentBottomPanel(bottomPanel, dir) ?: return false
+        if (next == bottomPanel) return false
+
+        pendingBottomPanelFocus = next
+        setBottomPanel(next)
+        return true
+    }
+
+    LaunchedEffect(bottomPanel, pendingBottomPanelFocus) {
+        val target = pendingBottomPanelFocus ?: return@LaunchedEffect
+        if (target != bottomPanel) return@LaunchedEffect
+
+        yield()
+        yield()
+
+        when (target) {
+            BottomPanel.WIDGETS -> widgetsFR
+            BottomPanel.CALENDAR -> calendarFR
+            BottomPanel.MUSIC -> musicFR
+        }.requestFocus()
+
+        pendingBottomPanelFocus = null
     }
 
     var clockText by remember { mutableStateOf("") }
@@ -921,7 +969,7 @@ fun PSHomeRoute(
 
             if (!allAppsOpen && (isLB || isRB)) {
                 if (homeSection == HomeSection.WIDGETS) {
-                    stepBottomPanel(if (isLB) -1 else +1)
+                    moveBottomPanelHorizontal(if (isLB) -1 else +1)
                     true
                 } else {
                     val order = listOf(Tab.GAMES, Tab.MEDIA, Tab.NOTIFICATIONS)
@@ -936,19 +984,29 @@ fun PSHomeRoute(
 
                     AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
                         if (allAppsOpen) {
-                            // ✅ TOPBAR-ról LE: vissza az AllApps első app tile-ra
                             allAppsSelectedIndex = 0
                             homeSection = HomeSection.TOP
                             focusManager.clearFocus(force = true)
                             true
                         } else {
-                            // normál működés (amikor nincs AllApps)
-                            homeSection = when (tab) {
-                                Tab.GAMES -> HomeSection.TOP
-                                Tab.MEDIA -> HomeSection.TOP
-                                Tab.NOTIFICATIONS -> HomeSection.NOTIFS
+                            when (tab) {
+                                Tab.GAMES -> {
+                                    homeSection = HomeSection.TOP
+                                    true
+                                }
+
+                                Tab.MEDIA -> {
+                                    homeSection = HomeSection.TOP
+                                    true
+                                }
+
+                                Tab.NOTIFICATIONS -> {
+                                    homeSection = HomeSection.NOTIFS
+                                    notifEnterFocusTick++
+                                    focusManager.clearFocus(force = true)
+                                    true
+                                }
                             }
-                            true
                         }
                     }
 
@@ -1115,28 +1173,35 @@ fun PSHomeRoute(
                 }
             } else {
                 when (homeSection) {
-                    HomeSection.NOTIFS -> when (code) {
+                    HomeSection.NOTIFS -> {
+                        val handledByNotif = notifKeyHandler?.invoke(e) == true
 
-                        AndroidKeyEvent.KEYCODE_DPAD_UP -> {
-                            if (notifUpToTopbarAllowed) {
-                                homeSection = HomeSection.TOPBAR
-                                topBarIndex = when (tab) {
-                                    Tab.GAMES -> 0
-                                    Tab.MEDIA -> 1
-                                    Tab.NOTIFICATIONS -> 2
-                                }
-                                focusManager.clearFocus(force = true)
-                                true
-                            } else false
-                        }
-
-                        AndroidKeyEvent.KEYCODE_BACK -> {
-                            homeSection = HomeSection.TOPBAR
-                            focusManager.clearFocus(force = true)
+                        if (handledByNotif) {
                             true
-                        }
+                        } else {
+                            when (code) {
+                                AndroidKeyEvent.KEYCODE_DPAD_UP -> {
+                                    if (notifUpToTopbarAllowed) {
+                                        homeSection = HomeSection.TOPBAR
+                                        topBarIndex = when (tab) {
+                                            Tab.GAMES -> 0
+                                            Tab.MEDIA -> 1
+                                            Tab.NOTIFICATIONS -> 2
+                                        }
+                                        focusManager.clearFocus(force = true)
+                                        true
+                                    } else false
+                                }
 
-                        else -> false
+                                AndroidKeyEvent.KEYCODE_BACK -> {
+                                    homeSection = HomeSection.TOPBAR
+                                    focusManager.clearFocus(force = true)
+                                    true
+                                }
+
+                                else -> false
+                            }
+                        }
                     }
 
                     HomeSection.TOP -> {
@@ -1249,13 +1314,30 @@ fun PSHomeRoute(
                             BottomPanel.MUSIC -> musicKeyHandler?.invoke(e) == true
                         }
 
-                        if (handledByPanel) true
-                        else when (code) {
-                            AndroidKeyEvent.KEYCODE_DPAD_UP -> { homeSection = HomeSection.ACTIONS; goActions(); true }
-                            AndroidKeyEvent.KEYCODE_BACK,
-                            AndroidKeyEvent.KEYCODE_BUTTON_B -> { homeSection = HomeSection.ACTIONS; goActions(); true }
-                            AndroidKeyEvent.KEYCODE_DPAD_DOWN -> true
-                            else -> false
+                        if (handledByPanel) {
+                            true
+                        } else {
+                            when (code) {
+                                AndroidKeyEvent.KEYCODE_DPAD_LEFT -> moveBottomPanelHorizontal(-1)
+
+                                AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> moveBottomPanelHorizontal(+1)
+
+                                AndroidKeyEvent.KEYCODE_DPAD_UP -> {
+                                    homeSection = HomeSection.ACTIONS
+                                    goActions()
+                                    true
+                                }
+
+                                AndroidKeyEvent.KEYCODE_BACK,
+                                AndroidKeyEvent.KEYCODE_BUTTON_B -> {
+                                    homeSection = HomeSection.ACTIONS
+                                    goActions()
+                                    true
+                                }
+
+                                AndroidKeyEvent.KEYCODE_DPAD_DOWN -> true
+                                else -> false
+                            }
                         }
                     }
                     HomeSection.TOPBAR -> false
@@ -1360,7 +1442,7 @@ fun PSHomeRoute(
 
                     if (ax > ay) {
                         if (homeSection == HomeSection.WIDGETS) {
-                            if (totalX < 0f) stepBottomPanel(+1) else stepBottomPanel(-1)
+                            if (totalX < 0f) moveBottomPanelHorizontal(+1) else moveBottomPanelHorizontal(-1)
                         } else {
                             // no-op (gear step already did it)
                         }
@@ -1494,10 +1576,25 @@ fun PSHomeRoute(
                         .weight(1f),
                     liveNotifications = liveNotifs,
                     historyNotifications = historyNotifs,
+                    enterFocusTick = notifEnterFocusTick,
                     historyMode = notifHistoryMode,
-                    onLeftButtonsFocusEdgeChanged = { _ ->
+                    onLeftButtonsFocusEdgeChanged = { allowed ->
+                        notifUpFromLeftButtonsAllowed = allowed
                     },
-                    onQsTopRowFocusEdgeChanged = { _ ->
+                    onQsTopRowFocusEdgeChanged = { allowed ->
+                        notifUpFromQsTopRowAllowed = allowed
+                    },
+                    registerKeyHandler = { handler ->
+                        notifKeyHandler = handler
+                    },
+                    onRequestMoveToTopbar = {
+                        homeSection = HomeSection.TOPBAR
+                        topBarIndex = when (tab) {
+                            Tab.GAMES -> 0
+                            Tab.MEDIA -> 1
+                            Tab.NOTIFICATIONS -> 2
+                        }
+                        focusManager.clearFocus(force = true)
                     },
                     onDismissOne = { id, fromHistory ->
                         if (fromHistory) NotificationsRepository.removeFromHistory(id)
@@ -1813,6 +1910,7 @@ fun PSHomeRoute(
                                             CalendarPanelCard(
                                                 modifier = Modifier.fillMaxSize(),
                                                 vibrationEnabled = vibrationEnabled,
+                                                focusRequester = calendarFR,
                                                 registerKeyHandler = { handler ->
                                                     calendarKeyHandler = handler
                                                 }

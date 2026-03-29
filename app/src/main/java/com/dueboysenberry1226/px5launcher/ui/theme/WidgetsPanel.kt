@@ -388,16 +388,24 @@ fun WidgetsPanel(
                 if (slotEmpty) {
                     return@registerKeyHandler when (code) {
                         AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
-                            if (currentSlotIndex > 0) applyLandscapeSlotIndex(currentSlotIndex - 1)
-                            true
+                            if (currentSlotIndex > 0) {
+                                applyLandscapeSlotIndex(currentSlotIndex - 1)
+                                true
+                            } else {
+                                false
+                            }
                         }
 
                         AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
-                            if (currentSlotIndex < 3) applyLandscapeSlotIndex(currentSlotIndex + 1)
-                            true
+                            if (currentSlotIndex < 3) {
+                                applyLandscapeSlotIndex(currentSlotIndex + 1)
+                                true
+                            } else {
+                                false
+                            }
                         }
 
-                        AndroidKeyEvent.KEYCODE_DPAD_UP -> true
+                        AndroidKeyEvent.KEYCODE_DPAD_UP -> false
                         AndroidKeyEvent.KEYCODE_DPAD_DOWN -> true
 
                         in okCodes -> {
@@ -413,16 +421,24 @@ fun WidgetsPanel(
                 if (slotBig) {
                     return@registerKeyHandler when (code) {
                         AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
-                            if (currentSlotIndex > 0) applyLandscapeSlotIndex(currentSlotIndex - 1)
-                            true
+                            if (currentSlotIndex > 0) {
+                                applyLandscapeSlotIndex(currentSlotIndex - 1)
+                                true
+                            } else {
+                                false
+                            }
                         }
 
                         AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
-                            if (currentSlotIndex < 3) applyLandscapeSlotIndex(currentSlotIndex + 1)
-                            true
+                            if (currentSlotIndex < 3) {
+                                applyLandscapeSlotIndex(currentSlotIndex + 1)
+                                true
+                            } else {
+                                false
+                            }
                         }
 
-                        AndroidKeyEvent.KEYCODE_DPAD_UP -> true
+                        AndroidKeyEvent.KEYCODE_DPAD_UP -> false
                         AndroidKeyEvent.KEYCODE_DPAD_DOWN -> true
 
                         in okCodes -> true
@@ -457,31 +473,43 @@ fun WidgetsPanel(
 
                 return@registerKeyHandler when (code) {
                     AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
-                        if (localX > 0) {
-                            selectedX -= 1
-                            clampSel()
-                        } else if (currentSlotIndex > 0) {
-                            jumpLandscapeSlot(currentSlotIndex - 1, 1, localY)
+                        when {
+                            localX > 0 -> {
+                                selectedX -= 1
+                                clampSel()
+                                true
+                            }
+                            currentSlotIndex > 0 -> {
+                                jumpLandscapeSlot(currentSlotIndex - 1, 1, localY)
+                                true
+                            }
+                            else -> false
                         }
-                        true
                     }
 
                     AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
-                        if (localX < 1) {
-                            selectedX += 1
-                            clampSel()
-                        } else if (currentSlotIndex < 3) {
-                            jumpLandscapeSlot(currentSlotIndex + 1, 0, localY)
+                        when {
+                            localX < 1 -> {
+                                selectedX += 1
+                                clampSel()
+                                true
+                            }
+                            currentSlotIndex < 3 -> {
+                                jumpLandscapeSlot(currentSlotIndex + 1, 0, localY)
+                                true
+                            }
+                            else -> false
                         }
-                        true
                     }
 
                     AndroidKeyEvent.KEYCODE_DPAD_UP -> {
                         if (localY > 0) {
                             selectedY -= 1
                             clampSel()
+                            true
+                        } else {
+                            false
                         }
-                        true
                     }
 
                     AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {

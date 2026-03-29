@@ -656,17 +656,25 @@ fun MusicControlPanelCard(
                 AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
                     when (selected) {
                         Selected.LIST -> {
-                            if (isPortrait) true else {
+                            if (isPortrait) {
+                                true
+                            } else {
                                 selected = Selected.SEEK
                                 true
                             }
                         }
+
                         Selected.SEEK -> {
                             if (seekMode) {
                                 doSeekBy(-5000L, controller, durationMs, positionMs) { positionMs = it }
                                 true
-                            } else false
+                            } else {
+                                false
+                            }
                         }
+
+                        Selected.PREV -> false
+
                         else -> {
                             selected = selected.prevControl()
                             lastControlSelected = selected
@@ -678,6 +686,7 @@ fun MusicControlPanelCard(
                 AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
                     when (selected) {
                         Selected.LIST -> false
+
                         Selected.SEEK -> {
                             if (seekMode) {
                                 doSeekBy(+5000L, controller, durationMs, positionMs) { positionMs = it }
@@ -686,7 +695,9 @@ fun MusicControlPanelCard(
                                 openQueueIfAny()
                             }
                         }
+
                         Selected.VOL_UP -> openQueueIfAny()
+
                         else -> {
                             selected = selected.nextControl()
                             lastControlSelected = selected
@@ -705,6 +716,7 @@ fun MusicControlPanelCard(
                                 true
                             } else false
                         }
+
                         else -> {
                             if (selected != Selected.SEEK) {
                                 selected = Selected.SEEK
@@ -729,12 +741,14 @@ fun MusicControlPanelCard(
                                 true
                             }
                         }
+
                         Selected.SEEK -> {
                             if (!seekMode) {
                                 selected = lastControlSelected
                                 true
                             } else false
                         }
+
                         else -> false
                     }
                 }

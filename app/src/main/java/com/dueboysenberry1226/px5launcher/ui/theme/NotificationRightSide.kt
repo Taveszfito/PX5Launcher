@@ -118,12 +118,15 @@ fun NotificationRightSide(
             available = available,
             onCancel = {
                 hClick()
+                pickerOpen = false
+                pickerTargetSlot = -1
             },
             onConfirm = { selected: QuickTileType ->
                 hClick()
                 if (pickerTargetSlot >= 0) {
                     onTileAssign(pickerTargetSlot, selected)
                 }
+                pickerOpen = false
                 pickerTargetSlot = -1
             },
             colors = colors,
@@ -160,6 +163,7 @@ private fun QuickTileCell(
                 shape = shape
             )
             .onFocusChanged {
+                focused = it.isFocused
                 if (it.isFocused) onFocusTick()
                 if (isTopRow) onTopRowFocusEdgeChanged(it.isFocused)
             }
@@ -260,7 +264,6 @@ private fun QuickTilePickerDialog(
             }
 
             LaunchedEffect(selected) {
-                // ha DPAD-ozással / új kijelöléssel is változik, kapjon egy tick-et
                 if (selected != null) onPickTick()
             }
         },

@@ -2,6 +2,7 @@
 
 package com.dueboysenberry1226.px5launcher.ui.theme
 
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -9,7 +10,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -36,6 +39,7 @@ fun NotificationLeftSide(
     liveNotifications: List<PX5NotificationItem>,
     historyNotifications: List<PX5NotificationItem>,
     historyMode: Boolean,
+    enterFocusTick: Int,
     onDismissOne: (String) -> Unit,
     onClearAll: () -> Unit,
     onToggleHistoryMode: () -> Unit,
@@ -53,6 +57,20 @@ fun NotificationLeftSide(
     val shape = RoundedCornerShape(22.dp)
 
     val firstBottomButtonFR = remember { FocusRequester() }
+    val firstNotificationFR = remember { FocusRequester() }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(enterFocusTick, items.size, historyMode) {
+        if (enterFocusTick <= 0) return@LaunchedEffect
+
+        kotlinx.coroutines.yield()
+
+        if (items.isNotEmpty()) {
+            firstNotificationFR.requestFocus()
+        } else {
+            firstBottomButtonFR.requestFocus()
+        }
+    }
 
     Column(
         modifier = modifier
@@ -79,6 +97,7 @@ fun NotificationLeftSide(
             }
         } else {
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
@@ -88,15 +107,15 @@ fun NotificationLeftSide(
                     NotificationRow(
                         item = item,
                         historyMode = historyMode,
+                        listState = listState,
+                        itemIndex = index,
+                        focusRequester = if (index == 0) firstNotificationFR else null,
                         onLaunch = {
                             hClick()
                             NotificationsRepository.launch(item.id, fromHistory = historyMode)
                         },
                         onDelete = {
                             hClick()
-                            // delete gomb:
-                            // live -> dismiss +
-                            // history -> remove history entry
                             if (historyMode) {
                                 NotificationsRepository.removeFromHistory(item.id)
                             } else {
@@ -114,6 +133,7 @@ fun NotificationLeftSide(
         }
 
         Spacer(Modifier.height(12.dp))
+
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -133,7 +153,6 @@ fun NotificationLeftSide(
                 focusRequester = firstBottomButtonFR,
                 onFocusChanged = { focused ->
                     if (focused) hTick()
-                    // ✅ csak akkor jelezzük a "topbar fel" engedélyt, ha NINCS értesítés
                     if (items.isEmpty()) onFocusEdgeChanged(focused)
                 }
             )
@@ -154,10 +173,14 @@ fun NotificationLeftSide(
     }
 }
 
+
 @Composable
 private fun NotificationRow(
     item: PX5NotificationItem,
     historyMode: Boolean,
+    listState: LazyListState,
+    itemIndex: Int,
+    focusRequester: FocusRequester? = null,
     onLaunch: () -> Unit,
     onDelete: () -> Unit,
     colors: PaneColors,
@@ -165,18 +188,29 @@ private fun NotificationRow(
     onTopEdgeReached: (Boolean) -> Unit,
     onFocusTick: () -> Unit
 ) {
+
+    val scope = rememberCoroutineScope()
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 🔵 launch area (külön fókusz target)
         FocusableCard(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
             onClick = onLaunch,
             colors = colors,
             onFocusChanged = { focused ->
-                if (focused) onFocusTick()
-                if (isFirst) onTopEdgeReached(focused)
+                if (focused) {
+                    onFocusTick()
+                    onTopEdgeReached(isFirst)
+                } else {
+                    if (isFirst) onTopEdgeReached(false)
+                }
+            },
+            onFocused = {
+                listState.animateScrollToItem(itemIndex)
             }
         ) {
             Column {
@@ -214,13 +248,17 @@ private fun NotificationRow(
 
         Spacer(Modifier.width(10.dp))
 
-        // 🔴 delete button (külön fókusz target)
         FocusableCard(
             modifier = Modifier.size(width = 58.dp, height = 48.dp),
             onClick = onDelete,
             colors = colors,
             onFocusChanged = { focused ->
-                if (focused) onFocusTick()
+                if (focused) {
+                    onFocusTick()
+                    scope.launch {
+                        listState.animateScrollToItem(itemIndex)
+                    }
+                }
             }
         ) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -236,6 +274,7 @@ private fun FocusableCard(
     onClick: () -> Unit,
     colors: PaneColors,
     onFocusChanged: (Boolean) -> Unit,
+    onFocused: (suspend () -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit
 ) {
     val shape = RoundedCornerShape(14.dp)
@@ -254,6 +293,7 @@ private fun FocusableCard(
                 shape = shape
             )
             .onFocusChanged {
+                focused = it.isFocused
                 onFocusChanged(it.isFocused)
             }
             .clickable(
@@ -265,6 +305,12 @@ private fun FocusableCard(
         contentAlignment = Alignment.CenterStart,
         content = content
     )
+
+    LaunchedEffect(focused) {
+        if (focused) {
+            onFocused?.invoke()
+        }
+    }
 }
 
 @Composable
@@ -292,6 +338,7 @@ private fun FocusableBottomButton(
                 shape = shape
             )
             .onFocusChanged {
+                focused = it.isFocused
                 onFocusChanged(it.isFocused)
             }
             .clickable(

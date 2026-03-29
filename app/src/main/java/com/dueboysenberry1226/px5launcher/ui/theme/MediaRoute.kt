@@ -74,6 +74,8 @@ fun MediaRoute(
     }
 
     var hasPerm by remember { mutableStateOf(hasAllPermissions(context)) }
+    var permissionButtonIndex by rememberSaveable { mutableIntStateOf(0) }
+    var permissionButtonsFocused by rememberSaveable { mutableStateOf(false) }
 
     val permLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -245,14 +247,44 @@ fun MediaRoute(
 
         if (!hasPerm) {
             return@internalKeyHandler when (code) {
+                AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
+                    permissionButtonsFocused = true
+                    if (permissionButtonIndex > 0) permissionButtonIndex--
+                    true
+                }
+
+                AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    permissionButtonsFocused = true
+                    if (permissionButtonIndex < 1) permissionButtonIndex++
+                    true
+                }
+
+                AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
+                    permissionButtonsFocused = true
+                    true
+                }
+
+                AndroidKeyEvent.KEYCODE_DPAD_UP -> {
+                    permissionButtonsFocused = false
+                    false
+                }
+
                 in backCodes -> {
+                    permissionButtonsFocused = true
                     onRequestBackToGames()
                     true
                 }
+
                 in okCodes -> {
-                    permLauncher.launch(MediaStoreRepository.requiredPermissions())
+                    permissionButtonsFocused = true
+                    if (permissionButtonIndex == 0) {
+                        permLauncher.launch(MediaStoreRepository.requiredPermissions())
+                    } else {
+                        onRequestBackToGames()
+                    }
                     true
                 }
+
                 else -> false
             }
         }
@@ -380,6 +412,12 @@ fun MediaRoute(
     Box(Modifier.fillMaxWidth()) {
         if (!hasPerm) {
             MediaPermissionCard(
+                selectedIndex = permissionButtonIndex,
+                buttonsFocused = permissionButtonsFocused,
+                onSelect = {
+                    permissionButtonsFocused = true
+                    permissionButtonIndex = it
+                },
                 onRequest = { hClick(); permLauncher.launch(MediaStoreRepository.requiredPermissions()) },
                 onBack = { hClick(); onRequestBackToGames() }
             )
@@ -481,6 +519,9 @@ private fun hasAllPermissions(ctx: Context): Boolean {
 
 @Composable
 private fun MediaPermissionCard(
+    selectedIndex: Int,
+    buttonsFocused: Boolean,
+    onSelect: (Int) -> Unit,
     onRequest: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -506,8 +547,23 @@ private fun MediaPermissionCard(
             )
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                TouchTextButton(text = stringResource(R.string.media_perm_request), onClick = onRequest)
-                TouchTextButton(text = stringResource(R.string.common_back), onClick = onBack, alpha = 0.85f)
+                TouchTextButton(
+                    text = stringResource(R.string.media_perm_request),
+                    selected = buttonsFocused && selectedIndex == 0,
+                    onClick = {
+                        onSelect(0)
+                        onRequest()
+                    }
+                )
+                TouchTextButton(
+                    text = stringResource(R.string.common_back),
+                    selected = buttonsFocused && selectedIndex == 1,
+                    onClick = {
+                        onSelect(1)
+                        onBack()
+                    },
+                    alpha = 0.85f
+                )
             }
         }
     }
@@ -517,21 +573,35 @@ private fun MediaPermissionCard(
 private fun TouchTextButton(
     text: String,
     onClick: () -> Unit,
-    alpha: Float = 1f
+    alpha: Float = 1f,
+    selected: Boolean = false
 ) {
-    Text(
-        text = text,
-        color = Color.White.copy(alpha = alpha),
-        fontSize = 13.sp,
-        fontWeight = FontWeight.SemiBold,
+    val shape = RoundedCornerShape(12.dp)
+
+    Box(
         modifier = Modifier
-            .padding(vertical = 8.dp, horizontal = 10.dp)
+            .clip(shape)
+            .then(
+                if (selected) {
+                    Modifier.border(2.dp, Color.White.copy(alpha = 0.95f), shape)
+                } else {
+                    Modifier
+                }
+            )
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onClick
             )
-    )
+    ) {
+        Text(
+            text = text,
+            color = Color.White.copy(alpha = alpha),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp)
+        )
+    }
 }
 
 @Composable
