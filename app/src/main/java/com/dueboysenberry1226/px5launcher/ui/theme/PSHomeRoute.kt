@@ -313,17 +313,7 @@ fun PSHomeRoute(
         pendingBottomPanelFocus = null
     }
 
-    var clockText by remember { mutableStateOf("") }
 
-    LaunchedEffect(is24h) {
-        val pattern = if (is24h) "HH:mm" else "hh:mm a"
-        val fmt = SimpleDateFormat(pattern, Locale.getDefault())
-
-        while (true) {
-            clockText = fmt.format(Date())
-            delay(1_000)
-        }
-    }
 
     LaunchedEffect(tab) {
         topBarIndex = when (tab) {
@@ -353,15 +343,17 @@ fun PSHomeRoute(
 
     val appByPkg = remember(allApps) { allApps.associateBy { it.packageName } }
 
-    val topApps: List<LaunchableApp> = remember(allApps, pinned, recents) {
-        fun recencyRank(pkg: String): Int {
-            val idx = recents.indexOf(pkg)
-            return if (idx >= 0) idx else Int.MAX_VALUE
-        }
+    val topApps: List<LaunchableApp> = remember(allApps, pinned, recents, appByPkg) {
+        val recentsRank = recents.withIndex().associate { it.value to it.index }
 
         val pinnedApps = pinned
             .mapNotNull { appByPkg[it] }
-            .sortedWith(compareBy({ recencyRank(it.packageName) }, { it.label.lowercase() }))
+            .sortedWith(
+                compareBy<LaunchableApp>(
+                    { recentsRank[it.packageName] ?: Int.MAX_VALUE },
+                    { it.label.lowercase() }
+                )
+            )
 
         val recentApps = recents
             .mapNotNull { appByPkg[it] }
@@ -434,13 +426,15 @@ fun PSHomeRoute(
         }
     }
 
-    val bg = Brush.verticalGradient(
-        listOf(
-            accent.copy(alpha = 0.22f),
-            Color(0xFF0A0F18),
-            Color(0xFF060A11)
+    val bg = remember(accent) {
+        Brush.verticalGradient(
+            listOf(
+                accent.copy(alpha = 0.22f),
+                Color(0xFF0A0F18),
+                Color(0xFF060A11)
+            )
         )
-    )
+    }
 
     fun launchApp(app: LaunchableApp) {
         val intent = pm.getLaunchIntentForPackage(app.packageName) ?: return
@@ -922,17 +916,26 @@ fun PSHomeRoute(
 
     val columns = allAppsColumns.coerceIn(2, 5)
 
-    val keyHandler: (KeyEvent) -> Boolean = { e ->
-        val nk = e.nativeKeyEvent
-        val code = nk.keyCode
-        val action = nk.action
+    val tabOrder = remember {
+        listOf(Tab.GAMES, Tab.MEDIA, Tab.NOTIFICATIONS)
+    }
 
-        val okCodes = setOf(
+    val okCodes = remember {
+        setOf(
             AndroidKeyEvent.KEYCODE_DPAD_CENTER,
             AndroidKeyEvent.KEYCODE_ENTER,
             AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
             AndroidKeyEvent.KEYCODE_BUTTON_A
         )
+    }
+
+
+    val keyHandler: (KeyEvent) -> Boolean = { e ->
+        val nk = e.nativeKeyEvent
+        val code = nk.keyCode
+        val action = nk.action
+
+
 
         val isLB = (code == AndroidKeyEvent.KEYCODE_BUTTON_L1) || (code == AndroidKeyEvent.KEYCODE_1)
         val isRB = (code == AndroidKeyEvent.KEYCODE_BUTTON_R1) || (code == AndroidKeyEvent.KEYCODE_2)
@@ -972,10 +975,9 @@ fun PSHomeRoute(
                     moveBottomPanelHorizontal(if (isLB) -1 else +1)
                     true
                 } else {
-                    val order = listOf(Tab.GAMES, Tab.MEDIA, Tab.NOTIFICATIONS)
-                    val idx = order.indexOf(tab).takeIf { it >= 0 } ?: 0
-                    val nextIdx = ((idx + (if (isLB) -1 else +1)) % order.size + order.size) % order.size
-                    val nextTab = order[nextIdx]
+                    val idx = tabOrder.indexOf(tab).takeIf { it >= 0 } ?: 0
+                    val nextIdx = ((idx + (if (isLB) -1 else +1)) % tabOrder.size + tabOrder.size) % tabOrder.size
+                    val nextTab = tabOrder[nextIdx]
                     if (tab != nextTab) tab = nextTab
                     true
                 }
@@ -1550,9 +1552,9 @@ fun PSHomeRoute(
             .padding(horizontal = 26.dp, vertical = 18.dp)
     ) {
         Column(Modifier.fillMaxSize()) {
-            HomeTopBar(
+            PSHomeTopBarHost(
                 tab = tab,
-                clockText = clockText,
+                is24h = is24h,
                 onTabChange = { tab = it },
                 onSearch = { searchOpen = true },
                 onSettings = onOpenSettings,
@@ -1937,6 +1939,8 @@ fun PSHomeRoute(
             }
         }
 
+
+
         if (tab == Tab.GAMES) {
             val menuAppSnapshot = menuTargetApp
 
@@ -1994,6 +1998,8 @@ fun PSHomeRoute(
                 onMenuClose = { closeMenu() }
             )
         }
+
+
 
         // ✅ Widget picker overlay: biztos fókusz + saját key handler
         val widgetPickerFR = remember { FocusRequester() }
@@ -2197,4 +2203,36 @@ private fun rememberQuickTileClickHandler(context: Context): (QuickTileType) -> 
             }
         }
     }
+}
+@Composable
+private fun PSHomeTopBarHost(
+    tab: Tab,
+    is24h: Boolean,
+    onTabChange: (Tab) -> Unit,
+    onSearch: () -> Unit,
+    onSettings: () -> Unit,
+    topBarFocused: Boolean,
+    topBarIndex: Int
+) {
+    var clockText by remember { mutableStateOf("") }
+
+    LaunchedEffect(is24h) {
+        val pattern = if (is24h) "HH:mm" else "hh:mm a"
+        val fmt = SimpleDateFormat(pattern, Locale.getDefault())
+
+        while (true) {
+            clockText = fmt.format(Date())
+            delay(1_000)
+        }
+    }
+
+    HomeTopBar(
+        tab = tab,
+        clockText = clockText,
+        onTabChange = onTabChange,
+        onSearch = onSearch,
+        onSettings = onSettings,
+        topBarFocused = topBarFocused,
+        topBarIndex = topBarIndex
+    )
 }

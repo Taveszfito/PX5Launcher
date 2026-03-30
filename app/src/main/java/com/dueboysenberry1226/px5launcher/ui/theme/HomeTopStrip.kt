@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
@@ -55,9 +56,8 @@ fun HomeTopStrip(
     onSelectIndex: (Int) -> Unit = {},
     onActivate: (TopItem) -> Unit = {},
     onLongPress: (TopItem) -> Unit = {},
-    onSelectionTick: () -> Unit = {} // ✅ új: haptic tick callback
+    onSelectionTick: () -> Unit = {}
 ) {
-    // ✅ tick csak akkor, ha tényleg változott a kijelölés (és ne az első rendernél)
     var lastIndex by remember { mutableIntStateOf(-1) }
     LaunchedEffect(displayIndex, showSelection) {
         if (!showSelection) return@LaunchedEffect
@@ -71,10 +71,20 @@ fun HomeTopStrip(
         }
     }
 
+    val selectedLabel = remember(items, displayIndex, showSelection) {
+        if (showSelection) (items.getOrNull(displayIndex) as? TopItem.App)?.app?.label else null
+    }
+
+    val labelTargetIndex = remember(displayIndex, items) {
+        var t = displayIndex + 1
+        while (t <= items.lastIndex && items[t] is TopItem.Spacer) t++
+        if (t > items.lastIndex) displayIndex else t
+    }
+
     LazyRow(
         state = stripState,
         flingBehavior = fling,
-        userScrollEnabled = false, // NEM DRAGGABLE
+        userScrollEnabled = false,
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy((-5).dp),
         contentPadding = PaddingValues(horizontal = 2.dp),
@@ -82,21 +92,18 @@ fun HomeTopStrip(
             .fillMaxWidth()
             .height(130.dp)
     ) {
-        itemsIndexed(items) { index, item ->
-            val isSelected = showSelection && (index == displayIndex)
-
-            val selectedLabel =
-                if (showSelection) (items.getOrNull(displayIndex) as? TopItem.App)?.app?.label else null
-
-            // felirat a kijelölt UTÁNI első nem-spacer elem alatt legyen
-            val labelTargetIndex = remember(displayIndex, items.size) {
-                var t = displayIndex + 1
-                while (t <= items.lastIndex && items[t] is TopItem.Spacer) t++
-                if (t > items.lastIndex) displayIndex else t
+        itemsIndexed(
+            items = items,
+            key = { index, item ->
+                when (item) {
+                    is TopItem.App -> "app:${item.app.packageName}"
+                    is TopItem.AllApps -> "all_apps"
+                    is TopItem.Spacer -> "spacer_$index"
+                }
             }
-
-            val underLabel =
-                if (selectedLabel != null && index == labelTargetIndex) selectedLabel else null
+        ) { index, item ->
+            val isSelected = showSelection && (index == displayIndex)
+            val underLabel = if (selectedLabel != null && index == labelTargetIndex) selectedLabel else null
 
             fun handleTap() {
                 if (!showSelection) {
@@ -159,6 +166,10 @@ private fun TopTile(
     val extra = if (selected) maxExtra else 0.dp
     val size by animateDpAsState(targetValue = base + extra, label = "topTileSize")
 
+    val iconBitmap: ImageBitmap? = remember(icon) {
+        icon?.asImageBitmap()
+    }
+
     Box(
         modifier = Modifier
             .width(slot)
@@ -177,9 +188,9 @@ private fun TopTile(
                 .combinedClickable(onClick = onClick, onLongClick = onLongPress)
                 .focusable()
         ) {
-            if (icon != null) {
+            if (iconBitmap != null) {
                 Image(
-                    bitmap = icon.asImageBitmap(),
+                    bitmap = iconBitmap,
                     contentDescription = label,
                     modifier = Modifier
                         .align(Alignment.Center)
@@ -200,26 +211,13 @@ private fun TopTile(
             }
         }
 
-        AnimatedContent(
-            targetState = underLabel,
-            transitionSpec = { fadeIn(tween(140)) togetherWith fadeOut(tween(140)) },
-            label = "UnderLabelFade",
+        UnderLabel(
+            text = underLabel,
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .offset(x = 12.dp, y = (-20).dp)
                 .padding(bottom = 6.dp)
-        ) { text ->
-            if (text != null) {
-                Text(
-                    text = text,
-                    color = Color.White.copy(alpha = 0.95f),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
+        )
     }
 }
 
@@ -273,25 +271,36 @@ private fun TopAllAppsTile(
             )
         }
 
-        AnimatedContent(
-            targetState = underLabel,
-            transitionSpec = { fadeIn(tween(140)) togetherWith fadeOut(tween(140)) },
-            label = "UnderLabelFadeAllApps",
+        UnderLabel(
+            text = underLabel,
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .offset(x = 12.dp, y = (-20).dp)
                 .padding(bottom = 6.dp)
-        ) { text ->
-            if (text != null) {
-                Text(
-                    text = text,
-                    color = Color.White.copy(alpha = 0.95f),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+        )
+    }
+}
+
+@Composable
+private fun UnderLabel(
+    text: String?,
+    modifier: Modifier = Modifier
+) {
+    AnimatedContent(
+        targetState = text,
+        transitionSpec = { fadeIn(tween(140)) togetherWith fadeOut(tween(140)) },
+        label = "UnderLabelFade",
+        modifier = modifier
+    ) { value ->
+        if (value != null) {
+            Text(
+                text = value,
+                color = Color.White.copy(alpha = 0.95f),
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

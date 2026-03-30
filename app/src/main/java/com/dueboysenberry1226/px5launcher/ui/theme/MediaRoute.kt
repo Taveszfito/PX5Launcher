@@ -66,7 +66,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import android.content.ClipData
 import android.text.format.Formatter
-import androidx.compose.foundation.gestures.detectTransformGestures
+import android.util.LruCache
+import android.util.Size
+import android.os.Build
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
@@ -76,6 +78,108 @@ import androidx.compose.ui.unit.IntSize
 import kotlin.math.max
 import kotlin.math.min
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+
+
+private object MediaBitmapCache {
+    private val cache = object : LruCache<String, Bitmap>((Runtime.getRuntime().maxMemory() / 8L).coerceAtMost(48L * 1024L * 1024L).toInt()) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
+    }
+
+    fun get(key: String): Bitmap? = cache.get(key)
+
+    fun put(key: String, bitmap: Bitmap) {
+        if (get(key) == null) cache.put(key, bitmap)
+    }
+}
+
+private val ViewerDecodeDispatcher = Dispatchers.IO.limitedParallelism(1)
+private val ThumbDecodeDispatcher = Dispatchers.IO.limitedParallelism(2)
+
+private fun cacheKey(uri: Uri, reqWidth: Int, reqHeight: Int): String =
+    "${uri}|${reqWidth}x${reqHeight}"
+
+private fun calculateInSampleSize(
+    srcWidth: Int,
+    srcHeight: Int,
+    reqWidth: Int,
+    reqHeight: Int
+): Int {
+    var inSampleSize = 1
+
+    if (srcHeight > reqHeight || srcWidth > reqWidth) {
+        var halfHeight = srcHeight / 2
+        var halfWidth = srcWidth / 2
+
+        while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
+            inSampleSize *= 2
+        }
+    }
+
+    return inSampleSize.coerceAtLeast(1)
+}
+
+private fun loadSampledBitmap(
+    context: Context,
+    uri: Uri,
+    reqWidth: Int,
+    reqHeight: Int
+): Bitmap? {
+    val safeReqWidth = reqWidth.coerceAtLeast(1)
+    val safeReqHeight = reqHeight.coerceAtLeast(1)
+    val key = cacheKey(uri, safeReqWidth, safeReqHeight)
+
+    MediaBitmapCache.get(key)?.let { return it }
+
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    context.contentResolver.openInputStream(uri)?.use { input ->
+        BitmapFactory.decodeStream(input, null, bounds)
+    }
+
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+    val decodeOptions = BitmapFactory.Options().apply {
+        inSampleSize = calculateInSampleSize(
+            srcWidth = bounds.outWidth,
+            srcHeight = bounds.outHeight,
+            reqWidth = safeReqWidth,
+            reqHeight = safeReqHeight
+        )
+        inPreferredConfig = Bitmap.Config.RGB_565
+    }
+
+    val bitmap = context.contentResolver.openInputStream(uri)?.use { input ->
+        BitmapFactory.decodeStream(input, null, decodeOptions)
+    } ?: return null
+
+    MediaBitmapCache.put(key, bitmap)
+    return bitmap
+}
+
+private fun loadThumbBitmap(
+    context: Context,
+    uri: Uri,
+    reqWidth: Int,
+    reqHeight: Int
+): Bitmap? {
+    val safeReqWidth = reqWidth.coerceAtLeast(1)
+    val safeReqHeight = reqHeight.coerceAtLeast(1)
+    val key = cacheKey(uri, safeReqWidth, safeReqHeight)
+
+    MediaBitmapCache.get(key)?.let { return it }
+
+    val bitmap = runCatching {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            context.contentResolver.loadThumbnail(uri, Size(safeReqWidth, safeReqHeight), null)
+        } else {
+            loadSampledBitmap(context, uri, safeReqWidth, safeReqHeight)
+        }
+    }.getOrNull() ?: return null
+
+    MediaBitmapCache.put(key, bitmap)
+    return bitmap
+}
 
 private enum class MediaScreen { HUB, IMAGES, VIDEOS, ALBUMS, ALBUM_CONTENT, VIEWER }
 
@@ -778,6 +882,8 @@ fun MediaRoute(
             MediaScreen.VIEWER -> {
                 MediaImageViewer(
                     entry = viewerEntry,
+                    previousEntry = viewerEntries.getOrNull(viewerIndex - 1),
+                    nextEntry = viewerEntries.getOrNull(viewerIndex + 1),
                     currentIndex = viewerIndex,
                     totalCount = viewerEntries.size,
                     focus = viewerFocus,
@@ -1169,6 +1275,7 @@ private fun MediaThumbTile(
     onLongPress: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current
     val shape = RoundedCornerShape(14.dp)
 
     val scale by animateFloatAsState(
@@ -1177,12 +1284,20 @@ private fun MediaThumbTile(
     )
     val bgAlpha = if (selected) 0.11f else 0.06f
 
-    val thumb: Bitmap? by produceState(initialValue = null, entry.uri) {
-        value = withContext(Dispatchers.IO) {
+    val thumbWidthPx = remember(density) { with(density) { 160.dp.roundToPx() } }
+    val thumbHeightPx = remember(density) { with(density) { 160.dp.roundToPx() } }
+
+    val thumb: Bitmap? by produceState(initialValue = MediaBitmapCache.get(cacheKey(entry.uri, thumbWidthPx, thumbHeightPx)), entry.uri) {
+        if (value != null) return@produceState
+
+        value = withContext(ThumbDecodeDispatcher) {
             runCatching {
-                context.contentResolver.openInputStream(entry.uri)?.use { input ->
-                    BitmapFactory.decodeStream(input)
-                }
+                loadThumbBitmap(
+                    context = context,
+                    uri = entry.uri,
+                    reqWidth = thumbWidthPx,
+                    reqHeight = thumbHeightPx
+                )
             }.getOrNull()
         }
     }
@@ -1207,6 +1322,7 @@ private fun MediaThumbTile(
                 Image(
                     bitmap = thumb!!.asImageBitmap(),
                     contentDescription = null,
+                    contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(RoundedCornerShape(12.dp))
@@ -1240,6 +1356,8 @@ private fun MediaThumbTile(
 @Composable
 private fun MediaImageViewer(
     entry: MediaEntry?,
+    previousEntry: MediaEntry?,
+    nextEntry: MediaEntry?,
     currentIndex: Int,
     totalCount: Int,
     focus: ViewerFocus,
@@ -1263,14 +1381,95 @@ private fun MediaImageViewer(
         if (vibrationEnabled) Haptics.click(context)
     }
 
-    val bmp: Bitmap? by produceState(initialValue = null, entry?.uri) {
+    val density = LocalDensity.current
+    val configuration = LocalConfiguration.current
+
+    var viewportSize by remember { mutableStateOf(IntSize.Zero) }
+
+    val fallbackDecodeWidth = remember(configuration.screenWidthDp, density) {
+        with(density) { (configuration.screenWidthDp.dp * 0.72f).roundToPx().coerceAtLeast(1) }
+    }
+    val fallbackDecodeHeight = remember(configuration.screenHeightDp, density) {
+        with(density) { (configuration.screenHeightDp.dp * 0.72f).roundToPx().coerceAtLeast(1) }
+    }
+
+    val targetDecodeWidth = remember(viewportSize, fallbackDecodeWidth) {
+        viewportSize.width.takeIf { it > 0 }?.coerceAtMost(1600) ?: fallbackDecodeWidth.coerceAtMost(1600)
+    }
+    val targetDecodeHeight = remember(viewportSize, fallbackDecodeHeight) {
+        viewportSize.height.takeIf { it > 0 }?.coerceAtMost(1600) ?: fallbackDecodeHeight.coerceAtMost(1600)
+    }
+
+    val previewDecodeWidth = remember(targetDecodeWidth) { max(1, targetDecodeWidth / 2) }
+    val previewDecodeHeight = remember(targetDecodeHeight) { max(1, targetDecodeHeight / 2) }
+
+    val bmp: Bitmap? by produceState(
+        initialValue = entry?.uri?.let {
+            MediaBitmapCache.get(cacheKey(it, targetDecodeWidth, targetDecodeHeight))
+                ?: MediaBitmapCache.get(cacheKey(it, previewDecodeWidth, previewDecodeHeight))
+        },
+        entry?.uri,
+        targetDecodeWidth,
+        targetDecodeHeight,
+        previewDecodeWidth,
+        previewDecodeHeight
+    ) {
         val u = entry?.uri ?: return@produceState
-        value = withContext(Dispatchers.IO) {
+
+        MediaBitmapCache.get(cacheKey(u, targetDecodeWidth, targetDecodeHeight))?.let {
+            value = it
+            return@produceState
+        }
+
+        if (value == null) {
+            value = withContext(ThumbDecodeDispatcher) {
+                runCatching {
+                    loadSampledBitmap(
+                        context = context,
+                        uri = u,
+                        reqWidth = previewDecodeWidth,
+                        reqHeight = previewDecodeHeight
+                    )
+                }.getOrNull()
+            }
+        }
+
+        val fullBitmap = withContext(ViewerDecodeDispatcher) {
             runCatching {
-                context.contentResolver.openInputStream(u)?.use { input ->
-                    BitmapFactory.decodeStream(input)
-                }
+                loadSampledBitmap(
+                    context = context,
+                    uri = u,
+                    reqWidth = targetDecodeWidth,
+                    reqHeight = targetDecodeHeight
+                )
             }.getOrNull()
+        }
+
+        if (fullBitmap != null) value = fullBitmap
+    }
+
+    LaunchedEffect(previousEntry?.uri, nextEntry?.uri, previewDecodeWidth, previewDecodeHeight) {
+        withContext(ThumbDecodeDispatcher) {
+            previousEntry?.uri?.let { uri ->
+                runCatching {
+                    loadSampledBitmap(
+                        context = context,
+                        uri = uri,
+                        reqWidth = previewDecodeWidth,
+                        reqHeight = previewDecodeHeight
+                    )
+                }
+            }
+            nextEntry?.uri?.let { uri ->
+                runCatching {
+                    loadSampledBitmap(
+                        context = context,
+                        uri = uri,
+                        reqWidth = previewDecodeWidth,
+                        reqHeight = previewDecodeHeight
+                    )
+                }
+            }
         }
     }
 
@@ -1293,7 +1492,6 @@ private fun MediaImageViewer(
         } ?: "—"
     }
 
-    var viewportSize by remember { mutableStateOf(IntSize.Zero) }
     var scale by remember(entry?.id) { mutableFloatStateOf(1f) }
     var offsetX by remember(entry?.id) { mutableFloatStateOf(0f) }
     var offsetY by remember(entry?.id) { mutableFloatStateOf(0f) }
