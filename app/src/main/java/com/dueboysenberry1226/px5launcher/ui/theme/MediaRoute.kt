@@ -2,6 +2,20 @@
 
 package com.dueboysenberry1226.px5launcher.ui.theme
 
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.positionChange
+import kotlin.math.abs
+import kotlin.math.hypot
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material3.Icon
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -50,6 +64,18 @@ import com.dueboysenberry1226.px5launcher.media.MediaKind
 import com.dueboysenberry1226.px5launcher.media.MediaStoreRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import android.content.ClipData
+import android.text.format.Formatter
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.IntSize
+import kotlin.math.max
+import kotlin.math.min
+import androidx.compose.ui.layout.onSizeChanged
 
 private enum class MediaScreen { HUB, IMAGES, VIDEOS, ALBUMS, ALBUM_CONTENT, VIEWER }
 
@@ -58,6 +84,32 @@ private sealed class MediaGridItem {
     data class Entry(val e: MediaEntry) : MediaGridItem()
     data class Album(val a: MediaAlbum) : MediaGridItem()
 }
+
+private enum class ViewerFocus {
+    BACK,
+    IMAGE,
+    ZOOM_IN,
+    ZOOM_OUT,
+    NEXT,
+    PREV,
+    SHARE,
+    DELETE,
+    TOGGLE
+}
+
+private enum class ViewerCommandType {
+    PAN_LEFT,
+    PAN_RIGHT,
+    PAN_UP,
+    PAN_DOWN,
+    ZOOM_IN,
+    ZOOM_OUT
+}
+
+private data class ViewerCommand(
+    val type: ViewerCommandType,
+    val nonce: Long = System.nanoTime()
+)
 
 @Composable
 fun MediaRoute(
@@ -91,35 +143,6 @@ fun MediaRoute(
     var currentAlbumId by rememberSaveable { mutableStateOf<String?>(null) }
     var currentAlbumName by rememberSaveable { mutableStateOf<String?>(null) }
 
-    var viewerEntry by remember { mutableStateOf<MediaEntry?>(null) }
-    val backStack = remember { mutableStateListOf<MediaScreen>() }
-
-    fun navigateTo(next: MediaScreen) {
-        if (screen != next) backStack.add(screen)
-        screen = next
-        selectedIndex = 0
-    }
-
-    fun goBackOneLevel() {
-        if (screen == MediaScreen.VIEWER) viewerEntry = null
-
-        val prev = backStack.lastOrNull()
-        if (prev != null) {
-            backStack.removeAt(backStack.lastIndex)
-            screen = prev
-        } else {
-            screen = MediaScreen.HUB
-        }
-        selectedIndex = 0
-
-        if (screen != MediaScreen.ALBUM_CONTENT) {
-            currentAlbumId = null
-            currentAlbumName = null
-        }
-        if (screen != MediaScreen.VIEWER) {
-            viewerEntry = null
-        }
-    }
 
     var refreshTick by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(hasPerm) { if (hasPerm) refreshTick++ }
@@ -143,10 +166,99 @@ fun MediaRoute(
 
     val columns = 6
 
+    var viewerEntries by remember { mutableStateOf<List<MediaEntry>>(emptyList()) }
+    var viewerIndex by rememberSaveable { mutableIntStateOf(0) }
+    var viewerFocus by rememberSaveable { mutableStateOf(ViewerFocus.ZOOM_IN) }
+    var viewerLastSideFocus by rememberSaveable { mutableStateOf(ViewerFocus.ZOOM_IN) }
+    var viewerPanMode by rememberSaveable { mutableStateOf(false) }
+    var viewerCommand by remember { mutableStateOf<ViewerCommand?>(null) }
+    var viewerPanelCollapsed by rememberSaveable { mutableStateOf(false) }
+
+    val viewerEntry = viewerEntries.getOrNull(viewerIndex)
+
+    val backStack = remember { mutableStateListOf<MediaScreen>() }
+
+    fun navigateTo(next: MediaScreen) {
+        if (screen != next) backStack.add(screen)
+        screen = next
+        selectedIndex = 0
+    }
+
+    fun goBackOneLevel() {
+        if (screen == MediaScreen.VIEWER) {
+            viewerEntries = emptyList()
+            viewerIndex = 0
+            viewerPanMode = false
+            viewerCommand = null
+            viewerPanelCollapsed = false
+        }
+
+        val prev = backStack.lastOrNull()
+        if (prev != null) {
+            backStack.removeAt(backStack.lastIndex)
+            screen = prev
+        } else {
+            screen = MediaScreen.HUB
+        }
+        selectedIndex = 0
+
+        if (screen != MediaScreen.ALBUM_CONTENT) {
+            currentAlbumId = null
+            currentAlbumName = null
+        }
+    }
+
     fun openViewer(e: MediaEntry) {
-        viewerEntry = e
+        val source = when (screen) {
+            MediaScreen.IMAGES -> images.filter { it.kind == MediaKind.IMAGE }
+            MediaScreen.ALBUM_CONTENT -> albumContent.filter { it.kind == MediaKind.IMAGE }
+            else -> images.filter { it.kind == MediaKind.IMAGE }
+        }
+
+        viewerEntries = source
+        viewerIndex = source.indexOfFirst { it.id == e.id }.takeIf { it >= 0 } ?: 0
+        viewerFocus = ViewerFocus.ZOOM_IN
+        viewerLastSideFocus = ViewerFocus.ZOOM_IN
+        viewerPanMode = false
+        viewerCommand = null
         navigateTo(MediaScreen.VIEWER)
     }
+
+    fun shareViewerEntry() {
+        val entry = viewerEntry ?: return
+        val i = Intent(Intent.ACTION_SEND).apply {
+            type = "image/*"
+            putExtra(Intent.EXTRA_STREAM, entry.uri)
+            clipData = ClipData.newUri(context.contentResolver, entry.displayName ?: "image", entry.uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(i, entry.displayName ?: "Share image"))
+    }
+
+    fun deleteViewerEntry() {
+        val entry = viewerEntry ?: return
+        val deleted = runCatching {
+            context.contentResolver.delete(entry.uri, null, null) > 0
+        }.getOrDefault(false)
+
+        if (!deleted) return
+
+        val newList = viewerEntries.filterNot { it.id == entry.id }
+        viewerEntries = newList
+        refreshTick++
+
+        if (newList.isEmpty()) {
+            goBackOneLevel()
+        } else {
+            viewerIndex = viewerIndex.coerceIn(0, newList.lastIndex)
+            viewerFocus = ViewerFocus.ZOOM_IN
+            viewerLastSideFocus = ViewerFocus.ZOOM_IN
+            viewerPanMode = false
+            viewerCommand = null
+        }
+    }
+
+
 
     fun openVideoExternal(uri: Uri) {
         val i = Intent(Intent.ACTION_VIEW).apply {
@@ -233,7 +345,11 @@ fun MediaRoute(
         val isBack = code in backCodes
 
         if (isOk || isBack) {
-            if (action != AndroidKeyEvent.ACTION_UP) return@internalKeyHandler false
+            when (action) {
+                AndroidKeyEvent.ACTION_DOWN -> return@internalKeyHandler true
+                AndroidKeyEvent.ACTION_UP -> Unit
+                else -> return@internalKeyHandler true
+            }
         } else {
             if (action != AndroidKeyEvent.ACTION_DOWN) return@internalKeyHandler false
         }
@@ -394,12 +510,172 @@ fun MediaRoute(
             }
 
             MediaScreen.VIEWER -> {
-                when (code) {
-                    in backCodes, in okCodes -> {
-                        goBackOneLevel()
-                        true
+                fun moveViewerFocus(code: Int) {
+                    viewerFocus = when (viewerFocus) {
+                        ViewerFocus.BACK -> when (code) {
+                            AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> ViewerFocus.IMAGE
+                            AndroidKeyEvent.KEYCODE_DPAD_DOWN -> ViewerFocus.IMAGE
+                            else -> ViewerFocus.BACK
+                        }
+
+                        ViewerFocus.IMAGE -> when (code) {
+                            AndroidKeyEvent.KEYCODE_DPAD_LEFT -> ViewerFocus.BACK
+                            AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> ViewerFocus.TOGGLE
+                            else -> ViewerFocus.IMAGE
+                        }
+
+                        ViewerFocus.NEXT -> when (code) {
+                            AndroidKeyEvent.KEYCODE_DPAD_LEFT -> ViewerFocus.PREV
+                            AndroidKeyEvent.KEYCODE_DPAD_DOWN -> ViewerFocus.TOGGLE
+                            else -> ViewerFocus.NEXT
+                        }
+
+                        ViewerFocus.PREV -> when (code) {
+                            AndroidKeyEvent.KEYCODE_DPAD_LEFT -> ViewerFocus.ZOOM_IN
+                            AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> ViewerFocus.NEXT
+                            else -> ViewerFocus.PREV
+                        }
+
+                        ViewerFocus.ZOOM_IN -> when (code) {
+                            AndroidKeyEvent.KEYCODE_DPAD_LEFT -> ViewerFocus.ZOOM_OUT
+                            AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> ViewerFocus.PREV
+                            else -> ViewerFocus.ZOOM_IN
+                        }
+
+                        ViewerFocus.ZOOM_OUT -> when (code) {
+                            AndroidKeyEvent.KEYCODE_DPAD_LEFT -> ViewerFocus.IMAGE
+                            AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> ViewerFocus.ZOOM_IN
+                            AndroidKeyEvent.KEYCODE_DPAD_DOWN -> ViewerFocus.SHARE
+                            else -> ViewerFocus.ZOOM_OUT
+                        }
+
+                        ViewerFocus.SHARE -> when (code) {
+                            AndroidKeyEvent.KEYCODE_DPAD_LEFT -> ViewerFocus.IMAGE
+                            AndroidKeyEvent.KEYCODE_DPAD_UP -> ViewerFocus.ZOOM_OUT
+                            AndroidKeyEvent.KEYCODE_DPAD_DOWN -> ViewerFocus.DELETE
+                            else -> ViewerFocus.SHARE
+                        }
+
+                        ViewerFocus.DELETE -> when (code) {
+                            AndroidKeyEvent.KEYCODE_DPAD_LEFT -> ViewerFocus.IMAGE
+                            AndroidKeyEvent.KEYCODE_DPAD_UP -> ViewerFocus.SHARE
+                            AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> ViewerFocus.TOGGLE
+                            else -> ViewerFocus.DELETE
+                        }
+
+                        ViewerFocus.TOGGLE -> when (code) {
+                            AndroidKeyEvent.KEYCODE_DPAD_LEFT ->
+                                if (viewerPanelCollapsed) ViewerFocus.IMAGE else ViewerFocus.DELETE
+
+                            AndroidKeyEvent.KEYCODE_DPAD_UP ->
+                                if (viewerPanelCollapsed) ViewerFocus.IMAGE else ViewerFocus.NEXT
+
+                            else -> ViewerFocus.TOGGLE
+                        }
                     }
-                    else -> true
+
+                    if (viewerFocus != ViewerFocus.IMAGE) {
+                        viewerLastSideFocus = viewerFocus
+                    }
+                }
+
+                if (viewerPanMode) {
+                    when (code) {
+                        AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
+                            viewerPanelCollapsed = true
+                            viewerCommand = ViewerCommand(ViewerCommandType.PAN_LEFT)
+                            true
+                        }
+
+                        AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                            viewerPanelCollapsed = true
+                            viewerCommand = ViewerCommand(ViewerCommandType.PAN_RIGHT)
+                            true
+                        }
+
+                        AndroidKeyEvent.KEYCODE_DPAD_UP -> {
+                            viewerPanelCollapsed = true
+                            viewerCommand = ViewerCommand(ViewerCommandType.PAN_UP)
+                            true
+                        }
+
+                        AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
+                            viewerPanelCollapsed = true
+                            viewerCommand = ViewerCommand(ViewerCommandType.PAN_DOWN)
+                            true
+                        }
+
+                        in okCodes, in backCodes -> {
+                            viewerPanMode = false
+                            viewerFocus = viewerLastSideFocus
+                            true
+                        }
+
+                        else -> true
+                    }
+                } else {
+                    when (code) {
+                        AndroidKeyEvent.KEYCODE_DPAD_LEFT,
+                        AndroidKeyEvent.KEYCODE_DPAD_RIGHT,
+                        AndroidKeyEvent.KEYCODE_DPAD_UP,
+                        AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
+                            moveViewerFocus(code)
+                            true
+                        }
+
+                        in okCodes -> {
+                            when (viewerFocus) {
+                                ViewerFocus.BACK -> {
+                                    goBackOneLevel()
+                                }
+
+                                ViewerFocus.IMAGE -> {
+                                    viewerPanelCollapsed = true
+                                    viewerPanMode = true
+                                }
+
+                                ViewerFocus.ZOOM_IN -> {
+                                    viewerCommand = ViewerCommand(ViewerCommandType.ZOOM_IN)
+                                }
+
+                                ViewerFocus.ZOOM_OUT -> {
+                                    viewerCommand = ViewerCommand(ViewerCommandType.ZOOM_OUT)
+                                }
+
+                                ViewerFocus.NEXT -> {
+                                    if (viewerIndex < viewerEntries.lastIndex) {
+                                        viewerIndex++
+                                    }
+                                }
+
+                                ViewerFocus.PREV -> {
+                                    if (viewerIndex > 0) {
+                                        viewerIndex--
+                                    }
+                                }
+
+                                ViewerFocus.SHARE -> {
+                                    shareViewerEntry()
+                                }
+
+                                ViewerFocus.DELETE -> {
+                                    deleteViewerEntry()
+                                }
+
+                                ViewerFocus.TOGGLE -> {
+                                    viewerPanelCollapsed = !viewerPanelCollapsed
+                                }
+                            }
+                            true
+                        }
+
+                        in backCodes -> {
+                            goBackOneLevel()
+                            true
+                        }
+
+                        else -> true
+                    }
                 }
             }
         }
@@ -502,7 +778,33 @@ fun MediaRoute(
             MediaScreen.VIEWER -> {
                 MediaImageViewer(
                     entry = viewerEntry,
-                    onClose = { goBackOneLevel() },
+                    currentIndex = viewerIndex,
+                    totalCount = viewerEntries.size,
+                    focus = viewerFocus,
+                    panMode = viewerPanMode,
+                    panelCollapsed = viewerPanelCollapsed,
+                    command = viewerCommand,
+                    onCommandConsumed = { viewerCommand = null },
+                    onFocusChange = {
+                        viewerFocus = it
+                        if (it != ViewerFocus.IMAGE) {
+                            viewerLastSideFocus = it
+                        }
+                    },
+                    onPanModeChange = {
+                        viewerPanMode = it
+                        if (it) viewerPanelCollapsed = true
+                    },
+                    onPanelCollapsedChange = { viewerPanelCollapsed = it },
+                    onNext = {
+                        if (viewerIndex < viewerEntries.lastIndex) viewerIndex++
+                    },
+                    onPrevious = {
+                        if (viewerIndex > 0) viewerIndex--
+                    },
+                    onShare = { shareViewerEntry() },
+                    onDelete = { deleteViewerEntry() },
+                    onBack = { goBackOneLevel() },
                     vibrationEnabled = vibrationEnabled
                 )
             }
@@ -934,13 +1236,29 @@ private fun MediaThumbTile(
     }
 }
 
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 private fun MediaImageViewer(
     entry: MediaEntry?,
-    onClose: () -> Unit,
+    currentIndex: Int,
+    totalCount: Int,
+    focus: ViewerFocus,
+    panMode: Boolean,
+    panelCollapsed: Boolean,
+    command: ViewerCommand?,
+    onCommandConsumed: () -> Unit,
+    onFocusChange: (ViewerFocus) -> Unit,
+    onPanModeChange: (Boolean) -> Unit,
+    onPanelCollapsedChange: (Boolean) -> Unit,
+    onNext: () -> Unit,
+    onPrevious: () -> Unit,
+    onShare: () -> Unit,
+    onDelete: () -> Unit,
+    onBack: () -> Unit,
     vibrationEnabled: Boolean
 ) {
     val context = LocalContext.current
+
     fun hClick() {
         if (vibrationEnabled) Haptics.click(context)
     }
@@ -956,37 +1274,534 @@ private fun MediaImageViewer(
         }
     }
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.92f))
-    ) {
-        if (bmp != null) {
-            Image(
-                bitmap = bmp!!.asImageBitmap(),
-                contentDescription = null,
-                modifier = Modifier.align(Alignment.Center).fillMaxWidth()
-            )
-        } else {
-            Text(
-                text = stringResource(R.string.media_loading),
-                color = Color.White.copy(alpha = 0.75f),
-                modifier = Modifier.align(Alignment.Center)
-            )
+    val fileSizeText by produceState(initialValue = "—", entry?.uri) {
+        val u = entry?.uri ?: return@produceState
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                context.contentResolver.openAssetFileDescriptor(u, "r")?.use { afd ->
+                    val len = afd.length
+                    if (len > 0) Formatter.formatShortFileSize(context, len) else "—"
+                } ?: "—"
+            }.getOrDefault("—")
+        }
+    }
+
+    val dateText = remember(entry?.dateAddedSec) {
+        entry?.dateAddedSec?.takeIf { it > 0L }?.let { sec ->
+            java.text.SimpleDateFormat("yyyy.MM.dd HH:mm", java.util.Locale.getDefault())
+                .format(java.util.Date(sec * 1000L))
+        } ?: "—"
+    }
+
+    var viewportSize by remember { mutableStateOf(IntSize.Zero) }
+    var scale by remember(entry?.id) { mutableFloatStateOf(1f) }
+    var offsetX by remember(entry?.id) { mutableFloatStateOf(0f) }
+    var offsetY by remember(entry?.id) { mutableFloatStateOf(0f) }
+
+    fun clampOffset(
+        targetScale: Float,
+        targetOffsetX: Float,
+        targetOffsetY: Float
+    ): Pair<Float, Float> {
+        val bmpW = bmp?.width?.toFloat() ?: 0f
+        val bmpH = bmp?.height?.toFloat() ?: 0f
+        val vpW = viewportSize.width.toFloat()
+        val vpH = viewportSize.height.toFloat()
+
+        if (bmpW <= 0f || bmpH <= 0f || vpW <= 0f || vpH <= 0f) {
+            return 0f to 0f
         }
 
-        Text(
-            text = stringResource(R.string.homescreen_close),
-            color = Color.White,
-            fontWeight = FontWeight.SemiBold,
+        val fitScale = min(vpW / bmpW, vpH / bmpH)
+        val displayedW = bmpW * fitScale * targetScale
+        val displayedH = bmpH * fitScale * targetScale
+
+        val maxX = max(0f, (displayedW - vpW) / 2f)
+        val maxY = max(0f, (displayedH - vpH) / 2f)
+
+        return targetOffsetX.coerceIn(-maxX, maxX) to targetOffsetY.coerceIn(-maxY, maxY)
+    }
+
+    fun applyZoom(multiplier: Float) {
+        val newScale = (scale * multiplier).coerceIn(1f, 4f)
+        val clamped = clampOffset(newScale, offsetX, offsetY)
+        scale = newScale
+        offsetX = clamped.first
+        offsetY = clamped.second
+    }
+
+    fun nudge(dx: Float, dy: Float) {
+        val clamped = clampOffset(scale, offsetX + dx, offsetY + dy)
+        offsetX = clamped.first
+        offsetY = clamped.second
+    }
+
+    LaunchedEffect(entry?.id) {
+        scale = 1f
+        offsetX = 0f
+        offsetY = 0f
+        onPanModeChange(false)
+        onFocusChange(ViewerFocus.ZOOM_IN)
+    }
+
+    LaunchedEffect(command?.nonce) {
+        when (command?.type) {
+            ViewerCommandType.PAN_LEFT -> {
+                onPanelCollapsedChange(true)
+                nudge(60f, 0f)
+            }
+
+            ViewerCommandType.PAN_RIGHT -> {
+                onPanelCollapsedChange(true)
+                nudge(-60f, 0f)
+            }
+
+            ViewerCommandType.PAN_UP -> {
+                onPanelCollapsedChange(true)
+                nudge(0f, 60f)
+            }
+
+            ViewerCommandType.PAN_DOWN -> {
+                onPanelCollapsedChange(true)
+                nudge(0f, -60f)
+            }
+
+            ViewerCommandType.ZOOM_IN -> applyZoom(1.2f)
+            ViewerCommandType.ZOOM_OUT -> applyZoom(1f / 1.2f)
+            null -> Unit
+        }
+        if (command != null) onCommandConsumed()
+    }
+
+    fun viewerButtonModifier(selected: Boolean): Modifier {
+        val shape = RoundedCornerShape(16.dp)
+        return Modifier
+            .size(width = 45.dp, height = 45.dp)
+            .clip(shape)
+            .background(Color.White.copy(alpha = if (selected) 0.18f else 0.08f))
+            .then(
+                if (selected) Modifier.border(2.dp, Color.White.copy(alpha = 0.95f), shape)
+                else Modifier
+            )
+    }
+
+    fun panelIconModifier(selected: Boolean): Modifier {
+        val shape = RoundedCornerShape(16.dp)
+        return Modifier
+            .size(52.dp)
+            .clip(shape)
+            .background(Color.White.copy(alpha = if (selected) 0.18f else 0.10f))
+            .then(
+                if (selected) Modifier.border(2.dp, Color.White.copy(alpha = 0.95f), shape)
+                else Modifier
+            )
+    }
+
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Box(
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(12.dp)
-                .combinedClickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = { hClick(); onClose() }
+                .fillMaxSize()
+                .padding(start = 18.dp, top = 8.dp, end = 18.dp, bottom = 1.dp)
+        ) {
+            Card(
+                shape = RoundedCornerShape(30.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.24f)),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (bmp != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(24.dp))
+                                .then(
+                                    if (focus == ViewerFocus.IMAGE || panMode) {
+                                        Modifier.border(
+                                            1.dp,
+                                            Color.White.copy(alpha = 0.55f),
+                                            RoundedCornerShape(24.dp)
+                                        )
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .onSizeChanged { viewportSize = it }
+                                .pointerInput(entry?.id) {
+                                    awaitEachGesture {
+                                        val down = awaitFirstDown(requireUnconsumed = false)
+                                        var totalDx = 0f
+                                        var totalDy = 0f
+                                        var maxPointerCount = 1
+                                        var handled = false
+
+                                        while (true) {
+                                            val event = awaitPointerEvent()
+                                            val pressed = event.changes.filter { it.pressed }
+                                            maxPointerCount = max(maxPointerCount, pressed.size)
+
+                                            if (pressed.isEmpty()) break
+                                            if (maxPointerCount >= 2) break
+
+                                            val tracked = event.changes.firstOrNull { it.id == down.id } ?: break
+                                            val delta = tracked.positionChange()
+                                            totalDx += delta.x
+                                            totalDy += delta.y
+
+                                            if (!handled && abs(totalDx) > 72f && abs(totalDx) > abs(totalDy)) {
+                                                onPanelCollapsedChange(true)
+                                                if (totalDx > 0f) {
+                                                    if (currentIndex > 0) onPrevious()
+                                                } else {
+                                                    if (currentIndex < totalCount - 1) onNext()
+                                                }
+                                                handled = true
+                                            }
+                                        }
+                                    }
+                                }
+                                .pointerInput(entry?.id) {
+                                    awaitEachGesture {
+                                        var previousCentroid: Offset? = null
+                                        var previousDistance: Float? = null
+
+                                        while (true) {
+                                            val event = awaitPointerEvent()
+                                            val pressed = event.changes.filter { it.pressed }
+
+                                            if (pressed.isEmpty()) break
+
+                                            if (pressed.size < 2) {
+                                                previousCentroid = null
+                                                previousDistance = null
+                                                continue
+                                            }
+
+                                            onPanelCollapsedChange(true)
+
+                                            val p1 = pressed[0].position
+                                            val p2 = pressed[1].position
+                                            val centroid = Offset(
+                                                (p1.x + p2.x) / 2f,
+                                                (p1.y + p2.y) / 2f
+                                            )
+                                            val distance = hypot(
+                                                (p1.x - p2.x).toDouble(),
+                                                (p1.y - p2.y).toDouble()
+                                            ).toFloat().coerceAtLeast(1f)
+
+                                            val oldCentroid = previousCentroid
+                                            val oldDistance = previousDistance
+
+                                            if (oldCentroid != null && oldDistance != null) {
+                                                val pan = centroid - oldCentroid
+                                                val zoom = distance / oldDistance
+                                                val newScale = (scale * zoom).coerceIn(1f, 4f)
+                                                val clamped = clampOffset(
+                                                    newScale,
+                                                    offsetX + pan.x,
+                                                    offsetY + pan.y
+                                                )
+                                                scale = newScale
+                                                offsetX = clamped.first
+                                                offsetY = clamped.second
+                                            }
+
+                                            previousCentroid = centroid
+                                            previousDistance = distance
+                                        }
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                bitmap = bmp!!.asImageBitmap(),
+                                contentDescription = null,
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        scaleX = scale
+                                        scaleY = scale
+                                        translationX = offsetX
+                                        translationY = offsetY
+                                    }
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = stringResource(R.string.media_loading),
+                            color = Color.White.copy(alpha = 0.75f)
+                        )
+                    }
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 18.dp, top = 18.dp)
+                    .then(viewerButtonModifier(focus == ViewerFocus.BACK))
+                    .combinedClickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {
+                            hClick()
+                            onBack()
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.ArrowBack,
+                    contentDescription = "Vissza",
+                    tint = Color.White
                 )
-        )
+            }
+
+
+            if (!panelCollapsed) {
+                Card(
+                    shape = RoundedCornerShape(28.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF202020).copy(alpha = 0.95f)),
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 18.dp)
+                        .width(360.dp)
+                        .scale(0.88f)
+                        .offset(x = 70.dp, y = 45.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = viewerButtonModifier(focus == ViewerFocus.ZOOM_OUT)
+                                    .weight(1f)
+                                    .combinedClickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                        onClick = {
+                                            hClick()
+                                            applyZoom(1f / 1.2f)
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("–", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            Box(
+                                modifier = viewerButtonModifier(focus == ViewerFocus.ZOOM_IN)
+                                    .weight(1f)
+                                    .combinedClickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                        onClick = {
+                                            hClick()
+                                            applyZoom(1.2f)
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("+", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            Box(
+                                modifier = viewerButtonModifier(focus == ViewerFocus.PREV)
+                                    .weight(1f)
+                                    .alpha(if (currentIndex > 0) 1f else 0.45f)
+                                    .combinedClickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                        onClick = {
+                                            hClick()
+                                            if (currentIndex > 0) onPrevious()
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("<", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            Box(
+                                modifier = viewerButtonModifier(focus == ViewerFocus.NEXT)
+                                    .weight(1f)
+                                    .alpha(if (currentIndex < totalCount - 1) 1f else 0.45f)
+                                    .combinedClickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                        onClick = {
+                                            hClick()
+                                            if (currentIndex < totalCount - 1) onNext()
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(">", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(22.dp))
+                                .background(Color.White.copy(alpha = 0.10f))
+                                .padding(horizontal = 14.dp, vertical = 14.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Box(
+                                    modifier = panelIconModifier(focus == ViewerFocus.SHARE)
+                                        .combinedClickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                            onClick = {
+                                                hClick()
+                                                onShare()
+                                            }
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Share,
+                                        contentDescription = "Megosztás",
+                                        tint = Color.White.copy(alpha = 0.95f)
+                                    )
+                                }
+
+                                Box(
+                                    modifier = panelIconModifier(focus == ViewerFocus.DELETE)
+                                        .combinedClickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                            onClick = {
+                                                hClick()
+                                                onDelete()
+                                            }
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Delete,
+                                        contentDescription = "Törlés",
+                                        tint = Color.White.copy(alpha = 0.95f)
+                                    )
+                                }
+                            }
+
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = entry?.displayName ?: "—",
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "${bmp?.width ?: 0} × ${bmp?.height ?: 0}",
+                                        color = Color.White.copy(alpha = 0.72f),
+                                        fontSize = 12.sp,
+                                        maxLines = 1
+                                    )
+                                    Text(
+                                        text = fileSizeText,
+                                        color = Color.White.copy(alpha = 0.72f),
+                                        fontSize = 12.sp,
+                                        maxLines = 1
+                                    )
+                                }
+
+                                Text(
+                                    text = dateText,
+                                    color = Color.White.copy(alpha = 0.72f),
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            Box(
+                                modifier = panelIconModifier(focus == ViewerFocus.TOGGLE)
+                                    .combinedClickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                        onClick = {
+                                            hClick()
+                                            onPanelCollapsedChange(true)
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Close,
+                                    contentDescription = "Popup bezárása",
+                                    tint = Color.White.copy(alpha = 0.95f)
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 18.dp, bottom = 18.dp)
+                        .then(viewerButtonModifier(focus == ViewerFocus.TOGGLE))
+                        .combinedClickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {
+                                hClick()
+                                onPanelCollapsedChange(false)
+                            }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Fullscreen,
+                        contentDescription = "Popup kinyitása",
+                        tint = Color.White
+                    )
+                }
+            }
+
+            if (panMode) {
+                Text(
+                    text = "Mozgatás mód",
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 14.dp, end = 84.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.Black.copy(alpha = 0.26f))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                )
+            }
+        }
     }
 }
