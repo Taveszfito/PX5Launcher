@@ -3,118 +3,52 @@
 
 package com.dueboysenberry1226.px5launcher.ui.theme
 
-
-import android.Manifest
-import android.annotation.SuppressLint
-import com.dueboysenberry1226.px5launcher.data.WidgetLayoutMode
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.core.tween
-import com.dueboysenberry1226.px5launcher.R
-import com.dueboysenberry1226.px5launcher.data.SettingsRepository
-import android.app.NotificationManager
-import android.bluetooth.BluetoothAdapter
-import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.hardware.camera2.CameraManager
-import android.os.Build
-import android.provider.Settings
-import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.*
-import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
-import androidx.compose.runtime.collectAsState
-import com.dueboysenberry1226.px5launcher.data.NotificationsRepository
-import com.dueboysenberry1226.px5launcher.data.QuickSettingsRepository
 import android.app.Activity
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.ComponentName
-import android.content.pm.ApplicationInfo
-import android.hardware.camera2.CameraCharacteristics
-import android.net.Uri
-import android.util.Log
-import android.view.KeyEvent as AndroidKeyEvent
-import android.widget.FrameLayout
-import android.widget.TextView
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.widget.Toast
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.gestures.FlingBehavior
-import androidx.compose.foundation.gestures.ScrollableDefaults
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEvent
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
+import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.data.LaunchableApp
-import com.dueboysenberry1226.px5launcher.data.LauncherRepository
+import com.dueboysenberry1226.px5launcher.data.SettingsRepository
+import com.dueboysenberry1226.px5launcher.data.NotificationsRepository
+import com.dueboysenberry1226.px5launcher.data.QuickSettingsRepository
 import com.dueboysenberry1226.px5launcher.data.Tab
-import com.dueboysenberry1226.px5launcher.data.TopItem
 import com.dueboysenberry1226.px5launcher.data.WidgetGridSpec
+import com.dueboysenberry1226.px5launcher.data.WidgetLayoutMode
 import com.dueboysenberry1226.px5launcher.data.WidgetPlacement
 import com.dueboysenberry1226.px5launcher.data.WidgetsRepository
-import com.dueboysenberry1226.px5launcher.util.computeDominantColor
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import kotlin.math.abs
-import androidx.core.net.toUri
 import kotlinx.coroutines.yield
-import kotlin.math.max
 
-private enum class HomeSection { TOPBAR, TOP, ACTIONS, WIDGETS, NOTIFS }
-private enum class BottomPanel { WIDGETS, CALENDAR, MUSIC }
-
-private data class BottomPanelPosition(
-    val panel: BottomPanel,
-    val col: Int,
-    val row: Int
-)
-
-private const val WIDGET_HOST_ID = 1024
-
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PSHomeRoute(
     pm: PackageManager,
@@ -123,7 +57,6 @@ fun PSHomeRoute(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
-    val repo = remember(pm, context) { LauncherRepository(context, pm) }
 
     val settingsRepo = remember(context) { SettingsRepository(context) }
     val is24h by settingsRepo.clock24hFlow.collectAsState(initial = true)
@@ -133,10 +66,12 @@ fun PSHomeRoute(
     val vibrationEnabled by settingsRepo.vibrationEnabledFlow.collectAsState(initial = true)
     val allAppsColumns by settingsRepo.allAppsColumnsFlow.collectAsState(initial = 4)
 
-    LaunchedEffect(Unit) {
-        NotificationsRepository.init(context)
-        QuickSettingsRepository.init(context)
-    }
+    val derived = rememberPSHomeDerivedData(
+        context = context,
+        pm = pm,
+        accentFromIcon = accentFromIcon,
+        allAppsColumns = allAppsColumns
+    )
 
     val liveNotifs = NotificationsRepository.live.collectAsState().value
     val historyNotifs = NotificationsRepository.history.collectAsState().value
@@ -144,7 +79,6 @@ fun PSHomeRoute(
 
     var notifHistoryMode by rememberSaveable { mutableStateOf(false) }
     var notifEnterFocusTick by rememberSaveable { mutableIntStateOf(0) }
-
     var notifUpFromLeftButtonsAllowed by rememberSaveable { mutableStateOf(false) }
     var notifUpFromQsTopRowAllowed by rememberSaveable { mutableStateOf(false) }
     val notifUpToTopbarAllowed = notifUpFromLeftButtonsAllowed || notifUpFromQsTopRowAllowed
@@ -156,7 +90,7 @@ fun PSHomeRoute(
     var notifKeyHandler by remember { mutableStateOf<((KeyEvent) -> Boolean)?>(null) }
 
     val widgetsRepo = remember(context) { WidgetsRepository(context) }
-    val widgetHost = remember(context) { AppWidgetHost(context, WIDGET_HOST_ID) }
+    val widgetHost = remember(context) { AppWidgetHost(context, PS_HOME_WIDGET_HOST_ID) }
     val widgetManager = remember(context) { AppWidgetManager.getInstance(context) }
 
     DisposableEffect(Unit) {
@@ -164,40 +98,11 @@ fun PSHomeRoute(
         onDispose { widgetHost.stopListening() }
     }
 
-    var appsRefreshTick by rememberSaveable { mutableIntStateOf(0) }
-
-    fun isAppEnabled(pkg: String): Boolean {
-        return runCatching {
-            when (pm.getApplicationEnabledSetting(pkg)) {
-                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER,
-                PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED -> false
-                else -> pm.getApplicationInfo(pkg, 0).enabled
-            }
-        }.getOrDefault(true)
-    }
-
-    val allApps by produceState(initialValue = emptyList(), appsRefreshTick) {
-        value = withContext(Dispatchers.Default) {
-            repo.loadApps().filter { isAppEnabled(it.packageName) }
-        }
-    }
-
-    val pinned by repo.pinnedFlow.collectAsState(initial = emptySet())
-    val recents by repo.recentsFlow.collectAsState(initial = emptyList())
-    val placements by widgetsRepo
-        .widgetsFlow(WidgetLayoutMode.LANDSCAPE)
-        .collectAsState(initial = emptyList())
-
-    val landscapePlacements = placements
-
-    val gridSpec = remember {
-        WidgetGridSpec(cols = 8, rows = 2)
-    }
+    val gridSpec = remember { WidgetGridSpec(cols = 8, rows = 2) }
+    val landscapePlacements = derived.placements
 
     var tab by rememberSaveable { mutableStateOf(Tab.GAMES) }
     var topIndex by rememberSaveable { mutableIntStateOf(0) }
-
     var topBarIndex by rememberSaveable {
         mutableIntStateOf(
             when (tab) {
@@ -212,19 +117,14 @@ fun PSHomeRoute(
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var allAppsSelectedIndex by rememberSaveable { mutableIntStateOf(0) }
-
     var menuOpen by rememberSaveable { mutableStateOf(false) }
     var menuTargetApp by remember { mutableStateOf<LaunchableApp?>(null) }
-
     var homeSection by rememberSaveable { mutableStateOf(HomeSection.TOP) }
     var actionIndex by rememberSaveable { mutableIntStateOf(0) }
-    val homeScrollState = rememberLazyListState()
-
     var bottomPanel by rememberSaveable { mutableStateOf(BottomPanel.WIDGETS) }
 
     val playFR = remember { FocusRequester() }
     val menuFR = remember { FocusRequester() }
-
     val widgetsFR = remember { FocusRequester() }
     val calendarFR = remember { FocusRequester() }
     val musicFR = remember { FocusRequester() }
@@ -240,12 +140,12 @@ fun PSHomeRoute(
     }
 
     fun goHomeTopKeepScroll() {
-        scope.launch { homeScrollState.animateScrollToItem(0) }
+        scope.launch { derived.homeScrollState.animateScrollToItem(0) }
     }
 
     fun goWidgets() {
         scope.launch {
-            homeScrollState.animateScrollToItem(1)
+            derived.homeScrollState.animateScrollToItem(1)
             yield()
             currentPanelFR().requestFocus()
         }
@@ -253,7 +153,7 @@ fun PSHomeRoute(
 
     fun goActions() {
         scope.launch {
-            homeScrollState.animateScrollToItem(0)
+            derived.homeScrollState.animateScrollToItem(0)
             yield()
             focusActions()
         }
@@ -275,14 +175,11 @@ fun PSHomeRoute(
 
     fun adjacentBottomPanel(from: BottomPanel, dir: Int): BottomPanel? {
         val current = bottomPanelPositions.firstOrNull { it.panel == from } ?: return null
-
         return bottomPanelPositions
             .asSequence()
             .filter { it.row == current.row }
-            .filter {
-                if (dir < 0) it.col < current.col else it.col > current.col
-            }
-            .minByOrNull { abs(it.col - current.col) }
+            .filter { if (dir < 0) it.col < current.col else it.col > current.col }
+            .minByOrNull { kotlin.math.abs(it.col - current.col) }
             ?.panel
     }
 
@@ -291,7 +188,6 @@ fun PSHomeRoute(
     fun moveBottomPanelHorizontal(dir: Int): Boolean {
         val next = adjacentBottomPanel(bottomPanel, dir) ?: return false
         if (next == bottomPanel) return false
-
         pendingBottomPanelFocus = next
         setBottomPanel(next)
         return true
@@ -300,20 +196,15 @@ fun PSHomeRoute(
     LaunchedEffect(bottomPanel, pendingBottomPanelFocus) {
         val target = pendingBottomPanelFocus ?: return@LaunchedEffect
         if (target != bottomPanel) return@LaunchedEffect
-
         yield()
         yield()
-
         when (target) {
             BottomPanel.WIDGETS -> widgetsFR
             BottomPanel.CALENDAR -> calendarFR
             BottomPanel.MUSIC -> musicFR
         }.requestFocus()
-
         pendingBottomPanelFocus = null
     }
-
-
 
     LaunchedEffect(tab) {
         topBarIndex = when (tab) {
@@ -333,198 +224,16 @@ fun PSHomeRoute(
         }
     }
 
-    val allAppsGrid: List<AllAppsGridItem> = remember(allApps) {
-        buildList {
-            add(AllAppsGridItem.Back)
-            addAll(allApps.map { AllAppsGridItem.App(it) })
-        }
-    }
-    val allAppsLastIndex = allAppsGrid.lastIndex
-
-    val appByPkg = remember(allApps) { allApps.associateBy { it.packageName } }
-
-    val topApps: List<LaunchableApp> = remember(allApps, pinned, recents, appByPkg) {
-        val recentsRank = recents.withIndex().associate { it.value to it.index }
-
-        val pinnedApps = pinned
-            .mapNotNull { appByPkg[it] }
-            .sortedWith(
-                compareBy<LaunchableApp>(
-                    { recentsRank[it.packageName] ?: Int.MAX_VALUE },
-                    { it.label.lowercase() }
-                )
-            )
-
-        val recentApps = recents
-            .mapNotNull { appByPkg[it] }
-            .filter { it.packageName !in pinned }
-
-        val base = (pinnedApps + recentApps)
-            .distinctBy { it.packageName }
-            .toMutableList()
-
-        if (base.size < 9) {
-            val existing = base.asSequence().map { it.packageName }.toSet()
-            val filler = allApps.asSequence()
-                .filter { it.packageName !in existing }
-                .take(9 - base.size)
-                .toList()
-            base.addAll(filler)
-        }
-
-        base.take(9)
-    }
-
-    val anchorIndex = 0
-    val padEnd = 12
-
-    val realItems: List<TopItem> = remember(topApps) {
-        buildList {
-            addAll(topApps.map { TopItem.App(it) })
-            add(TopItem.AllApps)
-        }
-    }
-    val realLastIndex = realItems.lastIndex
-
-    LaunchedEffect(realItems.size) {
-        if (topIndex !in 0..realLastIndex) topIndex = 0
-    }
-
-    val topItems: List<TopItem> = remember(realItems) {
-        buildList {
-            repeat(anchorIndex) { add(TopItem.Spacer) }
-            addAll(realItems)
-            repeat(padEnd) { add(TopItem.Spacer) }
-        }
-    }
-
-    val displayIndex = topIndex + anchorIndex
-    val rawSelectedTopItem = topItems.getOrNull(displayIndex)
-
-    val uiHidesSelectedApp = homeSection == HomeSection.TOPBAR || homeSection == HomeSection.WIDGETS
-    val selectedTopItem: TopItem? = if (uiHidesSelectedApp) null else rawSelectedTopItem
-    val selectedApp: LaunchableApp? = (selectedTopItem as? TopItem.App)?.app
-
-    val dominantCache = remember { mutableStateMapOf<String, Color>() }
-    val defaultAccent = Color(0xFF101826)
-    var accent by remember { mutableStateOf(defaultAccent) }
-
-    LaunchedEffect(accentFromIcon, selectedApp?.packageName) {
-        if (!accentFromIcon) {
-            accent = defaultAccent
-            return@LaunchedEffect
-        }
-
-        if (selectedApp == null) {
-            accent = defaultAccent
-        } else {
-            dominantCache[selectedApp.packageName]?.let { accent = it } ?: run {
-                val c = computeDominantColor(selectedApp.iconBitmap, fallback = defaultAccent)
-                dominantCache[selectedApp.packageName] = c
-                accent = c
-            }
-        }
-    }
-
-    val bg = remember(accent) {
-        Brush.verticalGradient(
-            listOf(
-                accent.copy(alpha = 0.22f),
-                Color(0xFF0A0F18),
-                Color(0xFF060A11)
-            )
-        )
-    }
-
-    fun launchApp(app: LaunchableApp) {
-        val intent = pm.getLaunchIntentForPackage(app.packageName) ?: return
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
-        scope.launch { repo.pushRecent(app.packageName) }
-    }
-
-    fun openAppInfo(app: LaunchableApp) {
-        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-            data = Uri.fromParts("package", app.packageName, null)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(intent)
-    }
-
-    fun canUninstall(pkg: String): Boolean {
-        if (pkg == context.packageName) return false
-        return runCatching {
-            val ai = pm.getApplicationInfo(pkg, 0)
-            val isSystemOrUpdatedSystem =
-                (ai.flags and ApplicationInfo.FLAG_SYSTEM) != 0 ||
-                        (ai.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
-            !isSystemOrUpdatedSystem
-        }.getOrDefault(false)
-    }
-
-    fun canDisable(pkg: String): Boolean {
-        if (pkg == context.packageName) return false
-        return runCatching {
-            val ai = pm.getApplicationInfo(pkg, 0)
-            val isSystemOrUpdatedSystem =
-                (ai.flags and ApplicationInfo.FLAG_SYSTEM) != 0 ||
-                        (ai.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
-            val isPersistent = (ai.flags and ApplicationInfo.FLAG_PERSISTENT) != 0
-            isSystemOrUpdatedSystem && !isPersistent && ai.enabled
-        }.getOrDefault(false)
-    }
-
-    @SuppressLint("UseKtx")
-    fun requestUninstall(app: LaunchableApp) {
-        val pkg = app.packageName
-        val uri = "package:$pkg".toUri()
-
-        fun fallback(reason: String? = null) {
-            if (!reason.isNullOrBlank()) Toast.makeText(context, reason, Toast.LENGTH_SHORT).show()
-            openAppInfo(app)
-        }
-
-        val intent = Intent(Intent.ACTION_DELETE).apply {
-            data = uri
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-
-        try {
-            if (intent.resolveActivity(context.packageManager) == null) {
-                fallback(context.getString(R.string.homescreen_uninstall_no_handler))
-                return
-            }
-            context.startActivity(intent)
-        } catch (_: Throwable) {
-            fallback(context.getString(R.string.homescreen_uninstall_open_failed))
-        }
-    }
-
-    fun openMenuFor(app: LaunchableApp?) {
-        if (app == null) return
-        menuTargetApp = app
-        menuOpen = true
-    }
-
-    fun closeMenu() {
-        menuOpen = false
-        menuTargetApp = null
-    }
-
     LaunchedEffect(allAppsOpen) {
         if (allAppsOpen) {
-            appsRefreshTick++
-            // -2 = none, -1 = back, 0.. = app
-            allAppsSelectedIndex = allAppsSelectedIndex.coerceIn(-2, (allApps.size - 1).coerceAtLeast(0))
-            // ha véletlen none-ban nyitna: induljunk 0-ról
+            derived.bumpAppsRefreshTick()
+            allAppsSelectedIndex = allAppsSelectedIndex.coerceIn(-2, (derived.allApps.size - 1).coerceAtLeast(0))
             if (allAppsSelectedIndex == -2) allAppsSelectedIndex = 0
         }
     }
 
     val density = LocalDensity.current
     val swipeThresholdPx = with(density) { 52.dp.toPx() }
-
-    // ----- Widget dolgok -----
     var cellPx by remember { mutableFloatStateOf(0f) }
     val handledWidgetIds = remember { mutableSetOf<Int>() }
 
@@ -538,132 +247,12 @@ fun PSHomeRoute(
     )
 
     var pendingAdd by remember { mutableStateOf<PendingWidgetAdd?>(null) }
+    var showWidgetPicker by rememberSaveable { mutableStateOf(false) }
+    var pendingPickCellX by remember { mutableIntStateOf(0) }
+    var pendingPickCellY by remember { mutableIntStateOf(0) }
 
     fun showToastWidget(msg: String) {
         Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-    }
-
-    fun canPlaceAtWidget(
-        cellX: Int,
-        cellY: Int,
-        spanX: Int,
-        spanY: Int,
-        ignoreAppWidgetId: Int? = null
-    ): Boolean {
-        if (cellX < 0 || cellY < 0) return false
-        if (cellX + spanX > gridSpec.cols) return false
-        if (cellY + spanY > gridSpec.rows) return false
-
-        val occ = Array(gridSpec.rows) { BooleanArray(gridSpec.cols) }
-        for (p in landscapePlacements) {
-            if (ignoreAppWidgetId != null && p.appWidgetId == ignoreAppWidgetId) continue
-            for (dy in 0 until p.spanY) for (dx in 0 until p.spanX) {
-                val x = p.cellX + dx
-                val y = p.cellY + dy
-                if (y in 0 until gridSpec.rows && x in 0 until gridSpec.cols) {
-                    occ[y][x] = true
-                }
-            }
-        }
-
-        for (dy in 0 until spanY) for (dx in 0 until spanX) {
-            val x = cellX + dx
-            val y = cellY + dy
-            if (occ[y][x]) return false
-        }
-        return true
-    }
-
-    fun resolveAnchorForTap(
-        tapX: Int,
-        tapY: Int,
-        spanX: Int,
-        spanY: Int,
-        ignoreAppWidgetId: Int? = null
-    ): Pair<Int, Int>? {
-        val candidates = mutableListOf<Pair<Int, Int>>()
-
-        val minX = (tapX - (spanX - 1)).coerceAtLeast(0)
-        val maxX = tapX.coerceAtMost(gridSpec.cols - spanX)
-
-        val minY = (tapY - (spanY - 1)).coerceAtLeast(0)
-        val maxY = tapY.coerceAtMost(gridSpec.rows - spanY)
-
-        for (y in minY..maxY) for (x in minX..maxX) {
-            candidates += x to y
-        }
-
-        val sorted = candidates.sortedBy { (x, y) ->
-            abs(x - tapX) + abs(y - tapY)
-        }
-
-        return sorted.firstOrNull { (x, y) ->
-            canPlaceAtWidget(x, y, spanX, spanY, ignoreAppWidgetId)
-        }
-    }
-
-    fun nextClockwiseSlotWidget(
-        spanX: Int,
-        spanY: Int,
-        startX: Int,
-        startY: Int,
-        ignoreAppWidgetId: Int? = null
-    ): Pair<Int, Int>? {
-        fun slotBaseXForCell(x: Int): Int {
-            return ((x / 2) * 2).coerceIn(0, gridSpec.cols - 2)
-        }
-
-        val slotBaseX = slotBaseXForCell(startX)
-
-        // 2x1: csak fel/le ugyanabban a 2 oszlopos slotban
-        if (spanX == 2 && spanY == 1) {
-            val candidates = listOf(
-                slotBaseX to 0,
-                slotBaseX to 1
-            )
-
-            val current = startX to startY
-            val startIdx = candidates.indexOf(current).takeIf { it >= 0 } ?: 0
-
-            for (step in 1..candidates.size) {
-                val (x, y) = candidates[(startIdx + step) % candidates.size]
-                if (canPlaceAtWidget(x, y, spanX, spanY, ignoreAppWidgetId)) {
-                    return x to y
-                }
-            }
-            return null
-        }
-
-        // 1x2: csak bal/jobb ugyanabban a 2 oszlopos slotban
-        if (spanX == 1 && spanY == 2) {
-            val candidates = listOf(
-                slotBaseX to 0,
-                (slotBaseX + 1) to 0
-            )
-
-            val current = startX to startY
-            val startIdx = candidates.indexOf(current).takeIf { it >= 0 } ?: 0
-
-            for (step in 1..candidates.size) {
-                val (x, y) = candidates[(startIdx + step) % candidates.size]
-                if (canPlaceAtWidget(x, y, spanX, spanY, ignoreAppWidgetId)) {
-                    return x to y
-                }
-            }
-            return null
-        }
-
-        // minden más marad a régi, teljes rácsos clockwise logikán
-        val total = gridSpec.cols * gridSpec.rows
-        val startIdx = (startY * gridSpec.cols + startX).coerceIn(0, total - 1)
-
-        for (step in 1..total) {
-            val idx = (startIdx + step) % total
-            val x = idx % gridSpec.cols
-            val y = idx / gridSpec.cols
-            if (canPlaceAtWidget(x, y, spanX, spanY, ignoreAppWidgetId)) return x to y
-        }
-        return null
     }
 
     fun finalizeAddWidget(appWidgetId: Int, info: AppWidgetProviderInfo, cellX: Int, cellY: Int) {
@@ -671,7 +260,7 @@ fun PSHomeRoute(
         val sx = pend?.spanX ?: 2
         val sy = pend?.spanY ?: 2
 
-        if (!canPlaceAtWidget(cellX, cellY, sx, sy)) {
+        if (!canPlaceAtWidget(gridSpec, landscapePlacements, cellX, cellY, sx, sy)) {
             runCatching { widgetHost.deleteAppWidgetId(appWidgetId) }
             handledWidgetIds.remove(appWidgetId)
             pendingAdd = null
@@ -722,7 +311,6 @@ fun PSHomeRoute(
 
     fun afterBoundWidget(appWidgetId: Int, cellX: Int, cellY: Int) {
         if (!handledWidgetIds.add(appWidgetId)) return
-
         val info = widgetManager.getAppWidgetInfo(appWidgetId)
         if (info == null) {
             runCatching { widgetHost.deleteAppWidgetId(appWidgetId) }
@@ -730,8 +318,6 @@ fun PSHomeRoute(
             pendingAdd = null
             return
         }
-
-
         finalizeAddWidget(appWidgetId, info, cellX, cellY)
     }
 
@@ -768,10 +354,6 @@ fun PSHomeRoute(
         }
     }
 
-    var showWidgetPicker by rememberSaveable { mutableStateOf(false) }
-    var pendingPickCellX by remember { mutableIntStateOf(0) }
-    var pendingPickCellY by remember { mutableIntStateOf(0) }
-
     val cellDp = remember(cellPx) {
         if (cellPx > 0f) with(density) { cellPx.toDp() } else 90.dp
     }
@@ -783,14 +365,10 @@ fun PSHomeRoute(
         cellHeightDp = cellDp,
         cellGapXDp = 12.dp,
         cellGapYDp = 12.dp,
-
-        // ✅ ÚJ: PSHome (landscape) marad 2×2, és szűrje is ki a nagyobbakat
         maxSpanX = 2,
         maxSpanY = 2,
         filterOutOversize = true,
-
         onPick = { providerInfo, sx, sy ->
-
             if (vibrationEnabled) Haptics.click(context)
 
             val provider = providerInfo.provider ?: run {
@@ -799,6 +377,8 @@ fun PSHomeRoute(
             }
 
             val anchor = resolveAnchorForTap(
+                gridSpec = gridSpec,
+                placements = landscapePlacements,
                 tapX = pendingPickCellX,
                 tapY = pendingPickCellY,
                 spanX = sx,
@@ -862,6 +442,8 @@ fun PSHomeRoute(
 
     fun moveWidgetClockwise(p: WidgetPlacement) {
         val next = nextClockwiseSlotWidget(
+            gridSpec = gridSpec,
+            placements = landscapePlacements,
             spanX = p.spanX,
             spanY = p.spanY,
             startX = p.cellX,
@@ -878,692 +460,124 @@ fun PSHomeRoute(
         scope.launch { widgetsRepo.upsert(p.copy(cellX = nx, cellY = ny)) }
     }
 
-    // ✅ GLOBAL BACK: soha ne zárja be az Activity-t + overlay-ket zárjon
     BackHandler(enabled = true) {
         when {
             showWidgetPicker -> showWidgetPicker = false
-            menuOpen -> closeMenu()
-            searchOpen -> { searchOpen = false; searchQuery = "" }
-            allAppsOpen -> allAppsOpen = false
-            else -> {
-                // elnyeljük: ne lépjen ki az appból
+            menuOpen -> {
+                menuOpen = false
+                menuTargetApp = null
             }
+            searchOpen -> {
+                searchOpen = false
+                searchQuery = ""
+            }
+            allAppsOpen -> allAppsOpen = false
+            else -> Unit
         }
     }
-
-    // ---------------- TOP STRIP ----------------
-    val stripState = rememberLazyListState()
-    val fling: FlingBehavior = ScrollableDefaults.flingBehavior()
 
     fun scrollSelectedToAnchor(animated: Boolean) {
-        if (topItems.isEmpty()) return
-        val idx = (topIndex + anchorIndex).coerceIn(0, topItems.lastIndex)
+        if (derived.topItems.isEmpty()) return
+        val idx = (topIndex + derived.anchorIndex).coerceIn(0, derived.topItems.lastIndex)
         scope.launch {
-            if (animated) stripState.animateScrollToItem(idx)
-            else stripState.scrollToItem(idx)
+            if (animated) derived.stripState.animateScrollToItem(idx)
+            else derived.stripState.scrollToItem(idx)
         }
     }
 
-    LaunchedEffect(topItems.size) { scrollSelectedToAnchor(animated = false) }
+    LaunchedEffect(derived.topItems.size) { scrollSelectedToAnchor(animated = false) }
     LaunchedEffect(topIndex) { scrollSelectedToAnchor(animated = true) }
 
     fun stepStripByController(delta: Int) {
         if (delta == 0) return
-        val next = (topIndex + delta).coerceIn(0, realLastIndex)
+        val next = (topIndex + delta).coerceIn(0, derived.realLastIndex)
         if (next == topIndex) return
         topIndex = next
     }
 
-    val columns = allAppsColumns.coerceIn(2, 5)
+    val keyHandler = buildPSHomeKeyHandler(
+        context = context,
+        scope = scope,
+        vibrationEnabled = vibrationEnabled,
+        tabOrder = derived.tabOrder,
+        okCodes = derived.okCodes,
+        homeSection = homeSection,
+        tab = tab,
+        topBarIndex = topBarIndex,
+        allAppsOpen = allAppsOpen,
+        allApps = derived.allApps,
+        allAppsLastIndex = derived.allAppsLastIndex,
+        allAppsSelectedIndex = allAppsSelectedIndex,
+        columns = derived.columns,
+        notifUpToTopbarAllowed = notifUpToTopbarAllowed,
+        selectedTopItem = derived.selectedTopItem(topIndex, homeSection),
+        selectedApp = derived.selectedApp(topIndex, homeSection),
+        pinned = derived.pinned,
+        actionIndex = actionIndex,
+        bottomPanel = bottomPanel,
+        notifEnterFocusTick = notifEnterFocusTick,
+        notifKeyHandler = notifKeyHandler,
+        widgetsKeyHandler = widgetsKeyHandler,
+        calendarKeyHandler = calendarKeyHandler,
+        musicKeyHandler = musicKeyHandler,
+        onOpenSettings = onOpenSettings,
+        focusManager = focusManager,
+        moveBottomPanelHorizontal = ::moveBottomPanelHorizontal,
+        stepStripByController = ::stepStripByController,
+        goActions = ::goActions,
+        goWidgets = ::goWidgets,
+        goHomeTopKeepScroll = ::goHomeTopKeepScroll,
+        focusActions = ::focusActions,
+        setTab = { tab = it },
+        setTopBarIndex = { topBarIndex = it },
+        setHomeSection = { homeSection = it },
+        setAllAppsOpen = { allAppsOpen = it },
+        setAllAppsSelectedIndex = { allAppsSelectedIndex = it },
+        setActionIndex = { actionIndex = it },
+        setSearchOpen = { searchOpen = it },
+        setSearchQuery = { searchQuery = it },
+        setNotifEnterFocusTick = { notifEnterFocusTick = it },
+        launchApp = { app -> launchPsHomeApp(context, pm, scope, derived.repo, app) },
+        togglePin = { app -> scope.launch { derived.repo.setPinned(app.packageName, value = app.packageName !in derived.pinned) } },
+        openMenuFor = { app -> if (app != null) { menuTargetApp = app; menuOpen = true } },
+        closeMenu = { menuOpen = false; menuTargetApp = null }
+    )
 
-    val tabOrder = remember {
-        listOf(Tab.GAMES, Tab.MEDIA, Tab.NOTIFICATIONS)
-    }
-
-    val okCodes = remember {
-        setOf(
-            AndroidKeyEvent.KEYCODE_DPAD_CENTER,
-            AndroidKeyEvent.KEYCODE_ENTER,
-            AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
-            AndroidKeyEvent.KEYCODE_BUTTON_A
-        )
-    }
-
-
-    val keyHandler: (KeyEvent) -> Boolean = { e ->
-        val nk = e.nativeKeyEvent
-        val code = nk.keyCode
-        val action = nk.action
-
-
-
-        val isLB = (code == AndroidKeyEvent.KEYCODE_BUTTON_L1) || (code == AndroidKeyEvent.KEYCODE_1)
-        val isRB = (code == AndroidKeyEvent.KEYCODE_BUTTON_R1) || (code == AndroidKeyEvent.KEYCODE_2)
-
-        if (homeSection == HomeSection.TOPBAR && code in okCodes) {
-            if (action == AndroidKeyEvent.ACTION_DOWN || action == AndroidKeyEvent.ACTION_UP) {
-                tab = when (topBarIndex) {
-                    0 -> Tab.GAMES
-                    1 -> Tab.MEDIA
-                    else -> Tab.NOTIFICATIONS
-                }
-                true
-            } else false
-        } else if (action != AndroidKeyEvent.ACTION_DOWN) {
-            false
-        } else {
-
-            if (vibrationEnabled) {
-                when (code) {
-                    AndroidKeyEvent.KEYCODE_DPAD_LEFT,
-                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT,
-                    AndroidKeyEvent.KEYCODE_DPAD_UP,
-                    AndroidKeyEvent.KEYCODE_DPAD_DOWN,
-                    AndroidKeyEvent.KEYCODE_DPAD_CENTER,
-                    AndroidKeyEvent.KEYCODE_ENTER,
-                    AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
-                    AndroidKeyEvent.KEYCODE_BUTTON_A,
-                    AndroidKeyEvent.KEYCODE_BUTTON_B,
-                    AndroidKeyEvent.KEYCODE_BACK -> {
-                        Haptics.click(context)
-                    }
-                }
+    PSHomeMainBox(
+        context = context,
+        bg = derived.bg,
+        swipeThresholdPx = swipeThresholdPx,
+        showWidgetPicker = showWidgetPicker,
+        tab = tab,
+        homeSection = homeSection,
+        bottomPanel = bottomPanel,
+        menuOpen = menuOpen,
+        searchOpen = searchOpen,
+        allAppsOpen = allAppsOpen,
+        vibrationEnabled = vibrationEnabled,
+        keyHandler = keyHandler,
+        handlePickerKey = { pickerState.handleKey(it) },
+        handleMediaKey = { mediaKeyHandler?.invoke(it) == true },
+        onCloseWidgetPicker = { showWidgetPicker = false },
+        onBackConsumed = { true },
+        onStepStripByController = ::stepStripByController,
+        onMoveBottomPanelHorizontal = ::moveBottomPanelHorizontal,
+        onGoHomeTopKeepScroll = ::goHomeTopKeepScroll,
+        onGoWidgets = { homeSection = HomeSection.WIDGETS; goWidgets() },
+        onSwipeToTop = {
+            if (homeSection != HomeSection.TOP) {
+                homeSection = HomeSection.TOP
+                focusManager.clearFocus(force = true)
+                goHomeTopKeepScroll()
             }
-
-            if (!allAppsOpen && (isLB || isRB)) {
-                if (homeSection == HomeSection.WIDGETS) {
-                    moveBottomPanelHorizontal(if (isLB) -1 else +1)
-                    true
-                } else {
-                    val idx = tabOrder.indexOf(tab).takeIf { it >= 0 } ?: 0
-                    val nextIdx = ((idx + (if (isLB) -1 else +1)) % tabOrder.size + tabOrder.size) % tabOrder.size
-                    val nextTab = tabOrder[nextIdx]
-                    if (tab != nextTab) tab = nextTab
-                    true
-                }
-            } else if (homeSection == HomeSection.TOPBAR) {
-                when (code) {
-
-                    AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
-                        if (allAppsOpen) {
-                            allAppsSelectedIndex = 0
-                            homeSection = HomeSection.TOP
-                            focusManager.clearFocus(force = true)
-                            true
-                        } else {
-                            when (tab) {
-                                Tab.GAMES -> {
-                                    homeSection = HomeSection.TOP
-                                    true
-                                }
-
-                                Tab.MEDIA -> {
-                                    homeSection = HomeSection.TOP
-                                    true
-                                }
-
-                                Tab.NOTIFICATIONS -> {
-                                    homeSection = HomeSection.NOTIFS
-                                    notifEnterFocusTick++
-                                    focusManager.clearFocus(force = true)
-                                    true
-                                }
-                            }
-                        }
-                    }
-
-                    AndroidKeyEvent.KEYCODE_DPAD_UP -> true
-
-                    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
-                        // 0..2 tabok, 3=search, 4=settings
-                        topBarIndex = (topBarIndex - 1).coerceAtLeast(0)
-                        // tab csak akkor változzon, ha tab indexen állunk
-                        if (topBarIndex <= 2) {
-                            tab = when (topBarIndex) {
-                                0 -> Tab.GAMES
-                                1 -> Tab.MEDIA
-                                else -> Tab.NOTIFICATIONS
-                            }
-                        }
-                        true
-                    }
-
-                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
-                        topBarIndex = (topBarIndex + 1).coerceAtMost(4)
-                        if (topBarIndex <= 2) {
-                            tab = when (topBarIndex) {
-                                0 -> Tab.GAMES
-                                1 -> Tab.MEDIA
-                                else -> Tab.NOTIFICATIONS
-                            }
-                        }
-                        true
-                    }
-
-                    AndroidKeyEvent.KEYCODE_ENTER,
-                    AndroidKeyEvent.KEYCODE_DPAD_CENTER,
-                    AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
-                    AndroidKeyEvent.KEYCODE_BUTTON_A -> {
-                        when (topBarIndex) {
-                            0 -> tab = Tab.GAMES
-                            1 -> tab = Tab.MEDIA
-                            2 -> tab = Tab.NOTIFICATIONS
-                            3 -> searchOpen = true
-                            4 -> onOpenSettings()
-                        }
-                        true
-                    }
-
-                    AndroidKeyEvent.KEYCODE_BACK -> true
-
-                    else -> false
-                }
-            } else if (allAppsOpen) {
-                val lastApp = (allApps.size - 1).coerceAtLeast(0)
-
-                when (code) {
-                    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
-                        when {
-                            allAppsSelectedIndex == -1 -> true
-                            allAppsSelectedIndex % columns == 0 -> { allAppsSelectedIndex = -1; true }
-                            allAppsSelectedIndex > 0 -> { allAppsSelectedIndex--; true }
-                            else -> true
-                        }
-                    }
-
-                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
-                        when {
-                            allAppsSelectedIndex == -1 -> { allAppsSelectedIndex = 0; true }
-                            allAppsSelectedIndex < lastApp -> { allAppsSelectedIndex++; true }
-                            else -> true
-                        }
-                    }
-
-                    AndroidKeyEvent.KEYCODE_DPAD_UP -> {
-                        when {
-                            // Back selected esetén: fel -> TOPBAR, és maradjon Back selected (OK)
-                            allAppsSelectedIndex == -1 -> {
-                                homeSection = HomeSection.TOPBAR
-                                topBarIndex = when (tab) {
-                                    Tab.GAMES -> 0
-                                    Tab.MEDIA -> 1
-                                    Tab.NOTIFICATIONS -> 2
-                                }
-                                focusManager.clearFocus(force = true)
-                                true
-                            }
-
-                            // ✅ FELSŐ SORBÓL: fel -> TOPBAR, DE NEM állítjuk -1-re
-                            allAppsSelectedIndex < columns -> {
-                                // jegyezzük meg, melyik app volt kijelölve
-
-                                // topbar
-                                homeSection = HomeSection.TOPBAR
-                                topBarIndex = when (tab) {
-                                    Tab.GAMES -> 0
-                                    Tab.MEDIA -> 1
-                                    Tab.NOTIFICATIONS -> 2
-                                }
-
-                                // ✅ vedd le a selected-et az appról
-                                allAppsSelectedIndex = -2
-
-                                focusManager.clearFocus(force = true)
-                                true
-                            }
-
-                            else -> {
-                                allAppsSelectedIndex = (allAppsSelectedIndex - columns).coerceAtLeast(0)
-                                true
-                            }
-                        }
-                    }
-
-                    AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
-                        when (// NONE állapotból ne csináljon semmit
-                            allAppsSelectedIndex) {
-                            -2 -> true
-
-
-                            // Back-ről lefelé: első app
-                            -1 -> {
-                                allAppsSelectedIndex = 0
-                                true
-                            }
-
-                            else -> {
-                                val next = allAppsSelectedIndex + columns
-                                if (next <= lastApp) {
-                                    allAppsSelectedIndex = next
-                                }
-                                true
-                            }
-                        }
-                    }
-
-                    AndroidKeyEvent.KEYCODE_DPAD_CENTER,
-                    AndroidKeyEvent.KEYCODE_ENTER,
-                    AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
-                    AndroidKeyEvent.KEYCODE_BUTTON_A -> {
-                        when (allAppsSelectedIndex) {
-                            -1 -> {
-                                allAppsOpen = false
-                                true
-                            }
-                            -2 -> {
-                                // NONE: a TOPBAR irányít, itt ne történjen semmi
-                                true
-                            }
-                            else -> {
-                                val app = allApps.getOrNull(allAppsSelectedIndex)
-                                if (app != null) {
-                                    allAppsOpen = false
-                                    launchApp(app)
-                                }
-                                true
-                            }
-                        }
-                    }
-
-                    AndroidKeyEvent.KEYCODE_BUTTON_B,
-                    AndroidKeyEvent.KEYCODE_BACK -> {
-                        allAppsOpen = false
-                        true
-                    }
-
-                    else -> false
-                }
-            } else {
-                when (homeSection) {
-                    HomeSection.NOTIFS -> {
-                        val handledByNotif = notifKeyHandler?.invoke(e) == true
-
-                        if (handledByNotif) {
-                            true
-                        } else {
-                            when (code) {
-                                AndroidKeyEvent.KEYCODE_DPAD_UP -> {
-                                    if (notifUpToTopbarAllowed) {
-                                        homeSection = HomeSection.TOPBAR
-                                        topBarIndex = when (tab) {
-                                            Tab.GAMES -> 0
-                                            Tab.MEDIA -> 1
-                                            Tab.NOTIFICATIONS -> 2
-                                        }
-                                        focusManager.clearFocus(force = true)
-                                        true
-                                    } else false
-                                }
-
-                                AndroidKeyEvent.KEYCODE_BACK -> {
-                                    homeSection = HomeSection.TOPBAR
-                                    focusManager.clearFocus(force = true)
-                                    true
-                                }
-
-                                else -> false
-                            }
-                        }
-                    }
-
-                    HomeSection.TOP -> {
-                        when (code) {
-                            AndroidKeyEvent.KEYCODE_DPAD_LEFT -> { stepStripByController(-1); true }
-                            AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> { stepStripByController(+1); true }
-
-                            AndroidKeyEvent.KEYCODE_DPAD_UP -> {
-                                homeSection = HomeSection.TOPBAR
-                                topBarIndex = when (tab) {
-                                    Tab.GAMES -> 0
-                                    Tab.MEDIA -> 1
-                                    Tab.NOTIFICATIONS -> 2
-                                }
-                                focusManager.clearFocus(force = true)
-                                true
-                            }
-
-                            AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
-                                homeSection = HomeSection.ACTIONS
-                                actionIndex = 0
-                                goActions()
-                                true
-                            }
-
-                            AndroidKeyEvent.KEYCODE_DPAD_CENTER,
-                            AndroidKeyEvent.KEYCODE_ENTER,
-                            AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
-                            AndroidKeyEvent.KEYCODE_BUTTON_A -> {
-                                when (selectedTopItem) {
-                                    is TopItem.App -> launchApp(selectedTopItem.app)
-                                    is TopItem.AllApps -> {
-                                        allAppsOpen = true
-                                        allAppsSelectedIndex =
-                                            allAppsSelectedIndex.coerceIn(0, allAppsLastIndex.coerceAtLeast(0))
-                                    }
-                                    else -> Unit
-                                }
-                                true
-                            }
-
-                            AndroidKeyEvent.KEYCODE_BUTTON_Y -> { searchOpen = true; true }
-
-                            AndroidKeyEvent.KEYCODE_BUTTON_X -> {
-                                if (selectedApp != null) {
-                                    scope.launch { repo.setPinned(selectedApp.packageName, value = selectedApp.packageName !in pinned) }
-                                    true
-                                } else false
-                            }
-
-                            AndroidKeyEvent.KEYCODE_BACK -> {
-                                when {
-                                    menuOpen -> { closeMenu(); true }
-                                    searchOpen -> { searchOpen = false; searchQuery = ""; true }
-                                    else -> true // elnyeljük
-                                }
-                            }
-
-                            else -> false
-                        }
-                    }
-
-                    HomeSection.ACTIONS -> {
-                        when (code) {
-                            AndroidKeyEvent.KEYCODE_DPAD_LEFT -> { actionIndex = 0; focusActions(); true }
-                            AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> { actionIndex = 1; focusActions(); true }
-
-                            AndroidKeyEvent.KEYCODE_DPAD_UP -> {
-                                homeSection = HomeSection.TOP
-                                focusManager.clearFocus(force = true)
-                                goHomeTopKeepScroll()
-                                true
-                            }
-
-                            AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
-                                homeSection = HomeSection.WIDGETS
-                                goWidgets()
-                                true
-                            }
-
-                            AndroidKeyEvent.KEYCODE_DPAD_CENTER,
-                            AndroidKeyEvent.KEYCODE_ENTER,
-                            AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
-                            AndroidKeyEvent.KEYCODE_BUTTON_A -> {
-                                val canLaunchNow = selectedTopItem is TopItem.App
-                                if (actionIndex == 0) {
-                                    if (canLaunchNow) launchApp(selectedTopItem.app)
-                                } else {
-                                    if (canLaunchNow) openMenuFor(selectedTopItem.app)
-                                }
-                                true
-                            }
-
-                            AndroidKeyEvent.KEYCODE_BACK -> {
-                                when {
-                                    menuOpen -> { closeMenu(); true }
-                                    searchOpen -> { searchOpen = false; searchQuery = ""; true }
-                                    else -> true
-                                }
-                            }
-
-                            else -> false
-                        }
-                    }
-
-                    HomeSection.WIDGETS -> {
-                        val handledByPanel = when (bottomPanel) {
-                            BottomPanel.WIDGETS -> widgetsKeyHandler?.invoke(e) == true
-                            BottomPanel.CALENDAR -> calendarKeyHandler?.invoke(e) == true
-                            BottomPanel.MUSIC -> musicKeyHandler?.invoke(e) == true
-                        }
-
-                        if (handledByPanel) {
-                            true
-                        } else {
-                            when (code) {
-                                AndroidKeyEvent.KEYCODE_DPAD_LEFT -> moveBottomPanelHorizontal(-1)
-
-                                AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> moveBottomPanelHorizontal(+1)
-
-                                AndroidKeyEvent.KEYCODE_DPAD_UP -> {
-                                    homeSection = HomeSection.ACTIONS
-                                    goActions()
-                                    true
-                                }
-
-                                AndroidKeyEvent.KEYCODE_BACK,
-                                AndroidKeyEvent.KEYCODE_BUTTON_B -> {
-                                    homeSection = HomeSection.ACTIONS
-                                    goActions()
-                                    true
-                                }
-
-                                AndroidKeyEvent.KEYCODE_DPAD_DOWN -> true
-                                else -> false
-                            }
-                        }
-                    }
-                    HomeSection.TOPBAR -> false
-                }
-            }
-        }
-    }
-
-    // ---------------- UI ----------------
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .pointerInput(allAppsOpen, showWidgetPicker, tab, homeSection, bottomPanel, menuOpen, searchOpen) {
-                if (allAppsOpen || showWidgetPicker || menuOpen || searchOpen) return@pointerInput
-                if (tab == Tab.MEDIA || tab == Tab.NOTIFICATIONS) return@pointerInput
-
-                val appStepPx = 96.dp.toPx()
-                val tapSlopPx = 10.dp.toPx()
-
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = true)
-                    val id = down.id
-
-                    var totalX = 0f
-                    var totalY = 0f
-
-                    var stepAccX = 0f
-                    var steppedCount = 0
-                    var dragDominant: Boolean? = null
-
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Main)
-                        val change = event.changes.firstOrNull { it.id == id } ?: break
-                        if (!change.pressed) break
-
-                        val d = change.positionChange()
-                        totalX += d.x
-                        totalY += d.y
-
-                        if (abs(totalX) + abs(totalY) > 2f) change.consume()
-
-                        val axNow = abs(totalX)
-                        val ayNow = abs(totalY)
-                        val maxNow = max(axNow, ayNow)
-
-                        if (dragDominant == null && maxNow >= swipeThresholdPx) {
-                            dragDominant = (axNow > ayNow)
-                        }
-
-                        if (dragDominant == true) {
-                            if (homeSection != HomeSection.WIDGETS && homeSection != HomeSection.TOPBAR) {
-                                stepAccX += d.x
-
-                                while (stepAccX <= -appStepPx) {
-                                    stepAccX += appStepPx
-                                    if (steppedCount < 12) {
-                                        stepStripByController(+1)
-                                        steppedCount++
-                                    } else break
-                                }
-                                while (stepAccX >= appStepPx) {
-                                    stepAccX -= appStepPx
-                                    if (steppedCount < 12) {
-                                        stepStripByController(-1)
-                                        steppedCount++
-                                    } else break
-                                }
-                            }
-                        }
-                    }
-
-                    val ax = abs(totalX)
-                    val ay = abs(totalY)
-                    val maxA = max(ax, ay)
-
-                    if (maxA < tapSlopPx) {
-                        if (homeSection == HomeSection.TOPBAR) {
-                            homeSection = HomeSection.TOP
-                            focusManager.clearFocus(force = true)
-                            goHomeTopKeepScroll()
-                        }
-                        return@awaitEachGesture
-                    }
-
-                    if (maxA < swipeThresholdPx) return@awaitEachGesture
-
-                    if (homeSection == HomeSection.TOPBAR) {
-                        if (ay >= ax) {
-                            if (totalY < 0f) {
-                                if (homeSection != HomeSection.WIDGETS) {
-                                    homeSection = HomeSection.WIDGETS
-                                    goWidgets()
-                                }
-                            } else {
-                                homeSection = HomeSection.TOP
-                                focusManager.clearFocus(force = true)
-                                goHomeTopKeepScroll()
-                            }
-                        }
-                        return@awaitEachGesture
-                    }
-
-                    if (ax > ay) {
-                        if (homeSection == HomeSection.WIDGETS) {
-                            if (totalX < 0f) moveBottomPanelHorizontal(+1) else moveBottomPanelHorizontal(-1)
-                        } else {
-                            // no-op (gear step already did it)
-                        }
-                    } else {
-                        if (totalY < 0f) {
-                            if (homeSection != HomeSection.WIDGETS) {
-                                homeSection = HomeSection.WIDGETS
-                                goWidgets()
-                            }
-                        } else {
-                            if (homeSection != HomeSection.TOP) {
-                                homeSection = HomeSection.TOP
-                                focusManager.clearFocus(force = true)
-                                goHomeTopKeepScroll()
-                            }
-                        }
-                    }
-                }
-            }
-            .onPreviewKeyEvent { e ->
-                val nk = e.nativeKeyEvent
-
-                // 1️⃣ WidgetPicker: itt is kezeljük
-                if (showWidgetPicker) {
-                    // ✅ haptic a “művelet” gombokra a pickerben (kontroller)
-                    if (nk.action == AndroidKeyEvent.ACTION_DOWN) {
-                        when (nk.keyCode) {
-                            AndroidKeyEvent.KEYCODE_DPAD_CENTER,
-                            AndroidKeyEvent.KEYCODE_ENTER,
-                            AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
-                            AndroidKeyEvent.KEYCODE_BUTTON_A,
-                            AndroidKeyEvent.KEYCODE_BACK,
-                            AndroidKeyEvent.KEYCODE_ESCAPE -> {
-                                if (vibrationEnabled) Haptics.click(context)
-                            }
-                        }
-                    }
-
-                    val handled = pickerState.handleKey(e)
-                    if (handled) return@onPreviewKeyEvent true
-
-                    // (fallback) ha valamiért nem kezelte:
-                    if (nk.action == AndroidKeyEvent.ACTION_DOWN &&
-                        (nk.keyCode == AndroidKeyEvent.KEYCODE_BACK || nk.keyCode == AndroidKeyEvent.KEYCODE_ESCAPE)
-                    ) {
-                        showWidgetPicker = false
-                        return@onPreviewKeyEvent true
-                    }
-
-                    return@onPreviewKeyEvent false
-                }
-
-                // 2️⃣ BACK: ne zárja be az Activity-t
-                if (nk.action == AndroidKeyEvent.ACTION_DOWN &&
-                    nk.keyCode == AndroidKeyEvent.KEYCODE_BACK
-                ) {
-                    // BackHandler úgyis elintézi, de itt is lenyeljük
-                    return@onPreviewKeyEvent true
-                }
-
-                // 3️⃣ Media routing
-                if (tab == Tab.MEDIA && homeSection != HomeSection.TOPBAR) {
-                    val handledByMedia = (mediaKeyHandler?.invoke(e) == true)
-                    if (handledByMedia) return@onPreviewKeyEvent true
-
-                    if (nk.action == AndroidKeyEvent.ACTION_DOWN &&
-                        nk.keyCode == AndroidKeyEvent.KEYCODE_DPAD_UP
-                    ) {
-                        return@onPreviewKeyEvent keyHandler(e)
-                    }
-
-                    return@onPreviewKeyEvent false
-                }
-
-                // 4️⃣ ALL APPS: ilyenkor a KEYHANDLER irányít mindent (nincs fókusz-mix)
-                if (allAppsOpen) {
-                    val nk = e.nativeKeyEvent
-
-                    if (nk.action == AndroidKeyEvent.ACTION_DOWN &&
-                        (nk.keyCode == AndroidKeyEvent.KEYCODE_BACK ||
-                                nk.keyCode == AndroidKeyEvent.KEYCODE_BUTTON_B)
-                    ) {
-                        allAppsOpen = false
-                        return@onPreviewKeyEvent true
-                    }
-
-                    // ✅ AllApps alatt MINDEN gomb a keyHandler-hez megy
-                    return@onPreviewKeyEvent keyHandler(e)
-                }
-
-// 5️⃣ Normal routing
-                InputController.route(
-                    e = e,
-                    state = InputController.State(
-                        if (homeSection == HomeSection.TOPBAR)
-                            InputController.Zone.TOPBAR
-                        else
-                            InputController.Zone.CONTENT
-                    ),
-                    topBarHandler = { ev -> keyHandler(ev) },
-                    contentHandler = { keyHandler(it) }
-                )
-            }
-            .background(bg)
-            .padding(horizontal = 26.dp, vertical = 18.dp)
-    ) {
-        Column(Modifier.fillMaxSize()) {
-            PSHomeTopBarHost(
-                tab = tab,
-                is24h = is24h,
-                onTabChange = { tab = it },
-                onSearch = { searchOpen = true },
-                onSettings = onOpenSettings,
-                topBarFocused = (homeSection == HomeSection.TOPBAR),
-                topBarIndex = topBarIndex
-            )
-
-            Spacer(Modifier.height(14.dp))
-
+        },
+        focusManager = focusManager,
+        topBarIndex = topBarIndex,
+        is24h = is24h,
+        onSetTab = { tab = it },
+        onSetSearchOpen = { searchOpen = it },
+        onOpenSettings = onOpenSettings,
+        body = {
             if (tab == Tab.MEDIA) {
                 MediaRoute(
                     onRequestBackToGames = { tab = Tab.GAMES },
@@ -1573,22 +587,14 @@ fun PSHomeRoute(
                 )
             } else if (tab == Tab.NOTIFICATIONS) {
                 NotificationsTabScreen(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
+                    modifier = Modifier.fillMaxWidth().weight(1f),
                     liveNotifications = liveNotifs,
                     historyNotifications = historyNotifs,
                     enterFocusTick = notifEnterFocusTick,
                     historyMode = notifHistoryMode,
-                    onLeftButtonsFocusEdgeChanged = { allowed ->
-                        notifUpFromLeftButtonsAllowed = allowed
-                    },
-                    onQsTopRowFocusEdgeChanged = { allowed ->
-                        notifUpFromQsTopRowAllowed = allowed
-                    },
-                    registerKeyHandler = { handler ->
-                        notifKeyHandler = handler
-                    },
+                    onLeftButtonsFocusEdgeChanged = { notifUpFromLeftButtonsAllowed = it },
+                    onQsTopRowFocusEdgeChanged = { notifUpFromQsTopRowAllowed = it },
+                    registerKeyHandler = { notifKeyHandler = it },
                     onRequestMoveToTopbar = {
                         homeSection = HomeSection.TOPBAR
                         topBarIndex = when (tab) {
@@ -1610,629 +616,102 @@ fun PSHomeRoute(
                     tilesState = qsState,
                     onTileClick = quickTileClick,
                     onTileRemove = { slotIndex -> QuickSettingsRepository.remove(slotIndex) },
-                    onTileAssign = { slotIndex, type ->
-                        QuickSettingsRepository.assign(
-                            slotIndex,
-                            type
-                        )
-                    }
+                    onTileAssign = { slotIndex, type -> QuickSettingsRepository.assign(slotIndex, type) }
                 )
             } else {
-                if (allAppsOpen) {
-                    AllAppsScreen(
-                        items = allAppsGrid,
-                        selectedIndex = allAppsSelectedIndex,
-                        columns = columns,
-                        onSelectChange = { allAppsSelectedIndex = it },
-                        onLaunch = { a ->
-                            allAppsOpen = false
-                            launchApp(a)
-                        },
-                        onBack = { allAppsOpen = false },
-                        onLongPress = { a ->
-                            allAppsSelectedIndex = allAppsGrid.indexOfFirst {
-                                it is AllAppsGridItem.App && it.app.packageName == a.packageName
-                            }.coerceAtLeast(0)
-                            openMenuFor(a)
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                    )
-                } else {
-                    LazyColumn(
-                        state = homeScrollState,
-                        userScrollEnabled = false,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        item {
-                            HomeTopStrip(
-                                items = topItems,
-                                displayIndex = displayIndex,
-                                pinned = pinned,
-                                stripState = stripState,
-                                fling = fling,
-                                showSelection = !uiHidesSelectedApp,
-                                modifier = Modifier.fillMaxWidth(),
-                                onSelectIndex = { idx ->
-                                    val target = (idx - anchorIndex)
-                                    if (target in 0..realLastIndex) topIndex = target
-                                },
-                                onActivate = { item ->
-                                    if (homeSection == HomeSection.TOPBAR) {
-                                        homeSection = HomeSection.TOP
-                                        focusManager.clearFocus(force = true)
-                                        goHomeTopKeepScroll()
-
-                                        when (item) {
-                                            is TopItem.App -> {
-                                                val target = realItems.indexOfFirst {
-                                                    it is TopItem.App && it.app.packageName == item.app.packageName
-                                                }
-                                                if (target >= 0) topIndex = target
-                                            }
-
-                                            is TopItem.AllApps -> {
-                                                val target =
-                                                    realItems.indexOfFirst { it is TopItem.AllApps }
-                                                if (target >= 0) topIndex = target
-                                            }
-
-                                            else -> Unit
-                                        }
-                                    } else {
-                                        when (item) {
-                                            is TopItem.App -> {
-                                                val curPkg =
-                                                    (rawSelectedTopItem as? TopItem.App)?.app?.packageName
-                                                if (curPkg == item.app.packageName) {
-                                                    launchApp(item.app)
-                                                } else {
-                                                    val target = realItems.indexOfFirst {
-                                                        it is TopItem.App && it.app.packageName == item.app.packageName
-                                                    }
-                                                    if (target >= 0) topIndex = target
-                                                }
-                                            }
-
-                                            is TopItem.AllApps -> {
-                                                val isAlready =
-                                                    rawSelectedTopItem is TopItem.AllApps
-                                                if (isAlready) {
-                                                    allAppsOpen = true
-                                                    allAppsSelectedIndex =
-                                                        allAppsSelectedIndex.coerceIn(
-                                                            0,
-                                                            allAppsLastIndex.coerceAtLeast(0)
-                                                        )
-                                                } else {
-                                                    val target =
-                                                        realItems.indexOfFirst { it is TopItem.AllApps }
-                                                    if (target >= 0) topIndex = target
-                                                }
-                                            }
-
-                                            else -> Unit
-                                        }
-                                    }
-                                },
-                                onLongPress = { item ->
-                                    when (item) {
-                                        is TopItem.App -> openMenuFor(item.app)
-                                        else -> Unit
-                                    }
-                                },
-                                onSelectionTick = {
-                                    if (vibrationEnabled) Haptics.tick(context)
-                                }
-                            )
-
-                            Spacer(Modifier.height(18.dp))
-                            Spacer(Modifier.height(18.dp))
-
-                            if (showBigAppName) {
-                                Text(
-                                    text = when (selectedTopItem) {
-                                        is TopItem.App -> selectedTopItem.app.label
-                                        is TopItem.AllApps -> context.getString(R.string.homescreen_apps_title)
-                                        else -> ""
-                                    },
-                                    color = Color.White,
-                                    fontSize = 40.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    lineHeight = 44.sp
-                                )
-
-                                Spacer(Modifier.height(14.dp))
-                            } else {
-                                Spacer(Modifier.height(6.dp))
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                HomeActions(
-                                    canLaunch = selectedTopItem is TopItem.App,
-                                    playFR = playFR,
-                                    menuFR = menuFR,
-                                    onPlay = {
-                                        if (vibrationEnabled) Haptics.click(context)
-                                        (selectedTopItem as? TopItem.App)?.app?.let { launchApp(it) }
-                                    },
-                                    onMenu = {
-                                        if (vibrationEnabled) Haptics.click(context)
-                                        if (selectedTopItem is TopItem.App) {
-                                            openMenuFor(selectedTopItem.app)
-                                        }
-                                    }
-                                )
-
-                                Spacer(Modifier.width(18.dp))
-
-                                AnimatedVisibility(
-                                    visible = (homeSection == HomeSection.WIDGETS),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .wrapContentSize(Alignment.Center),
-                                    enter = fadeIn(animationSpec = tween(180)),
-                                    exit = fadeOut(animationSpec = tween(180))
-                                ) {
-                                    BottomPanelTabsRow(active = bottomPanel)
-                                }
-                            }
-
-                            Spacer(Modifier.height(10.dp))
-                        }
-
-                        item {
-                            val panelFR = currentPanelFR()
-
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
-                                shape = RoundedCornerShape(22.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(220.dp)
-                                    .focusRequester(panelFR)
-                                    .focusable()
-                            ) {
-                                AnimatedContent(
-                                    targetState = bottomPanel,
-                                    transitionSpec = {
-                                        val order = listOf(BottomPanel.WIDGETS, BottomPanel.CALENDAR, BottomPanel.MUSIC)
-                                        val from = order.indexOf(initialState).coerceAtLeast(0)
-                                        val to = order.indexOf(targetState).coerceAtLeast(0)
-                                        val dir = if (to > from) 1 else -1
-
-                                        (slideInHorizontally(
-                                            animationSpec = tween(220),
-                                            initialOffsetX = { full -> full * dir }
-                                        ) + fadeIn(tween(220)))
-                                            .togetherWith(
-                                                slideOutHorizontally(
-                                                    animationSpec = tween(220),
-                                                    targetOffsetX = { full -> -full * dir }
-                                                ) + fadeOut(tween(180))
-                                            )
-                                    },
-                                    label = "bottomPanel"
-                                ) { p ->
-                                    when (p) {
-                                        BottomPanel.WIDGETS -> {
-                                            WidgetsPanel(
-                                                placements = placements,
-                                                grid = gridSpec,
-                                                layoutMode = WidgetLayoutMode.LANDSCAPE,
-                                                focusRequester = widgetsFR,
-                                                registerKeyHandler = { handler ->
-                                                    widgetsKeyHandler = handler
-                                                },
-                                                onRequestAddAt = { x, y -> requestAddAt(x, y) },
-                                                onMove = { placement ->
-                                                    moveWidgetClockwise(
-                                                        placement
-                                                    )
-                                                },
-                                                onDelete = { placement -> deleteWidget(placement) },
-                                                onCellPxKnown = { px -> cellPx = px },
-                                                renderWidget = { placement, modifier ->
-                                                    key(
-                                                        placement.appWidgetId,
-                                                        placement.provider,
-                                                        placement.cellX,
-                                                        placement.cellY
-                                                    ) {
-                                                        val info =
-                                                            widgetManager.getAppWidgetInfo(placement.appWidgetId)
-
-                                                        if (info == null) {
-                                                            Box(
-                                                                modifier,
-                                                                contentAlignment = Alignment.Center
-                                                            ) {
-                                                                Text(
-                                                                    context.getString(R.string.homescreen_widget_error_title),
-                                                                    color = Color.White.copy(alpha = 0.65f)
-                                                                )
-                                                            }
-                                                        } else {
-                                                            AndroidView(
-                                                                factory = { ctx ->
-                                                                    try {
-                                                                        widgetHost.createView(
-                                                                            ctx,
-                                                                            placement.appWidgetId,
-                                                                            info
-                                                                        ).apply {
-                                                                            setAppWidget(
-                                                                                placement.appWidgetId,
-                                                                                info
-                                                                            )
-                                                                            setPadding(0, 0, 0, 0)
-                                                                            layoutParams =
-                                                                                FrameLayout.LayoutParams(
-                                                                                    FrameLayout.LayoutParams.MATCH_PARENT,
-                                                                                    FrameLayout.LayoutParams.MATCH_PARENT
-                                                                                )
-                                                                        }
-                                                                    } catch (_: Throwable) {
-                                                                        FrameLayout(ctx).apply {
-                                                                            addView(
-                                                                                TextView(ctx).apply {
-                                                                                    text =
-                                                                                        context.getString(
-                                                                                            R.string.homescreen_widget_error_title
-                                                                                        )
-                                                                                }
-                                                                            )
-                                                                        }
-                                                                    }
-                                                                },
-                                                                update = { view ->
-                                                                    view.setPadding(0, 0, 0, 0)
-                                                                    view.layoutParams =
-                                                                        FrameLayout.LayoutParams(
-                                                                            FrameLayout.LayoutParams.MATCH_PARENT,
-                                                                            FrameLayout.LayoutParams.MATCH_PARENT
-                                                                        )
-                                                                },
-                                                                modifier = modifier
-                                                            )
-                                                        }
-                                                    }
-                                                },
-                                                modifier = Modifier.fillMaxSize()
-                                            )
-                                        }
-
-                                        BottomPanel.CALENDAR -> {
-                                            CalendarPanelCard(
-                                                modifier = Modifier.fillMaxSize(),
-                                                vibrationEnabled = vibrationEnabled,
-                                                focusRequester = calendarFR,
-                                                registerKeyHandler = { handler ->
-                                                    calendarKeyHandler = handler
-                                                }
-                                            )
-                                        }
-
-                                        BottomPanel.MUSIC -> {
-                                            MusicControlPanelCard(
-                                                modifier = Modifier.fillMaxSize(),
-                                                registerKeyHandler = { handler ->
-                                                    musicKeyHandler = handler
-                                                },
-                                                focusRequester = musicFR
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            Spacer(Modifier.height(5.dp))
-                        }
-                    }
+                PSHomeGamesBody(
+                    topData = derived,
+                    homeSection = homeSection,
+                    allAppsOpen = allAppsOpen,
+                    allAppsSelectedIndex = allAppsSelectedIndex,
+                    topIndex = topIndex,
+                    showBigAppName = showBigAppName,
+                    vibrationEnabled = vibrationEnabled,
+                    actionIndex = actionIndex,
+                    bottomPanel = bottomPanel,
+                    playFR = playFR,
+                    menuFR = menuFR,
+                    widgetsFR = widgetsFR,
+                    calendarFR = calendarFR,
+                    musicFR = musicFR,
+                    widgetHost = widgetHost,
+                    widgetManager = widgetManager,
+                    gridSpec = gridSpec,
+                    placements = landscapePlacements,
+                    onSetAllAppsSelectedIndex = { allAppsSelectedIndex = it },
+                    onSetAllAppsOpen = { allAppsOpen = it },
+                    onSetTopIndex = { topIndex = it },
+                    onSetHomeSection = { homeSection = it },
+                    onSetWidgetsKeyHandler = { widgetsKeyHandler = it },
+                    onSetCalendarKeyHandler = { calendarKeyHandler = it },
+                    onSetMusicKeyHandler = { musicKeyHandler = it },
+                    onSetCellPx = { cellPx = it },
+                    onRequestAddAt = ::requestAddAt,
+                    onMoveWidgetClockwise = ::moveWidgetClockwise,
+                    onDeleteWidget = ::deleteWidget,
+                    onGoHomeTopKeepScroll = ::goHomeTopKeepScroll,
+                    onOpenMenuFor = { app -> if (app != null) { menuTargetApp = app; menuOpen = true } },
+                    onLaunchApp = { app -> launchPsHomeApp(context, pm, scope, derived.repo, app) },
+                    onGoActions = ::goActions,
+                    currentPanelFR = ::currentPanelFR
+                )
+            }
+        },
+        overlays = {
+            if (tab == Tab.GAMES) {
+                val menuAppSnapshot = menuTargetApp
+                val canUninstallMenuApp = remember(menuAppSnapshot?.packageName) {
+                    menuAppSnapshot?.packageName?.let { canPsHomeUninstall(context, pm, it) } == true
                 }
-            }
-        }
-
-
-
-        if (tab == Tab.GAMES) {
-            val menuAppSnapshot = menuTargetApp
-
-            val canUninstallMenuApp = remember(menuAppSnapshot?.packageName) {
-                menuAppSnapshot?.packageName?.let(::canUninstall) == true
-            }
-            val canDisableMenuApp = remember(menuAppSnapshot?.packageName) {
-                menuAppSnapshot?.packageName?.let(::canDisable) == true
-            }
-
-            HomeOverlays(
-                searchOpen = searchOpen,
-                searchQuery = searchQuery,
-                searchResults = remember(allApps, searchQuery) {
-                    val q = searchQuery.trim()
-                    if (q.isBlank()) emptyList()
-                    else allApps.filter { it.label.contains(q, true) }.take(20)
-                },
-                menuOpen = menuOpen,
-                isPinned = menuAppSnapshot?.packageName in pinned,
-                canUninstall = canUninstallMenuApp,
-                canDisable = canDisableMenuApp,
-                onSearchChange = { searchQuery = it },
-                onSearchClose = { searchOpen = false; searchQuery = "" },
-                onSearchLaunch = {
-                    searchOpen = false
-                    searchQuery = ""
-                    launchApp(it)
-                },
-                onTogglePin = {
-                    val app = menuAppSnapshot ?: return@HomeOverlays
-                    closeMenu()
-                    scope.launch {
-                        repo.setPinned(
-                            app.packageName,
-                            value = app.packageName !in pinned
-                        )
-                    }
-                },
-                onAppInfo = {
-                    val app = menuAppSnapshot ?: return@HomeOverlays
-                    closeMenu()
-                    openAppInfo(app)
-                },
-                onUninstall = {
-                    val app = menuAppSnapshot ?: return@HomeOverlays
-                    closeMenu()
-                    requestUninstall(app)
-                },
-                onDisable = {
-                    val app = menuAppSnapshot ?: return@HomeOverlays
-                    closeMenu()
-                    openAppInfo(app)
-                },
-                onMenuClose = { closeMenu() }
-            )
-        }
-
-
-
-        // ✅ Widget picker overlay: biztos fókusz + saját key handler
-        val widgetPickerFR = remember { FocusRequester() }
-
-        AnimatedVisibility(
-            visible = showWidgetPicker,
-            enter = fadeIn(animationSpec = tween(160)) +
-                    scaleIn(initialScale = 0.94f, animationSpec = tween(200)),
-            exit = fadeOut(animationSpec = tween(130)) +
-                    scaleOut(targetScale = 0.94f, animationSpec = tween(170))
-        ) {
-            // FONTOS: itt van kompozícióban a Card, ezért itt kérünk fókuszt
-            LaunchedEffect(Unit) {
-                // 1 frame várás, hogy biztosan felépüljön a focus node
-                yield()
-                widgetPickerFR.requestFocus()
-            }
-
-            Box(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    shape = RoundedCornerShape(22.dp),
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .fillMaxWidth(1f)
-                        .fillMaxHeight(1f)
-                        .focusRequester(widgetPickerFR)
-                        .focusable()
-                ) {
-                    WidgetPickerScreen(
-                        state = pickerState,
-                        modifier = Modifier.fillMaxSize()
-                    )
+                val canDisableMenuApp = remember(menuAppSnapshot?.packageName) {
+                    menuAppSnapshot?.packageName?.let { canPsHomeDisable(context, pm, it) } == true
                 }
+
+                PSHomeGamesOverlays(
+                    searchOpen = searchOpen,
+                    searchQuery = searchQuery,
+                    searchResults = remember(derived.allApps, searchQuery) {
+                        val q = searchQuery.trim()
+                        if (q.isBlank()) emptyList() else derived.allApps.filter { it.label.contains(q, true) }.take(20)
+                    },
+                    menuOpen = menuOpen,
+                    isPinned = menuAppSnapshot?.packageName in derived.pinned,
+                    canUninstall = canUninstallMenuApp,
+                    canDisable = canDisableMenuApp,
+                    onSearchChange = { searchQuery = it },
+                    onSearchClose = { searchOpen = false; searchQuery = "" },
+                    onSearchLaunch = { searchOpen = false; searchQuery = ""; launchPsHomeApp(context, pm, scope, derived.repo, it) },
+                    onTogglePin = {
+                        val app = menuAppSnapshot ?: return@PSHomeGamesOverlays
+                        menuOpen = false
+                        menuTargetApp = null
+                        scope.launch { derived.repo.setPinned(app.packageName, value = app.packageName !in derived.pinned) }
+                    },
+                    onAppInfo = {
+                        val app = menuAppSnapshot ?: return@PSHomeGamesOverlays
+                        menuOpen = false
+                        menuTargetApp = null
+                        openPsHomeAppInfo(context, app)
+                    },
+                    onUninstall = {
+                        val app = menuAppSnapshot ?: return@PSHomeGamesOverlays
+                        menuOpen = false
+                        menuTargetApp = null
+                        requestPsHomeUninstall(context, pm, app, ::openPsHomeAppInfo)
+                    },
+                    onDisable = {
+                        val app = menuAppSnapshot ?: return@PSHomeGamesOverlays
+                        menuOpen = false
+                        menuTargetApp = null
+                        openPsHomeAppInfo(context, app)
+                    },
+                    onMenuClose = { menuOpen = false; menuTargetApp = null }
+                )
+            }
+
+            PSHomeWidgetPickerOverlay(showWidgetPicker = showWidgetPicker) {
+                WidgetPickerScreen(state = pickerState, modifier = Modifier.fillMaxSize())
             }
         }
-    }
-}
-
-@Composable
-private fun rememberQuickTileClickHandler(context: Context): (QuickTileType) -> Unit {
-    var torchOn by remember { mutableStateOf(false) }
-    var pendingAfterPermission by remember { mutableStateOf<(() -> Unit)?>(null) }
-
-    fun toast(msg: String) {
-        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-    }
-
-    fun log(msg: String) {
-        Log.d("PX5QS", msg)
-    }
-
-    fun openIntent(intent: Intent) {
-        runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-    }
-
-    fun openInternetPanel() = openIntent(Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY))
-    fun openBluetoothSettings() = openIntent(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
-    fun openDndAccessSettings() = openIntent(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
-    fun openDisplaySettings() = openIntent(Intent(Settings.ACTION_DISPLAY_SETTINGS))
-    fun openSystemSettings() = openIntent(Intent(Settings.ACTION_SETTINGS))
-
-    fun openAppDetailsSettings() {
-        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-            data = "package:${context.packageName}".toUri()
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        runCatching { context.startActivity(intent) }
-    }
-
-    val requestCamera = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        log("CAMERA permission result: $granted")
-        if (granted) {
-            pendingAfterPermission?.invoke()
-        } else {
-            openAppDetailsSettings()
-        }
-        pendingAfterPermission = null
-    }
-
-    val requestBtConnect = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        log("BT_CONNECT permission result: $granted")
-        if (granted) {
-            pendingAfterPermission?.invoke()
-        } else {
-            openAppDetailsSettings()
-        }
-        pendingAfterPermission = null
-    }
-
-    fun toggleBluetooth() {
-        val adapter = BluetoothAdapter.getDefaultAdapter()
-        if (adapter == null) {
-            openBluetoothSettings()
-            return
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val perm = Manifest.permission.BLUETOOTH_CONNECT
-            val granted = ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED
-            if (!granted) {
-                pendingAfterPermission = { toggleBluetooth() }
-                requestBtConnect.launch(perm)
-                return
-            }
-        }
-
-        val ok = runCatching {
-            if (adapter.isEnabled) adapter.disable() else adapter.enable()
-        }.getOrNull() == true
-
-        if (!ok) openBluetoothSettings()
-    }
-
-    fun toggleFlashlightInternal() {
-        val pm = context.packageManager
-        val hasFlash = pm.hasSystemFeature(PackageManager.FEATURE_CAMERA_FLASH)
-        log("toggleFlashlightInternal hasFlash=$hasFlash")
-        if (!hasFlash) {
-            toast(context.getString(R.string.homescreen_qs_no_flashlight))
-            return
-        }
-
-        val cam = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-
-        val cameraId = runCatching {
-            cam.cameraIdList.firstOrNull { id ->
-                val ch = cam.getCameraCharacteristics(id)
-                ch.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
-            }
-        }.getOrNull()
-
-        log("toggleFlashlightInternal cameraId=$cameraId")
-        if (cameraId == null) {
-            toast(context.getString(R.string.homescreen_qs_no_flash_camera))
-            return
-        }
-
-        val next = !torchOn
-        val ok = runCatching {
-            cam.setTorchMode(cameraId, next)
-            torchOn = next
-        }.isSuccess
-
-        log("toggleFlashlightInternal setTorchMode next=$next ok=$ok")
-        if (!ok) {
-            toast(context.getString(R.string.homescreen_qs_flashlight_toggle_failed))
-        }
-    }
-
-    fun toggleFlashlight() {
-        val perm = Manifest.permission.CAMERA
-        val granted = ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED
-        log("toggleFlashlight permissionGranted=$granted")
-        if (!granted) {
-            pendingAfterPermission = { toggleFlashlightInternal() }
-            requestCamera.launch(perm)
-            return
-        }
-        toggleFlashlightInternal()
-    }
-
-    fun toggleDnd() {
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (!nm.isNotificationPolicyAccessGranted) {
-            openDndAccessSettings()
-            return
-        }
-
-        val cur = nm.currentInterruptionFilter
-        val next = if (cur == NotificationManager.INTERRUPTION_FILTER_NONE) {
-            NotificationManager.INTERRUPTION_FILTER_ALL
-        } else {
-            NotificationManager.INTERRUPTION_FILTER_NONE
-        }
-
-        runCatching { nm.setInterruptionFilter(next) }
-            .onFailure { openDndAccessSettings() }
-    }
-
-    return remember {
-        { type: QuickTileType ->
-            log("Tile click: $type")
-            when (type) {
-                QuickTileType.WIFI -> openInternetPanel()
-                QuickTileType.BT -> toggleBluetooth()
-                QuickTileType.FLASHLIGHT -> toggleFlashlight()
-                QuickTileType.DND -> toggleDnd()
-                QuickTileType.ROTATION -> openDisplaySettings()
-                QuickTileType.AIRPLANE -> openSystemSettings()
-                QuickTileType.LOCATION -> openIntent(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
-                QuickTileType.STB -> openSystemSettings()
-            }
-        }
-    }
-}
-@Composable
-private fun PSHomeTopBarHost(
-    tab: Tab,
-    is24h: Boolean,
-    onTabChange: (Tab) -> Unit,
-    onSearch: () -> Unit,
-    onSettings: () -> Unit,
-    topBarFocused: Boolean,
-    topBarIndex: Int
-) {
-    var clockText by remember { mutableStateOf("") }
-
-    LaunchedEffect(is24h) {
-        val pattern = if (is24h) "HH:mm" else "hh:mm a"
-        val fmt = SimpleDateFormat(pattern, Locale.getDefault())
-
-        while (true) {
-            clockText = fmt.format(Date())
-            delay(1_000)
-        }
-    }
-
-    HomeTopBar(
-        tab = tab,
-        clockText = clockText,
-        onTabChange = onTabChange,
-        onSearch = onSearch,
-        onSettings = onSettings,
-        topBarFocused = topBarFocused,
-        topBarIndex = topBarIndex
     )
 }
