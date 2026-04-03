@@ -2,6 +2,8 @@
 
 package com.dueboysenberry1226.px5launcher.ui.theme
 
+import androidx.compose.material.icons.rounded.Refresh
+import android.media.MediaMetadataRetriever
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -109,8 +111,8 @@ private fun calculateInSampleSize(
     var inSampleSize = 1
 
     if (srcHeight > reqHeight || srcWidth > reqWidth) {
-        var halfHeight = srcHeight / 2
-        var halfWidth = srcWidth / 2
+        val halfHeight = srcHeight / 2
+        val halfWidth = srcWidth / 2
 
         while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
             inSampleSize *= 2
@@ -161,7 +163,8 @@ private fun loadThumbBitmap(
     context: Context,
     uri: Uri,
     reqWidth: Int,
-    reqHeight: Int
+    reqHeight: Int,
+    kind: MediaKind
 ): Bitmap? {
     val safeReqWidth = reqWidth.coerceAtLeast(1)
     val safeReqHeight = reqHeight.coerceAtLeast(1)
@@ -173,12 +176,60 @@ private fun loadThumbBitmap(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             context.contentResolver.loadThumbnail(uri, Size(safeReqWidth, safeReqHeight), null)
         } else {
-            loadSampledBitmap(context, uri, safeReqWidth, safeReqHeight)
+            if (kind == MediaKind.IMAGE) {
+                loadSampledBitmap(context, uri, safeReqWidth, safeReqHeight)
+            } else {
+                null
+            }
         }
-    }.getOrNull() ?: return null
+    }.getOrNull() ?: if (kind == MediaKind.VIDEO) {
+        loadVideoFrameBitmap(
+            context = context,
+            uri = uri,
+            reqWidth = safeReqWidth,
+            reqHeight = safeReqHeight
+        )
+    } else {
+        null
+    } ?: return null
 
     MediaBitmapCache.put(key, bitmap)
     return bitmap
+}
+
+private fun loadVideoFrameBitmap(
+    context: Context,
+    uri: Uri,
+    reqWidth: Int,
+    reqHeight: Int
+): Bitmap? {
+    val retriever = MediaMetadataRetriever()
+
+    return try {
+        retriever.setDataSource(context, uri)
+
+        val rawFrame =
+            retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                ?: retriever.frameAtTime
+                ?: return null
+
+        val scaled = Bitmap.createScaledBitmap(
+            rawFrame,
+            reqWidth.coerceAtLeast(1),
+            reqHeight.coerceAtLeast(1),
+            true
+        )
+
+        if (scaled != rawFrame) {
+            rawFrame.recycle()
+        }
+
+        scaled
+    } catch (_: Throwable) {
+        null
+    } finally {
+        runCatching { retriever.release() }
+    }
 }
 
 private enum class MediaScreen { HUB, IMAGES, VIDEOS, ALBUMS, ALBUM_CONTENT, VIEWER }
@@ -190,7 +241,9 @@ private sealed class MediaGridItem {
 }
 
 private enum class ViewerFocus {
+    NONE,
     BACK,
+    ROTATE,
     IMAGE,
     ZOOM_IN,
     ZOOM_OUT,
@@ -207,7 +260,8 @@ private enum class ViewerCommandType {
     PAN_UP,
     PAN_DOWN,
     ZOOM_IN,
-    ZOOM_OUT
+    ZOOM_OUT,
+    ROTATE_CLOCKWISE
 }
 
 private data class ViewerCommand(
@@ -616,14 +670,29 @@ fun MediaRoute(
             MediaScreen.VIEWER -> {
                 fun moveViewerFocus(code: Int) {
                     viewerFocus = when (viewerFocus) {
+                        ViewerFocus.NONE -> when (code) {
+                            AndroidKeyEvent.KEYCODE_DPAD_LEFT,
+                            AndroidKeyEvent.KEYCODE_DPAD_RIGHT,
+                            AndroidKeyEvent.KEYCODE_DPAD_UP,
+                            AndroidKeyEvent.KEYCODE_DPAD_DOWN -> ViewerFocus.ZOOM_IN
+                            else -> ViewerFocus.NONE
+                        }
+
                         ViewerFocus.BACK -> when (code) {
                             AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> ViewerFocus.IMAGE
-                            AndroidKeyEvent.KEYCODE_DPAD_DOWN -> ViewerFocus.IMAGE
+                            AndroidKeyEvent.KEYCODE_DPAD_DOWN -> ViewerFocus.ROTATE
                             else -> ViewerFocus.BACK
                         }
 
+                        ViewerFocus.ROTATE -> when (code) {
+                            AndroidKeyEvent.KEYCODE_DPAD_UP -> ViewerFocus.BACK
+                            AndroidKeyEvent.KEYCODE_DPAD_DOWN -> ViewerFocus.IMAGE
+                            AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> ViewerFocus.IMAGE
+                            else -> ViewerFocus.ROTATE
+                        }
+
                         ViewerFocus.IMAGE -> when (code) {
-                            AndroidKeyEvent.KEYCODE_DPAD_LEFT -> ViewerFocus.BACK
+                            AndroidKeyEvent.KEYCODE_DPAD_LEFT -> ViewerFocus.ROTATE
                             AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> ViewerFocus.TOGGLE
                             else -> ViewerFocus.IMAGE
                         }
@@ -678,7 +747,7 @@ fun MediaRoute(
                         }
                     }
 
-                    if (viewerFocus != ViewerFocus.IMAGE) {
+                    if (viewerFocus != ViewerFocus.IMAGE && viewerFocus != ViewerFocus.NONE) {
                         viewerLastSideFocus = viewerFocus
                     }
                 }
@@ -729,8 +798,14 @@ fun MediaRoute(
 
                         in okCodes -> {
                             when (viewerFocus) {
+                                ViewerFocus.NONE -> Unit
+
                                 ViewerFocus.BACK -> {
                                     goBackOneLevel()
+                                }
+
+                                ViewerFocus.ROTATE -> {
+                                    viewerCommand = ViewerCommand(ViewerCommandType.ROTATE_CLOCKWISE)
                                 }
 
                                 ViewerFocus.IMAGE -> {
@@ -1296,7 +1371,8 @@ private fun MediaThumbTile(
                     context = context,
                     uri = entry.uri,
                     reqWidth = thumbWidthPx,
-                    reqHeight = thumbHeightPx
+                    reqHeight = thumbHeightPx,
+                    kind = entry.kind
                 )
             }.getOrNull()
         }
@@ -1495,6 +1571,7 @@ private fun MediaImageViewer(
     var scale by remember(entry?.id) { mutableFloatStateOf(1f) }
     var offsetX by remember(entry?.id) { mutableFloatStateOf(0f) }
     var offsetY by remember(entry?.id) { mutableFloatStateOf(0f) }
+    var rotation by remember(entry?.id) { mutableFloatStateOf(0f) }
 
     fun clampOffset(
         targetScale: Float,
@@ -1510,9 +1587,13 @@ private fun MediaImageViewer(
             return 0f to 0f
         }
 
-        val fitScale = min(vpW / bmpW, vpH / bmpH)
-        val displayedW = bmpW * fitScale * targetScale
-        val displayedH = bmpH * fitScale * targetScale
+        val isQuarterTurn = (rotation % 180f) != 0f
+        val effectiveBmpW = if (isQuarterTurn) bmpH else bmpW
+        val effectiveBmpH = if (isQuarterTurn) bmpW else bmpH
+
+        val fitScale = min(vpW / effectiveBmpW, vpH / effectiveBmpH)
+        val displayedW = effectiveBmpW * fitScale * targetScale
+        val displayedH = effectiveBmpH * fitScale * targetScale
 
         val maxX = max(0f, (displayedW - vpW) / 2f)
         val maxY = max(0f, (displayedH - vpH) / 2f)
@@ -1534,10 +1615,23 @@ private fun MediaImageViewer(
         offsetY = clamped.second
     }
 
+    fun rotateClockwise() {
+        rotation = (rotation + 90f) % 360f
+        val clamped = clampOffset(scale, offsetX, offsetY)
+        offsetX = clamped.first
+        offsetY = clamped.second
+    }
+
+    fun clearTouchSelection() {
+        onPanModeChange(false)
+        onFocusChange(ViewerFocus.NONE)
+    }
+
     LaunchedEffect(entry?.id) {
         scale = 1f
         offsetX = 0f
         offsetY = 0f
+        rotation = 0f
         onPanModeChange(false)
         onFocusChange(ViewerFocus.ZOOM_IN)
     }
@@ -1566,6 +1660,11 @@ private fun MediaImageViewer(
 
             ViewerCommandType.ZOOM_IN -> applyZoom(1.2f)
             ViewerCommandType.ZOOM_OUT -> applyZoom(1f / 1.2f)
+
+            ViewerCommandType.ROTATE_CLOCKWISE -> {
+                rotateClockwise()
+            }
+
             null -> Unit
         }
         if (command != null) onCommandConsumed()
@@ -1634,6 +1733,8 @@ private fun MediaImageViewer(
                                 .pointerInput(entry?.id) {
                                     awaitEachGesture {
                                         val down = awaitFirstDown(requireUnconsumed = false)
+                                        clearTouchSelection()
+
                                         var totalDx = 0f
                                         var totalDy = 0f
                                         var maxPointerCount = 1
@@ -1668,12 +1769,18 @@ private fun MediaImageViewer(
                                     awaitEachGesture {
                                         var previousCentroid: Offset? = null
                                         var previousDistance: Float? = null
+                                        var clearedSelection = false
 
                                         while (true) {
                                             val event = awaitPointerEvent()
                                             val pressed = event.changes.filter { it.pressed }
 
                                             if (pressed.isEmpty()) break
+
+                                            if (!clearedSelection && pressed.isNotEmpty()) {
+                                                clearTouchSelection()
+                                                clearedSelection = true
+                                            }
 
                                             if (pressed.size < 2) {
                                                 previousCentroid = null
@@ -1729,6 +1836,7 @@ private fun MediaImageViewer(
                                         scaleY = scale
                                         translationX = offsetX
                                         translationY = offsetY
+                                        rotationZ = rotation
                                     }
                             )
                         }
@@ -1763,6 +1871,28 @@ private fun MediaImageViewer(
                 )
             }
 
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 18.dp, bottom = 18.dp)
+                    .then(viewerButtonModifier(focus == ViewerFocus.ROTATE))
+                    .combinedClickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {
+                            hClick()
+                            onFocusChange(ViewerFocus.ROTATE)
+                            rotateClockwise()
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Refresh,
+                    contentDescription = "Forgatás",
+                    tint = Color.White
+                )
+            }
 
             if (!panelCollapsed) {
                 Card(

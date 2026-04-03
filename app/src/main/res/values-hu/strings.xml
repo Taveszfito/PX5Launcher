@@ -305,7 +305,7 @@
     <string name="music_hint_seek_mode">Seek mód: DPAD ←/→ teker • Kilépés: B/Back</string>
     <string name="music_hint_queue_autoskip"> </string>
     <string name="music_hint_queue_next_songs">Jobbra: következő számok</string>
-    <string name="music_hint_strip_seek_mode">A a csíkon: seek mód</string>
+    <string name="music_hint_strip_seek_mode"> </string>
 
     <!-- Controls / volume -->
     <string name="music_volume_format">%1$d/%2$d</string>

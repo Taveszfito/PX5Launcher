@@ -281,7 +281,7 @@
     <string name="music_hint_seek_mode">Seek mode: DPAD ←/→ • Exit: B/Back</string>
     <string name="music_hint_queue_autoskip"> </string>
     <string name="music_hint_queue_next_songs">Right: next tracks</string>
-    <string name="music_hint_strip_seek_mode">A on strip: seek mode</string>
+    <string name="music_hint_strip_seek_mode"> </string>
 
     <string name="music_volume_format">%1$d/%2$d</string>
 
