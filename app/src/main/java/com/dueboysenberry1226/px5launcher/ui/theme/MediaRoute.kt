@@ -2,63 +2,102 @@
 
 package com.dueboysenberry1226.px5launcher.ui.theme
 
-import androidx.compose.material.icons.rounded.Refresh
-import android.media.MediaMetadataRetriever
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Fullscreen
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.material.icons.rounded.ArrowBack
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.pointer.positionChange
-import kotlin.math.abs
-import kotlin.math.hypot
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material3.Icon
+
+import androidx.compose.foundation.layout.PaddingValues
 import android.annotation.SuppressLint
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
+import android.text.format.Formatter
+import android.util.LruCache
+import android.util.Size
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.OptIn
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.media3.common.util.UnstableApi
 import com.dueboysenberry1226.px5launcher.R
 import com.dueboysenberry1226.px5launcher.media.MediaAlbum
 import com.dueboysenberry1226.px5launcher.media.MediaEntry
@@ -66,26 +105,17 @@ import com.dueboysenberry1226.px5launcher.media.MediaKind
 import com.dueboysenberry1226.px5launcher.media.MediaStoreRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import android.content.ClipData
-import android.text.format.Formatter
-import android.util.LruCache
-import android.util.Size
-import android.os.Build
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.unit.IntSize
+import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
-
 
 private object MediaBitmapCache {
-    private val cache = object : LruCache<String, Bitmap>((Runtime.getRuntime().maxMemory() / 8L).coerceAtMost(48L * 1024L * 1024L).toInt()) {
+    private val cache = object : LruCache<String, Bitmap>(
+        (Runtime.getRuntime().maxMemory() / 8L)
+            .coerceAtMost(48L * 1024L * 1024L)
+            .toInt()
+    ) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
     }
 
@@ -232,7 +262,15 @@ private fun loadVideoFrameBitmap(
     }
 }
 
-private enum class MediaScreen { HUB, IMAGES, VIDEOS, ALBUMS, ALBUM_CONTENT, VIEWER }
+private enum class MediaScreen {
+    HUB,
+    IMAGES,
+    VIDEOS,
+    ALBUMS,
+    ALBUM_CONTENT,
+    VIEWER,
+    VIDEO_PLAYER
+}
 
 private sealed class MediaGridItem {
     data object Back : MediaGridItem()
@@ -269,6 +307,7 @@ private data class ViewerCommand(
     val nonce: Long = System.nanoTime()
 )
 
+@OptIn(UnstableApi::class)
 @Composable
 fun MediaRoute(
     onRequestBackToGames: () -> Unit,
@@ -301,20 +340,26 @@ fun MediaRoute(
     var currentAlbumId by rememberSaveable { mutableStateOf<String?>(null) }
     var currentAlbumName by rememberSaveable { mutableStateOf<String?>(null) }
 
-
     var refreshTick by rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(hasPerm) { if (hasPerm) refreshTick++ }
+    LaunchedEffect(hasPerm) {
+        if (hasPerm) refreshTick++
+    }
 
     val images by produceState(initialValue = emptyList(), refreshTick) {
-        value = if (!hasPerm) emptyList() else withContext(Dispatchers.Default) { repo.loadImages() }
+        value = if (!hasPerm) emptyList()
+        else withContext(Dispatchers.Default) { repo.loadImages() }
     }
+
     val videos by produceState(initialValue = emptyList(), refreshTick) {
-        value = if (!hasPerm) emptyList() else withContext(Dispatchers.Default) { repo.loadVideos() }
+        value = if (!hasPerm) emptyList()
+        else withContext(Dispatchers.Default) { repo.loadVideos() }
     }
-    val albums by produceState(initialValue = emptyList
-        (), refreshTick) {
-        value = if (!hasPerm) emptyList() else withContext(Dispatchers.Default) { repo.loadAlbums() }
+
+    val albums by produceState(initialValue = emptyList(), refreshTick) {
+        value = if (!hasPerm) emptyList()
+        else withContext(Dispatchers.Default) { repo.loadAlbums() }
     }
+
     val albumContent by produceState(initialValue = emptyList(), refreshTick, currentAlbumId) {
         val bid = currentAlbumId
         value =
@@ -331,6 +376,8 @@ fun MediaRoute(
     var viewerPanMode by rememberSaveable { mutableStateOf(false) }
     var viewerCommand by remember { mutableStateOf<ViewerCommand?>(null) }
     var viewerPanelCollapsed by rememberSaveable { mutableStateOf(false) }
+
+    var currentVideoEntry by remember { mutableStateOf<MediaEntry?>(null) }
 
     val viewerEntry = viewerEntries.getOrNull(viewerIndex)
 
@@ -349,6 +396,10 @@ fun MediaRoute(
             viewerPanMode = false
             viewerCommand = null
             viewerPanelCollapsed = false
+        }
+
+        if (screen == MediaScreen.VIDEO_PLAYER) {
+            currentVideoEntry = null
         }
 
         val prev = backStack.lastOrNull()
@@ -382,12 +433,21 @@ fun MediaRoute(
         navigateTo(MediaScreen.VIEWER)
     }
 
+    fun openVideoPlayer(entry: MediaEntry) {
+        currentVideoEntry = entry
+        navigateTo(MediaScreen.VIDEO_PLAYER)
+    }
+
     fun shareViewerEntry() {
         val entry = viewerEntry ?: return
         val i = Intent(Intent.ACTION_SEND).apply {
             type = "image/*"
             putExtra(Intent.EXTRA_STREAM, entry.uri)
-            clipData = ClipData.newUri(context.contentResolver, entry.displayName ?: "image", entry.uri)
+            clipData = ClipData.newUri(
+                context.contentResolver,
+                entry.displayName ?: "image",
+                entry.uri
+            )
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(Intent.createChooser(i, entry.displayName ?: "Share image"))
@@ -416,34 +476,28 @@ fun MediaRoute(
         }
     }
 
-
-
-    fun openVideoExternal(uri: Uri) {
-        val i = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "video/*")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        if (i.resolveActivity(context.packageManager) != null) context.startActivity(i)
-    }
-
     val gridItems: List<MediaGridItem> = remember(screen, images, videos, albums, albumContent) {
         when (screen) {
             MediaScreen.IMAGES -> buildList {
                 add(MediaGridItem.Back)
                 addAll(images.map { MediaGridItem.Entry(it) })
             }
+
             MediaScreen.VIDEOS -> buildList {
                 add(MediaGridItem.Back)
                 addAll(videos.map { MediaGridItem.Entry(it) })
             }
+
             MediaScreen.ALBUMS -> buildList {
                 add(MediaGridItem.Back)
                 addAll(albums.map { MediaGridItem.Album(it) })
             }
+
             MediaScreen.ALBUM_CONTENT -> buildList {
                 add(MediaGridItem.Back)
                 addAll(albumContent.map { MediaGridItem.Entry(it) })
             }
+
             else -> emptyList()
         }
     }
@@ -463,7 +517,8 @@ fun MediaRoute(
         } else {
             if (selectedIndex == -1) {
                 val last = gridItems.lastIndex
-                selectedIndex = if (last >= 0) lastContentSelectedIndex.coerceIn(0, last) else 0
+                selectedIndex =
+                    if (last >= 0) lastContentSelectedIndex.coerceIn(0, last) else 0
             }
         }
     }
@@ -512,7 +567,6 @@ fun MediaRoute(
             if (action != AndroidKeyEvent.ACTION_DOWN) return@internalKeyHandler false
         }
 
-        // ✅ HAPTIC: OK/Back/Enter/B
         if (isOk || isBack) hClick()
 
         if (!hubSelectionEnabled && screen == MediaScreen.HUB && code == AndroidKeyEvent.KEYCODE_DPAD_UP) {
@@ -566,7 +620,8 @@ fun MediaRoute(
         fun ensureSelectionForGrid() {
             if (selectedIndex == -1) {
                 val last = gridItems.lastIndex
-                selectedIndex = if (last >= 0) lastContentSelectedIndex.coerceIn(0, last) else 0
+                selectedIndex =
+                    if (last >= 0) lastContentSelectedIndex.coerceIn(0, last) else 0
             }
         }
 
@@ -577,6 +632,7 @@ fun MediaRoute(
                         if (hubSelectionEnabled && selectedIndex > 0) selectedIndex--
                         true
                     }
+
                     AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
                         if (hubSelectionEnabled && selectedIndex < 2) selectedIndex++
                         true
@@ -616,6 +672,7 @@ fun MediaRoute(
                         if (selectedIndex > 0) selectedIndex--
                         true
                     }
+
                     AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
                         ensureSelectionForGrid()
                         if (selectedIndex < lastIndex) selectedIndex++
@@ -644,15 +701,21 @@ fun MediaRoute(
                         ensureSelectionForGrid()
                         when (val it = gridItems.getOrNull(selectedIndex)) {
                             is MediaGridItem.Back -> goBackOneLevel()
+
                             is MediaGridItem.Entry -> {
-                                if (it.e.kind == MediaKind.VIDEO) openVideoExternal(it.e.uri)
-                                else openViewer(it.e)
+                                if (it.e.kind == MediaKind.VIDEO) {
+                                    openVideoPlayer(it.e)
+                                } else {
+                                    openViewer(it.e)
+                                }
                             }
+
                             is MediaGridItem.Album -> {
                                 currentAlbumId = it.a.bucketId
                                 currentAlbumName = it.a.bucketName
                                 navigateTo(MediaScreen.ALBUM_CONTENT)
                             }
+
                             null -> Unit
                         }
                         true
@@ -857,6 +920,17 @@ fun MediaRoute(
                     }
                 }
             }
+
+            MediaScreen.VIDEO_PLAYER -> {
+                when (code) {
+                    in backCodes -> {
+                        goBackOneLevel()
+                        true
+                    }
+
+                    else -> false
+                }
+            }
         }
     }
 
@@ -873,8 +947,14 @@ fun MediaRoute(
                     permissionButtonsFocused = true
                     permissionButtonIndex = it
                 },
-                onRequest = { hClick(); permLauncher.launch(MediaStoreRepository.requiredPermissions()) },
-                onBack = { hClick(); onRequestBackToGames() }
+                onRequest = {
+                    hClick()
+                    permLauncher.launch(MediaStoreRepository.requiredPermissions())
+                },
+                onBack = {
+                    hClick()
+                    onRequestBackToGames()
+                }
             )
             return@Box
         }
@@ -914,7 +994,7 @@ fun MediaRoute(
                     columns = columns,
                     onSelectChange = { selectedIndex = it },
                     onBack = { goBackOneLevel() },
-                    onOpenEntry = { e -> openVideoExternal(e.uri) },
+                    onOpenEntry = { e -> openVideoPlayer(e) },
                     onOpenAlbum = null,
                     vibrationEnabled = vibrationEnabled
                 )
@@ -947,7 +1027,7 @@ fun MediaRoute(
                     onSelectChange = { selectedIndex = it },
                     onBack = { goBackOneLevel() },
                     onOpenEntry = { e ->
-                        if (e.kind == MediaKind.VIDEO) openVideoExternal(e.uri) else openViewer(e)
+                        if (e.kind == MediaKind.VIDEO) openVideoPlayer(e) else openViewer(e)
                     },
                     onOpenAlbum = null,
                     vibrationEnabled = vibrationEnabled
@@ -968,7 +1048,7 @@ fun MediaRoute(
                     onCommandConsumed = { viewerCommand = null },
                     onFocusChange = {
                         viewerFocus = it
-                        if (it != ViewerFocus.IMAGE) {
+                        if (it != ViewerFocus.IMAGE && it != ViewerFocus.NONE) {
                             viewerLastSideFocus = it
                         }
                     },
@@ -988,6 +1068,20 @@ fun MediaRoute(
                     onBack = { goBackOneLevel() },
                     vibrationEnabled = vibrationEnabled
                 )
+            }
+
+            MediaScreen.VIDEO_PLAYER -> {
+                val videoEntry = currentVideoEntry
+                if (videoEntry != null) {
+                    MediaVideoPlayer(
+                        videoUri = videoEntry.uri,
+                        videoName = videoEntry.displayName,
+                        vibrationEnabled = vibrationEnabled,
+                        onBack = { goBackOneLevel() }
+                    )
+                } else {
+                    goBackOneLevel()
+                }
             }
         }
     }
@@ -1052,6 +1146,7 @@ private fun MediaPermissionCard(
     }
 }
 
+@kotlin.OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TouchTextButton(
     text: String,
@@ -1098,6 +1193,7 @@ private fun MediaHub(
     vibrationEnabled: Boolean
 ) {
     val context = LocalContext.current
+
     fun hClick() {
         if (vibrationEnabled) Haptics.click(context)
     }
@@ -1146,6 +1242,7 @@ private fun MediaHub(
     }
 }
 
+@kotlin.OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MediaBigButton(
     icon: String,
@@ -1165,7 +1262,10 @@ private fun MediaBigButton(
             .width(220.dp)
             .height(170.dp)
             .scale(scale)
-            .then(if (selected) Modifier.border(2.dp, Color.White.copy(alpha = 0.95f), shape) else Modifier)
+            .then(
+                if (selected) Modifier.border(2.dp, Color.White.copy(alpha = 0.95f), shape)
+                else Modifier
+            )
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -1182,7 +1282,12 @@ private fun MediaBigButton(
         ) {
             Text(icon, fontSize = 34.sp)
             Spacer(Modifier.height(10.dp))
-            Text(text, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                text,
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }
@@ -1200,6 +1305,7 @@ private fun MediaGrid(
     vibrationEnabled: Boolean
 ) {
     val context = LocalContext.current
+
     fun hClick() {
         if (vibrationEnabled) Haptics.click(context)
     }
@@ -1220,214 +1326,164 @@ private fun MediaGrid(
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 8.dp, bottom = 10.dp)
+            modifier = Modifier.padding(top = 22.dp, start = 8.dp, bottom = 14.dp)
         )
 
         LazyVerticalGrid(
-            state = gridState,
             columns = GridCells.Fixed(columns),
+            state = gridState,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(top = 10.dp, bottom = 14.dp),
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 18.dp)
         ) {
-            itemsIndexed(items) { i, item ->
-                val isSel = (selectedIndex >= 0 && i == selectedIndex)
-
-                fun selectAnd(block: () -> Unit) {
-                    onSelectChange(i)
-                    hClick()
-                    block()
-                }
-
+            itemsIndexed(items) { index, item ->
                 when (item) {
-                    is MediaGridItem.Back -> BackTile(
-                        selected = isSel,
-                        label = stringResource(R.string.common_back),
-                        onClick = { selectAnd { onBack() } }
-                    )
+                    is MediaGridItem.Back -> {
+                        MediaBigButton(
+                            icon = "↩",
+                            text = stringResource(R.string.common_back),
+                            selected = selectedIndex == index,
+                            onClick = {
+                                hClick()
+                                onSelectChange(index)
+                                onBack()
+                            }
+                        )
+                    }
 
-                    is MediaGridItem.Entry -> MediaThumbTile(
-                        selected = isSel,
-                        entry = item.e,
-                        onClick = { selectAnd { onOpenEntry?.invoke(item.e) } }
-                    )
+                    is MediaGridItem.Entry -> {
+                        MediaThumbTile(
+                            entry = item.e,
+                            selected = selectedIndex == index,
+                            onClick = {
+                                hClick()
+                                onSelectChange(index)
+                                onOpenEntry?.invoke(item.e)
+                            }
+                        )
+                    }
 
-                    is MediaGridItem.Album -> AlbumTile(
-                        selected = isSel,
-                        album = item.a,
-                        onClick = { selectAnd { onOpenAlbum?.invoke(item.a) } }
-                    )
+                    is MediaGridItem.Album -> {
+                        MediaBigButton(
+                            icon = "📁",
+                            text = item.a.bucketName.ifBlank {
+                                stringResource(R.string.media_title_album_fallback)
+                            },
+                            selected = selectedIndex == index,
+                            onClick = {
+                                hClick()
+                                onSelectChange(index)
+                                onOpenAlbum?.invoke(item.a)
+                            }
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-@Composable
-private fun BackTile(selected: Boolean, label: String, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
-    val scale by animateFloatAsState(if (selected) 1.06f else 1.0f, label = "mediaBackScale")
-    val bgAlpha = if (selected) 0.11f else 0.06f
-
-    Card(
-        shape = shape,
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = bgAlpha)),
-        modifier = Modifier
-            .height(120.dp)
-            .fillMaxWidth()
-            .scale(scale)
-            .then(if (selected) Modifier.border(2.dp, Color.White.copy(alpha = 0.95f), shape) else Modifier)
-            .combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
-            )
-    ) {
-        Box(Modifier.fillMaxSize().padding(12.dp), contentAlignment = Alignment.CenterStart) {
-            Text(
-                text = stringResource(R.string.media_back_tile, label),
-                color = Color.White,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
-    }
-}
-
-@Composable
-private fun AlbumTile(selected: Boolean, album: MediaAlbum, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
-    val scale by animateFloatAsState(if (selected) 1.06f else 1.0f, label = "albumScale")
-    val bgAlpha = if (selected) 0.11f else 0.06f
-
-    Card(
-        shape = shape,
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = bgAlpha)),
-        modifier = Modifier
-            .height(120.dp)
-            .fillMaxWidth()
-            .scale(scale)
-            .then(if (selected) Modifier.border(2.dp, Color.White.copy(alpha = 0.95f), shape) else Modifier)
-            .combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
-            )
-    ) {
-        Row(Modifier.fillMaxSize().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier
-                    .size(54.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White.copy(alpha = 0.10f)),
-                contentAlignment = Alignment.Center
-            ) { Text("📁", fontSize = 18.sp) }
-
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    album.bucketName,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = stringResource(R.string.common_open),
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontSize = 12.sp
-                )
-            }
-        }
-    }
-}
-
+@kotlin.OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MediaThumbTile(
-    selected: Boolean,
     entry: MediaEntry,
-    onClick: () -> Unit,
-    onLongPress: (() -> Unit)? = null
+    selected: Boolean,
+    onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val density = LocalDensity.current
-    val shape = RoundedCornerShape(14.dp)
+    var thumbSize by remember { mutableStateOf(IntSize.Zero) }
 
-    val scale by animateFloatAsState(
-        targetValue = if (selected) 1.06f else 1.0f,
-        label = "mediaTileScale"
-    )
-    val bgAlpha = if (selected) 0.11f else 0.06f
-
-    val thumbWidthPx = remember(density) { with(density) { 160.dp.roundToPx() } }
-    val thumbHeightPx = remember(density) { with(density) { 160.dp.roundToPx() } }
-
-    val thumb: Bitmap? by produceState(initialValue = MediaBitmapCache.get(cacheKey(entry.uri, thumbWidthPx, thumbHeightPx)), entry.uri) {
-        if (value != null) return@produceState
-
+    val bmp: Bitmap? by produceState(
+        initialValue = null,
+        entry.uri,
+        thumbSize
+    ) {
+        val w = thumbSize.width.coerceAtLeast(1)
+        val h = thumbSize.height.coerceAtLeast(1)
         value = withContext(ThumbDecodeDispatcher) {
             runCatching {
                 loadThumbBitmap(
                     context = context,
                     uri = entry.uri,
-                    reqWidth = thumbWidthPx,
-                    reqHeight = thumbHeightPx,
+                    reqWidth = w,
+                    reqHeight = h,
                     kind = entry.kind
                 )
             }.getOrNull()
         }
     }
 
-    Card(
-        shape = shape,
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = bgAlpha)),
+    val shape = RoundedCornerShape(18.dp)
+
+    Box(
         modifier = Modifier
-            .height(120.dp)
+            .height(170.dp)
             .fillMaxWidth()
-            .scale(scale)
-            .then(if (selected) Modifier.border(2.dp, Color.White.copy(alpha = 0.95f), shape) else Modifier)
+            .clip(shape)
+            .background(Color.White.copy(alpha = 0.06f))
+            .then(
+                if (selected) Modifier.border(2.dp, Color.White.copy(alpha = 0.95f), shape)
+                else Modifier
+            )
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = onClick,
-                onLongClick = { onLongPress?.invoke() }
+                onClick = onClick
             )
+            .onSizeChanged { thumbSize = it }
     ) {
-        Box(Modifier.fillMaxSize().padding(10.dp)) {
-            if (thumb != null) {
-                Image(
-                    bitmap = thumb!!.asImageBitmap(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(12.dp))
-                )
-            } else {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.White.copy(alpha = 0.08f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(if (entry.kind == MediaKind.VIDEO) "🎬" else "🖼️", fontSize = 22.sp)
-                }
-            }
-
-            if (entry.kind == MediaKind.VIDEO) {
+        if (bmp != null) {
+            Image(
+                bitmap = bmp!!.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(
-                    "▶",
-                    color = Color.White.copy(alpha = 0.9f),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)
+                    text = if (entry.kind == MediaKind.VIDEO) "🎬" else "🖼️",
+                    fontSize = 22.sp
                 )
             }
+        }
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .background(Color.Black.copy(alpha = 0.45f))
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+        ) {
+            Text(
+                text = entry.displayName ?: "—",
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        if (entry.kind == MediaKind.VIDEO) {
+            Text(
+                "▶",
+                color = Color.White.copy(alpha = 0.9f),
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(8.dp)
+            )
         }
     }
 }
 
+@kotlin.OptIn(ExperimentalFoundationApi::class)
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 private fun MediaImageViewer(
