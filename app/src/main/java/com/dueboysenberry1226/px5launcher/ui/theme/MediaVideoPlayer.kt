@@ -1,26 +1,31 @@
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package com.dueboysenberry1226.px5launcher.ui.theme
 
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.media.AudioManager
 import android.net.Uri
-import androidx.compose.foundation.ExperimentalFoundationApi
+import android.view.KeyEvent as AndroidKeyEvent
+import android.view.MotionEvent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Pause
@@ -36,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,27 +49,56 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
-import kotlin.math.roundToInt
 
-@kotlin.OptIn(UnstableApi::class, ExperimentalFoundationApi::class)
+private enum class VideoControlButtonId {
+    BACK,
+    PREV_VIDEO,
+    PLAY_PAUSE,
+    NEXT_VIDEO,
+    VOL_DOWN,
+    VOL_UP
+}
+
+private fun formatVideoTime(currentMs: Long, durationMs: Long): String {
+    fun formatSingle(ms: Long, forceHours: Boolean): String {
+        val totalSeconds = (ms.coerceAtLeast(0L) / 1000L).toInt()
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val seconds = totalSeconds % 60
+
+        return if (forceHours || hours > 0) {
+            "%d:%02d:%02d".format(hours, minutes, seconds)
+        } else {
+            "%d:%02d".format(minutes, seconds)
+        }
+    }
+
+    val needsHours = currentMs >= 3_600_000L || durationMs >= 3_600_000L
+    return "${formatSingle(currentMs, needsHours)} / ${formatSingle(durationMs, needsHours)}"
+}
+
 @Composable
 fun MediaVideoPlayer(
     videoUri: Uri,
@@ -71,34 +106,22 @@ fun MediaVideoPlayer(
     modifier: Modifier = Modifier,
     startPlaying: Boolean = true,
     vibrationEnabled: Boolean = false,
-    onBack: (() -> Unit)? = null
+    onBack: (() -> Unit)? = null,
+    onPreviousVideo: (() -> Unit)? = null,
+    onNextVideo: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
 
     fun hClick() {
         if (vibrationEnabled) Haptics.click(context)
     }
 
-    val audioManager = remember {
-        context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    fun findActivity(ctx: Context): Activity? = when (ctx) {
+        is Activity -> ctx
+        is ContextWrapper -> findActivity(ctx.baseContext)
+        else -> null
     }
-
-    fun getVolumePercent(): Int {
-        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
-        val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-        return ((currentVolume.toFloat() / maxVolume.toFloat()) * 100f)
-            .roundToInt()
-            .coerceIn(0, 100)
-    }
-
-    var controlsVisible by rememberSaveable(videoUri.toString()) { mutableStateOf(true) }
-    var isScrubbing by rememberSaveable(videoUri.toString()) { mutableStateOf(false) }
-    var scrubPositionMs by rememberSaveable(videoUri.toString()) { mutableLongStateOf(0L) }
-    var displayedPositionMs by rememberSaveable(videoUri.toString()) { mutableLongStateOf(0L) }
-    var displayedDurationMs by rememberSaveable(videoUri.toString()) { mutableLongStateOf(0L) }
-    var isPlaying by rememberSaveable(videoUri.toString()) { mutableStateOf(startPlaying) }
-    var volumePercent by rememberSaveable(videoUri.toString()) { mutableStateOf(getVolumePercent()) }
-    var resolvedTitle by rememberSaveable(videoUri.toString()) { mutableStateOf(videoName ?: "Videó") }
 
     val exoPlayer = remember(videoUri) {
         ExoPlayer.Builder(context).build().apply {
@@ -109,249 +132,488 @@ fun MediaVideoPlayer(
     }
 
     DisposableEffect(exoPlayer) {
-        val listener = object : Player.Listener {
-            override fun onIsPlayingChanged(playing: Boolean) {
-                isPlaying = playing
-            }
-
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                val dur = exoPlayer.duration
-                displayedDurationMs = if (dur > 0L) dur else 0L
-            }
-
-            override fun onMediaMetadataChanged(mediaMetadata: androidx.media3.common.MediaMetadata) {
-                val metaTitle =
-                    mediaMetadata.displayTitle?.toString()
-                        ?: mediaMetadata.title?.toString()
-
-                resolvedTitle = when {
-                    !metaTitle.isNullOrBlank() -> metaTitle
-                    !videoName.isNullOrBlank() -> videoName
-                    else -> "Videó"
-                }
-            }
-        }
-
-        exoPlayer.addListener(listener)
-
         onDispose {
-            exoPlayer.removeListener(listener)
             exoPlayer.release()
+        }
+    }
+
+    val audioManager = remember {
+        context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    }
+
+    fun getVolumeMax(): Int {
+        return audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+    }
+
+    fun getVolumeCurrent(): Int {
+        return audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(0)
+    }
+
+    var controlsVisible by rememberSaveable(videoUri.toString()) { mutableStateOf(true) }
+    var isPlaying by rememberSaveable(videoUri.toString()) { mutableStateOf(startPlaying) }
+    var isScrubbing by rememberSaveable(videoUri.toString()) { mutableStateOf(false) }
+    var scrubPositionMs by rememberSaveable(videoUri.toString()) { mutableLongStateOf(0L) }
+    var positionMs by rememberSaveable(videoUri.toString()) { mutableLongStateOf(0L) }
+    var durationMs by rememberSaveable(videoUri.toString()) { mutableLongStateOf(1L) }
+    var currentVolume by rememberSaveable(videoUri.toString()) { mutableIntStateOf(getVolumeCurrent()) }
+    var maxVolume by rememberSaveable(videoUri.toString()) { mutableIntStateOf(getVolumeMax()) }
+    var interactionTick by rememberSaveable(videoUri.toString()) { mutableIntStateOf(0) }
+    var touchMode by rememberSaveable(videoUri.toString()) { mutableStateOf(false) }
+
+    fun refreshVolumeState() {
+        currentVolume = getVolumeCurrent()
+        maxVolume = getVolumeMax()
+    }
+
+    fun pingControls() {
+        controlsVisible = true
+        interactionTick++
+    }
+
+    fun handleTouchInteraction() {
+        pingControls()
+        if (!touchMode) {
+            touchMode = true
+            focusManager.clearFocus(force = true)
+        }
+    }
+
+    fun handleControllerInteraction() {
+        if (touchMode) {
+            touchMode = false
+        }
+        pingControls()
+    }
+
+    var focusedButton by rememberSaveable(videoUri.toString()) {
+        mutableStateOf(VideoControlButtonId.PLAY_PAUSE)
+    }
+    var focusedIndex by rememberSaveable(videoUri.toString()) { mutableIntStateOf(2) }
+
+    val rootFocusRequester = remember { FocusRequester() }
+    val backFR = remember { FocusRequester() }
+    val prevFR = remember { FocusRequester() }
+    val playPauseFR = remember { FocusRequester() }
+    val nextFR = remember { FocusRequester() }
+    val volDownFR = remember { FocusRequester() }
+    val volUpFR = remember { FocusRequester() }
+
+    val orderedButtons = remember {
+        listOf(
+            VideoControlButtonId.BACK,
+            VideoControlButtonId.PREV_VIDEO,
+            VideoControlButtonId.PLAY_PAUSE,
+            VideoControlButtonId.NEXT_VIDEO,
+            VideoControlButtonId.VOL_DOWN,
+            VideoControlButtonId.VOL_UP
+        )
+    }
+
+    fun requestFocusedButton(index: Int) {
+        if (touchMode) return
+
+        focusedIndex = index.coerceIn(0, orderedButtons.lastIndex)
+        focusedButton = orderedButtons[focusedIndex]
+        when (focusedButton) {
+            VideoControlButtonId.BACK -> backFR.requestFocus()
+            VideoControlButtonId.PREV_VIDEO -> prevFR.requestFocus()
+            VideoControlButtonId.PLAY_PAUSE -> playPauseFR.requestFocus()
+            VideoControlButtonId.NEXT_VIDEO -> nextFR.requestFocus()
+            VideoControlButtonId.VOL_DOWN -> volDownFR.requestFocus()
+            VideoControlButtonId.VOL_UP -> volUpFR.requestFocus()
+        }
+    }
+
+    fun togglePlayPause() {
+        hClick()
+        if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+        pingControls()
+    }
+
+    fun adjustVolume(direction: Int) {
+        hClick()
+        audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0)
+        refreshVolumeState()
+        pingControls()
+    }
+
+    fun invokeFocusedButton() {
+        when (focusedButton) {
+            VideoControlButtonId.BACK -> {
+                hClick()
+                onBack?.invoke()
+            }
+
+            VideoControlButtonId.PREV_VIDEO -> {
+                hClick()
+                onPreviousVideo?.invoke()
+                pingControls()
+            }
+
+            VideoControlButtonId.PLAY_PAUSE -> togglePlayPause()
+
+            VideoControlButtonId.NEXT_VIDEO -> {
+                hClick()
+                onNextVideo?.invoke()
+                pingControls()
+            }
+
+            VideoControlButtonId.VOL_DOWN -> adjustVolume(AudioManager.ADJUST_LOWER)
+            VideoControlButtonId.VOL_UP -> adjustVolume(AudioManager.ADJUST_RAISE)
         }
     }
 
     LaunchedEffect(exoPlayer) {
         while (isActive) {
+            val dur = exoPlayer.duration.takeIf { it > 0L } ?: 1L
+            durationMs = dur
             if (!isScrubbing) {
-                val pos = exoPlayer.currentPosition.coerceAtLeast(0L)
-                val dur = exoPlayer.duration.takeIf { it > 0L } ?: 0L
-                displayedPositionMs = pos
-                displayedDurationMs = dur
+                positionMs = exoPlayer.currentPosition.coerceAtLeast(0L)
             }
+            isPlaying = exoPlayer.isPlaying
+            refreshVolumeState()
             delay(250)
         }
     }
 
-    LaunchedEffect(controlsVisible, isPlaying, isScrubbing, videoUri) {
+    LaunchedEffect(controlsVisible, isPlaying, isScrubbing, videoUri, interactionTick) {
         if (controlsVisible && isPlaying && !isScrubbing) {
             delay(5000)
             controlsVisible = false
         }
     }
 
-    fun showControls() {
+    LaunchedEffect(videoUri) {
         controlsVisible = true
-    }
-
-    fun togglePlayPause() {
-        hClick()
-        if (exoPlayer.isPlaying) {
-            exoPlayer.pause()
-        } else {
-            exoPlayer.play()
+        delay(120)
+        rootFocusRequester.requestFocus()
+        delay(80)
+        if (!touchMode) {
+            requestFocusedButton(2)
         }
-        showControls()
     }
 
-    fun seekBy(deltaMs: Long) {
-        hClick()
-        val dur = exoPlayer.duration.takeIf { it > 0L } ?: 0L
-        val newPos = (exoPlayer.currentPosition + deltaMs).coerceIn(0L, dur)
-        exoPlayer.seekTo(newPos)
-        displayedPositionMs = newPos
-        showControls()
+    LaunchedEffect(videoUri, controlsVisible) {
+        val activity = findActivity(context)
+        val window = activity?.window
+        val controller = window?.let { WindowInsetsControllerCompat(it, it.decorView) }
+
+        if (window != null && controller != null) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+        }
     }
 
-    fun adjustVolume(direction: Int) {
-        hClick()
-        audioManager.adjustStreamVolume(
-            AudioManager.STREAM_MUSIC,
-            direction,
-            0
-        )
-        volumePercent = getVolumePercent()
-        showControls()
-    }
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .focusRequester(rootFocusRequester)
+            .focusable()
+            .pointerInteropFilter { motionEvent ->
+                when (motionEvent.actionMasked) {
+                    MotionEvent.ACTION_DOWN,
+                    MotionEvent.ACTION_MOVE,
+                    MotionEvent.ACTION_UP,
+                    MotionEvent.ACTION_CANCEL -> {
+                        handleTouchInteraction()
+                    }
+                }
+                false
+            }
+            .onPreviewKeyEvent { event: KeyEvent ->
+                val native = event.nativeKeyEvent
+                if (native.action != AndroidKeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
 
-    BoxWithConstraints(
-        modifier = modifier.fillMaxSize()
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-                .combinedClickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {
-                        controlsVisible = !controlsVisible
-                    },
-                    onLongClick = {
+                handleControllerInteraction()
+
+                when (native.keyCode) {
+                    AndroidKeyEvent.KEYCODE_DPAD_UP,
+                    AndroidKeyEvent.KEYCODE_DPAD_DOWN,
+                    AndroidKeyEvent.KEYCODE_DPAD_LEFT,
+                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (!controlsVisible) {
+                            controlsVisible = true
+                            true
+                        } else {
+                            when (native.keyCode) {
+                                AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
+                                    requestFocusedButton((focusedIndex - 1).coerceAtLeast(0))
+                                    true
+                                }
+
+                                AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                    requestFocusedButton((focusedIndex + 1).coerceAtMost(orderedButtons.lastIndex))
+                                    true
+                                }
+
+                                AndroidKeyEvent.KEYCODE_DPAD_UP,
+                                AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
+                                    true
+                                }
+
+                                else -> false
+                            }
+                        }
+                    }
+
+                    AndroidKeyEvent.KEYCODE_DPAD_CENTER,
+                    AndroidKeyEvent.KEYCODE_ENTER,
+                    AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
+                    AndroidKeyEvent.KEYCODE_BUTTON_A -> {
+                        invokeFocusedButton()
+                        true
+                    }
+
+                    AndroidKeyEvent.KEYCODE_BUTTON_L1 -> {
+                        hClick()
+                        onPreviousVideo?.invoke()
+                        pingControls()
+                        true
+                    }
+
+                    AndroidKeyEvent.KEYCODE_BUTTON_R1 -> {
+                        hClick()
+                        onNextVideo?.invoke()
+                        pingControls()
+                        true
+                    }
+
+                    AndroidKeyEvent.KEYCODE_BACK,
+                    AndroidKeyEvent.KEYCODE_BUTTON_B -> {
+                        hClick()
                         onBack?.invoke()
+                        true
                     }
-                )
-        ) {
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        useController = false
-                        controllerAutoShow = false
-                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                        setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
-                        player = exoPlayer
-                    }
+
+                    else -> false
+                }
+            }
+            .combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {
+                    handleTouchInteraction()
                 },
-                update = { view ->
-                    if (view.player !== exoPlayer) {
-                        view.player = exoPlayer
-                    }
-                },
-                modifier = Modifier.fillMaxSize()
+                onLongClick = {
+                    handleTouchInteraction()
+                    hClick()
+                    onBack?.invoke()
+                }
             )
+    ) {
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    useController = false
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    player = exoPlayer
+                }
+            },
+            update = { view ->
+                if (view.player != exoPlayer) {
+                    view.player = exoPlayer
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
 
-            if (controlsVisible) {
-                Card(
-                    shape = RoundedCornerShape(28.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(0xCC202020)
-                    ),
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 18.dp)
-                        .fillMaxWidth(0.34f)
-                        .widthIn(min = 280.dp, max = 420.dp)
-                        .heightIn(min = 220.dp)
-                        .offset(y = 18.dp)
+        if (controlsVisible) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 18.dp, top = 18.dp)
+                    .background(
+                        color = Color.Black.copy(alpha = 0.42f),
+                        shape = RoundedCornerShape(18.dp)
+                    )
+            ) {
+                Text(
+                    text = videoName ?: "Videó",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                )
+            }
+
+            Card(
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xAA111111)
+                ),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(20.dp)
+                    .fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        Text(
-                            text = resolvedTitle.ifBlank { "Videó" },
-                            color = Color.White,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        Box(
+                            modifier = Modifier.width(0.dp).weight(1f)
                         ) {
                             Slider(
-                                value = if (displayedDurationMs > 0L) {
-                                    val base = if (isScrubbing) scrubPositionMs else displayedPositionMs
-                                    (base.toFloat() / displayedDurationMs.toFloat()).coerceIn(0f, 1f)
+                                value = if (durationMs > 0L) {
+                                    val base = if (isScrubbing) scrubPositionMs else positionMs
+                                    (base.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
                                 } else {
                                     0f
                                 },
                                 onValueChange = { fraction ->
+                                    handleTouchInteraction()
                                     isScrubbing = true
                                     scrubPositionMs =
-                                        (displayedDurationMs.toFloat() * fraction).roundToLongSafe()
+                                        (durationMs * fraction).toLong().coerceIn(0L, durationMs)
                                 },
                                 onValueChangeFinished = {
-                                    val target = scrubPositionMs.coerceIn(0L, displayedDurationMs)
+                                    handleTouchInteraction()
+                                    val target = scrubPositionMs.coerceIn(0L, durationMs)
                                     exoPlayer.seekTo(target)
-                                    displayedPositionMs = target
+                                    positionMs = target
                                     isScrubbing = false
-                                    showControls()
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        Text(
+                            text = formatVideoTime(
+                                currentMs = if (isScrubbing) scrubPositionMs else positionMs,
+                                durationMs = durationMs
+                            ),
+                            color = Color.White.copy(alpha = 0.88f),
+                            fontSize = 16.sp
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            VideoGlassButton(
+                                icon = Icons.Rounded.ArrowBack,
+                                selected = !touchMode && focusedButton == VideoControlButtonId.BACK,
+                                focusEnabled = !touchMode,
+                                focusRequester = backFR,
+                                onFocused = {
+                                    focusedButton = VideoControlButtonId.BACK
+                                    focusedIndex = 0
+                                },
+                                onClick = {
+                                    handleTouchInteraction()
+                                    hClick()
+                                    onBack?.invoke()
                                 }
                             )
 
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = formatVideoTime(if (isScrubbing) scrubPositionMs else displayedPositionMs),
-                                    color = Color.White.copy(alpha = 0.78f),
-                                    fontSize = 12.sp
+                                    text = "$currentVolume/$maxVolume",
+                                    color = Color.White.copy(alpha = 0.88f),
+                                    fontSize = 16.sp
                                 )
 
-                                Text(
-                                    text = formatVideoTime(displayedDurationMs),
-                                    color = Color.White.copy(alpha = 0.78f),
-                                    fontSize = 12.sp
+                                VideoGlassButton(
+                                    icon = Icons.Rounded.VolumeDown,
+                                    selected = !touchMode && focusedButton == VideoControlButtonId.VOL_DOWN,
+                                    focusEnabled = !touchMode,
+                                    focusRequester = volDownFR,
+                                    onFocused = {
+                                        focusedButton = VideoControlButtonId.VOL_DOWN
+                                        focusedIndex = 4
+                                    },
+                                    onClick = {
+                                        handleTouchInteraction()
+                                        adjustVolume(AudioManager.ADJUST_LOWER)
+                                    }
+                                )
+
+                                VideoGlassButton(
+                                    icon = Icons.Rounded.VolumeUp,
+                                    selected = !touchMode && focusedButton == VideoControlButtonId.VOL_UP,
+                                    focusEnabled = !touchMode,
+                                    focusRequester = volUpFR,
+                                    onFocused = {
+                                        focusedButton = VideoControlButtonId.VOL_UP
+                                        focusedIndex = 5
+                                    },
+                                    onClick = {
+                                        handleTouchInteraction()
+                                        adjustVolume(AudioManager.ADJUST_RAISE)
+                                    }
                                 )
                             }
                         }
 
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            VideoControlButton(
-                                icon = Icons.Rounded.FastRewind,
-                                onClick = { seekBy(-10_000L) },
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            VideoControlButton(
-                                icon = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                                onClick = { togglePlayPause() },
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            VideoControlButton(
-                                icon = Icons.Rounded.FastForward,
-                                onClick = { seekBy(10_000L) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.align(Alignment.Center),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            VideoControlButton(
-                                icon = Icons.Rounded.VolumeDown,
-                                onClick = { adjustVolume(AudioManager.ADJUST_LOWER) },
-                                modifier = Modifier.weight(1f)
+                            VideoGlassButton(
+                                icon = Icons.Rounded.FastRewind,
+                                selected = !touchMode && focusedButton == VideoControlButtonId.PREV_VIDEO,
+                                focusEnabled = !touchMode,
+                                focusRequester = prevFR,
+                                onFocused = {
+                                    focusedButton = VideoControlButtonId.PREV_VIDEO
+                                    focusedIndex = 1
+                                },
+                                onClick = {
+                                    handleTouchInteraction()
+                                    hClick()
+                                    onPreviousVideo?.invoke()
+                                    pingControls()
+                                }
                             )
 
-                            Text(
-                                text = "$volumePercent%",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.alpha(0.88f)
+                            VideoGlassButton(
+                                icon = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                selected = !touchMode && focusedButton == VideoControlButtonId.PLAY_PAUSE,
+                                focusEnabled = !touchMode,
+                                focusRequester = playPauseFR,
+                                onFocused = {
+                                    focusedButton = VideoControlButtonId.PLAY_PAUSE
+                                    focusedIndex = 2
+                                },
+                                onClick = {
+                                    handleTouchInteraction()
+                                    togglePlayPause()
+                                }
                             )
 
-                            VideoControlButton(
-                                icon = Icons.Rounded.VolumeUp,
-                                onClick = { adjustVolume(AudioManager.ADJUST_RAISE) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-                        if (onBack != null) {
-                            Text(
-                                text = "Hosszan nyomva: vissza",
-                                color = Color.White.copy(alpha = 0.55f),
-                                fontSize = 11.sp
+                            VideoGlassButton(
+                                icon = Icons.Rounded.FastForward,
+                                selected = !touchMode && focusedButton == VideoControlButtonId.NEXT_VIDEO,
+                                focusEnabled = !touchMode,
+                                focusRequester = nextFR,
+                                onFocused = {
+                                    focusedButton = VideoControlButtonId.NEXT_VIDEO
+                                    focusedIndex = 3
+                                },
+                                onClick = {
+                                    handleTouchInteraction()
+                                    hClick()
+                                    onNextVideo?.invoke()
+                                    pingControls()
+                                }
                             )
                         }
                     }
@@ -361,52 +623,45 @@ fun MediaVideoPlayer(
     }
 }
 
-@kotlin.OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun VideoControlButton(
-    icon: ImageVector,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
+private fun VideoGlassButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    focusEnabled: Boolean,
+    focusRequester: FocusRequester,
+    onFocused: () -> Unit,
+    onClick: () -> Unit
 ) {
+    val shape = RoundedCornerShape(18.dp)
+
     Box(
-        modifier = modifier
-            .heightIn(min = 52.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.10f))
+        modifier = Modifier
+            .size(56.dp)
+            .focusRequester(focusRequester)
+            .onFocusChanged {
+                if (focusEnabled && it.isFocused) onFocused()
+            }
+            .focusable(enabled = focusEnabled)
+            .background(
+                color = if (selected) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.08f),
+                shape = shape
+            )
+            .border(
+                width = if (selected) 2.dp else 1.dp,
+                color = if (selected) Color.White.copy(alpha = 0.95f) else Color.White.copy(alpha = 0.16f),
+                shape = shape
+            )
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onClick
-            )
-            .padding(vertical = 12.dp),
+            ),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(24.dp)
+            tint = Color.White
         )
-    }
-}
-
-private fun formatVideoTime(ms: Long): String {
-    val totalSeconds = (ms.coerceAtLeast(0L) / 1000L).toInt()
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-
-    return if (hours > 0) {
-        "%d:%02d:%02d".format(hours, minutes, seconds)
-    } else {
-        "%02d:%02d".format(minutes, seconds)
-    }
-}
-
-private fun Float.roundToLongSafe(): Long {
-    return if (this.isFinite()) {
-        roundToInt().toLong()
-    } else {
-        0L
     }
 }

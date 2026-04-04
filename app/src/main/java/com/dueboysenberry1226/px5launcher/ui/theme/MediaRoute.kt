@@ -2,7 +2,15 @@
 
 package com.dueboysenberry1226.px5launcher.ui.theme
 
-
+import android.app.Dialog
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.PaddingValues
 import android.annotation.SuppressLint
 import android.content.ClipData
@@ -39,12 +47,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -436,6 +442,26 @@ fun MediaRoute(
     fun openVideoPlayer(entry: MediaEntry) {
         currentVideoEntry = entry
         navigateTo(MediaScreen.VIDEO_PLAYER)
+    }
+
+    fun currentVideoSource(): List<MediaEntry> = when (screen) {
+        MediaScreen.VIDEOS -> videos.filter { it.kind == MediaKind.VIDEO }
+        MediaScreen.ALBUM_CONTENT -> albumContent.filter { it.kind == MediaKind.VIDEO }
+        else -> videos.filter { it.kind == MediaKind.VIDEO }
+    }
+
+    fun stepVideo(direction: Int) {
+        val current = currentVideoEntry ?: return
+        val source = currentVideoSource()
+        if (source.isEmpty()) return
+
+        val currentIndex = source.indexOfFirst { it.id == current.id }
+        if (currentIndex < 0) return
+
+        val nextIndex = (currentIndex + direction).coerceIn(0, source.lastIndex)
+        if (nextIndex != currentIndex) {
+            currentVideoEntry = source[nextIndex]
+        }
     }
 
     fun shareViewerEntry() {
@@ -843,7 +869,7 @@ fun MediaRoute(
 
                         in okCodes, in backCodes -> {
                             viewerPanMode = false
-                            viewerFocus = viewerLastSideFocus
+                            viewerFocus = ViewerFocus.IMAGE
                             true
                         }
 
@@ -923,7 +949,8 @@ fun MediaRoute(
 
             MediaScreen.VIDEO_PLAYER -> {
                 when (code) {
-                    in backCodes -> {
+                    AndroidKeyEvent.KEYCODE_BACK,
+                    AndroidKeyEvent.KEYCODE_BUTTON_B -> {
                         goBackOneLevel()
                         true
                     }
@@ -938,7 +965,9 @@ fun MediaRoute(
         registerKeyHandler(internalKeyHandler)
     }
 
-    Box(Modifier.fillMaxWidth()) {
+    Box(
+        Modifier.fillMaxSize()
+    ) {
         if (!hasPerm) {
             MediaPermissionCard(
                 selectedIndex = permissionButtonIndex,
@@ -1073,12 +1102,29 @@ fun MediaRoute(
             MediaScreen.VIDEO_PLAYER -> {
                 val videoEntry = currentVideoEntry
                 if (videoEntry != null) {
-                    MediaVideoPlayer(
-                        videoUri = videoEntry.uri,
-                        videoName = videoEntry.displayName,
-                        vibrationEnabled = vibrationEnabled,
-                        onBack = { goBackOneLevel() }
-                    )
+                    Dialog(
+                        onDismissRequest = { goBackOneLevel() },
+                        properties = DialogProperties(
+                            usePlatformDefaultWidth = false,
+                            decorFitsSystemWindows = false,
+                            dismissOnBackPress = true,
+                            dismissOnClickOutside = false
+                        )
+                    ) {
+                        VideoPlayerDialogImmersiveEffect()
+
+                        MediaVideoPlayer(
+                            videoUri = videoEntry.uri,
+                            videoName = videoEntry.displayName,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black),
+                            vibrationEnabled = vibrationEnabled,
+                            onBack = { goBackOneLevel() },
+                            onPreviousVideo = { stepVideo(-1) },
+                            onNextVideo = { stepVideo(+1) }
+                        )
+                    }
                 } else {
                     goBackOneLevel()
                 }
@@ -1326,7 +1372,7 @@ private fun MediaGrid(
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 22.dp, start = 8.dp, bottom = 14.dp)
+            modifier = Modifier.padding(top = 2.dp, start = 8.dp, bottom = 14.dp)
         )
 
         LazyVerticalGrid(
@@ -1335,7 +1381,7 @@ private fun MediaGrid(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 18.dp)
+            contentPadding = PaddingValues(top = 8.dp, bottom = 18.dp)
         ) {
             itemsIndexed(items) { index, item ->
                 when (item) {
@@ -1452,33 +1498,26 @@ private fun MediaThumbTile(
             }
         }
 
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .background(Color.Black.copy(alpha = 0.45f))
-                .padding(horizontal = 10.dp, vertical = 8.dp)
-        ) {
-            Text(
-                text = entry.displayName ?: "—",
-                color = Color.White,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+
 
         if (entry.kind == MediaKind.VIDEO) {
-            Text(
-                "▶",
-                color = Color.White.copy(alpha = 0.9f),
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
+            Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(8.dp)
-            )
+                    .background(
+                        Color.Black.copy(alpha = 0.46f),
+                        RoundedCornerShape(12.dp)
+                    )
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = "▶",
+                    color = Color.White.copy(alpha = 0.95f),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }
@@ -2186,6 +2225,21 @@ private fun MediaImageViewer(
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 )
             }
+        }
+    }
+}
+@Composable
+private fun VideoPlayerDialogImmersiveEffect() {
+    val view = LocalView.current
+    val dialogWindow = (view.parent as? DialogWindowProvider)?.window
+
+    SideEffect {
+        val window = dialogWindow ?: return@SideEffect
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
     }
 }
