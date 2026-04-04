@@ -535,6 +535,7 @@ fun PSHomeRoute(
         setAllAppsSelectedIndex = { allAppsSelectedIndex = it },
         setActionIndex = { actionIndex = it },
         setSearchOpen = { searchOpen = it },
+        searchOpen = searchOpen,
         setSearchQuery = { searchQuery = it },
         setNotifEnterFocusTick = { notifEnterFocusTick = it },
         launchApp = { app -> launchPsHomeApp(context, pm, scope, derived.repo, app) },
@@ -670,10 +671,7 @@ fun PSHomeRoute(
                 PSHomeGamesOverlays(
                     searchOpen = searchOpen,
                     searchQuery = searchQuery,
-                    searchResults = remember(derived.allApps, searchQuery) {
-                        val q = searchQuery.trim()
-                        if (q.isBlank()) emptyList() else derived.allApps.filter { it.label.contains(q, true) }.take(20)
-                    },
+                    searchResults = derived.allApps,
                     menuOpen = menuOpen,
                     isPinned = menuAppSnapshot?.packageName in derived.pinned,
                     canUninstall = canUninstallMenuApp,

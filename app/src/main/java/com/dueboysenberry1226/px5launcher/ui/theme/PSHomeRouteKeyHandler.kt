@@ -57,6 +57,7 @@ internal fun buildPSHomeKeyHandler(
     setNotifEnterFocusTick: (Int) -> Unit,
     launchApp: (LaunchableApp) -> Unit,
     togglePin: (LaunchableApp) -> Unit,
+    searchOpen: Boolean,
     openMenuFor: (LaunchableApp?) -> Unit,
     closeMenu: () -> Unit
 ): (KeyEvent) -> Boolean = { e ->
@@ -67,18 +68,20 @@ internal fun buildPSHomeKeyHandler(
     val isLB = code == AndroidKeyEvent.KEYCODE_BUTTON_L1 || code == AndroidKeyEvent.KEYCODE_1
     val isRB = code == AndroidKeyEvent.KEYCODE_BUTTON_R1 || code == AndroidKeyEvent.KEYCODE_2
 
-    if (homeSection == HomeSection.TOPBAR && code in okCodes) {
-        if (action == AndroidKeyEvent.ACTION_DOWN || action == AndroidKeyEvent.ACTION_UP) {
-            setTab(
-                when (topBarIndex) {
-                    0 -> Tab.GAMES
-                    1 -> Tab.MEDIA
-                    else -> Tab.NOTIFICATIONS
-                }
-            )
-            true
-        } else {
+    if (searchOpen) {
+        if (action != AndroidKeyEvent.ACTION_DOWN) {
             false
+        } else {
+            when (code) {
+                AndroidKeyEvent.KEYCODE_BACK,
+                AndroidKeyEvent.KEYCODE_BUTTON_B -> {
+                    setSearchOpen(false)
+                    setSearchQuery("")
+                    true
+                }
+
+                else -> false
+            }
         }
     } else if (action != AndroidKeyEvent.ACTION_DOWN) {
         false
@@ -169,7 +172,9 @@ internal fun buildPSHomeKeyHandler(
                         0 -> setTab(Tab.GAMES)
                         1 -> setTab(Tab.MEDIA)
                         2 -> setTab(Tab.NOTIFICATIONS)
-                        3 -> setSearchOpen(true)
+                        3 -> {
+                            setSearchOpen(true)
+                        }
                         4 -> onOpenSettings()
                     }
                     true

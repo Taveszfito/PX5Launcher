@@ -11,29 +11,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -127,7 +112,7 @@ fun HomeTopBar(
         if (vibrationEnabled) Haptics.click(context)
 
         if (!easterEggEnabled) {
-            activationTapCount += 1
+            activationTapCount++
             resetTapCount = 0
 
             if (activationTapCount >= 5) {
@@ -138,7 +123,7 @@ fun HomeTopBar(
                 showEasterEggMessage = true
             }
         } else {
-            resetTapCount += 1
+            resetTapCount++
             activationTapCount = 0
 
             if (resetTapCount >= 3) {
@@ -162,23 +147,9 @@ fun HomeTopBar(
         action()
     }
 
-    val displayedAppsText = if (easterEggEnabled) {
-        textForSource(shuffledOrder[0])
-    } else {
-        appsBaseText
-    }
-
-    val displayedMediaText = if (easterEggEnabled) {
-        textForSource(shuffledOrder[1])
-    } else {
-        mediaBaseText
-    }
-
-    val displayedClockText = if (easterEggEnabled) {
-        textForSource(shuffledOrder[2])
-    } else {
-        clockText
-    }
+    val displayedAppsText = if (easterEggEnabled) textForSource(shuffledOrder[0]) else appsBaseText
+    val displayedMediaText = if (easterEggEnabled) textForSource(shuffledOrder[1]) else mediaBaseText
+    val displayedClockText = if (easterEggEnabled) textForSource(shuffledOrder[2]) else clockText
 
     val gamesSelected = if (topBarFocused) topBarIndex == 0 else tab == Tab.GAMES
     val mediaSelected = if (topBarFocused) topBarIndex == 1 else tab == Tab.MEDIA
@@ -198,110 +169,65 @@ fun HomeTopBar(
         }
     }
 
-    Column(
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    Column(Modifier.fillMaxWidth()) {
+
         AnimatedVisibility(
             visible = showEasterEggMessage,
-            enter = fadeIn(animationSpec = tween(180)),
-            exit = fadeOut(animationSpec = tween(180))
+            enter = fadeIn(tween(180)),
+            exit = fadeOut(tween(180))
         ) {
             Box(
-                modifier = Modifier
+                Modifier
                     .fillMaxWidth()
                     .padding(bottom = 10.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .background(Color.White.copy(alpha = 0.10f))
-                    .border(
-                        width = 1.dp,
-                        color = Color.White.copy(alpha = 0.16f),
-                        shape = RoundedCornerShape(16.dp)
-                    )
-                    .padding(horizontal = 14.dp, vertical = 12.dp)
+                    .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(16.dp))
+                    .padding(14.dp)
             ) {
                 Text(
                     text = stringResource(R.string.easter_egg_topbar_shuffle_found),
                     color = Color.White.copy(alpha = 0.92f),
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp,
-                    fontWeight = FontWeight.Medium
+                    fontSize = 13.sp
                 )
             }
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+
             Row(verticalAlignment = Alignment.CenterVertically) {
-                PSTab(
-                    text = displayedAppsText,
-                    selected = gamesSelected,
-                    underline = gamesUnderline,
-                    focused = topBarFocused,
-                    onClick = {
-                        handleOtherTopBarAction {
-                            onTabChange(Tab.GAMES)
-                        }
-                    }
-                )
+                PSTab(displayedAppsText, gamesSelected, gamesUnderline, topBarFocused) {
+                    handleOtherTopBarAction { onTabChange(Tab.GAMES) }
+                }
 
                 Spacer(Modifier.width(18.dp))
 
-                PSTab(
-                    text = displayedMediaText,
-                    selected = mediaSelected,
-                    underline = mediaUnderline,
-                    focused = topBarFocused,
-                    onClick = {
-                        handleOtherTopBarAction {
-                            onTabChange(Tab.MEDIA)
-                        }
-                    }
-                )
+                PSTab(displayedMediaText, mediaSelected, mediaUnderline, topBarFocused) {
+                    handleOtherTopBarAction { onTabChange(Tab.MEDIA) }
+                }
 
                 Spacer(Modifier.width(18.dp))
 
-                PSTab(
-                    text = notificationsBaseText,
-                    selected = notificationsSelected,
-                    underline = notificationsUnderline,
-                    focused = topBarFocused,
-                    onClick = {
-                        handleNotificationsTap()
-                    }
-                )
+                PSTab(notificationsBaseText, notificationsSelected, notificationsUnderline, topBarFocused) {
+                    handleNotificationsTap()
+                }
             }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TopIcon(
-                    icon = Icons.Filled.Search,
-                    contentDescription = null,
-                    selected = searchSelected,
-                    topBarFocused = topBarFocused,
-                    onClick = {
-                        handleOtherTopBarAction {
-                            onSearch()
-                        }
-                    }
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+
+                TopIcon(Icons.Filled.Search, null, searchSelected, topBarFocused) {
+                    handleOtherTopBarAction { onSearch() }
+                }
 
                 Spacer(Modifier.width(10.dp))
 
-                TopIcon(
-                    icon = Icons.Filled.Settings,
-                    contentDescription = null,
-                    selected = settingsSelected,
-                    topBarFocused = topBarFocused,
-                    onClick = {
-                        handleOtherTopBarAction {
-                            onSettings()
-                        }
-                    }
-                )
+                TopIcon(Icons.Filled.Settings, null, settingsSelected, topBarFocused) {
+                    handleOtherTopBarAction { onSettings() }
+                }
 
                 Spacer(Modifier.width(16.dp))
 
@@ -322,8 +248,7 @@ private fun PSTab(
     selected: Boolean,
     underline: Boolean,
     focused: Boolean,
-    onClick: () -> Unit,
-    onLongPress: (() -> Unit)? = null
+    onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -334,15 +259,13 @@ private fun PSTab(
     }
 
     Column(
-        modifier = Modifier
+        Modifier
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = onClick,
-                onLongClick = { onLongPress?.invoke() }
+                onClick = onClick
             )
-            .padding(horizontal = 6.dp),
-        horizontalAlignment = Alignment.Start
+            .padding(horizontal = 6.dp)
     ) {
         Text(
             text = text,
@@ -351,10 +274,8 @@ private fun PSTab(
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
         )
 
-        Spacer(Modifier.height(0.dp))
-
         Box(
-            modifier = Modifier
+            Modifier
                 .height(2.dp)
                 .width(if (underline) 46.dp else 0.dp)
                 .background(if (underline) Color.White else Color.Transparent)
@@ -368,39 +289,44 @@ private fun TopIcon(
     contentDescription: String?,
     selected: Boolean,
     topBarFocused: Boolean,
-    onClick: () -> Unit,
-    onLongPress: (() -> Unit)? = null
+    onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val shape = RoundedCornerShape(14.dp)
 
-    val bgA = if (selected) 0.18f else 0f
-    val borderA = if (selected) 0.55f else 0f
     val iconA = when {
-        selected -> 0.92f
+        selected -> 0.95f
         topBarFocused -> 0.55f
         else -> 0.85f
     }
 
-    Box(
+    Column(
         modifier = Modifier
-            .padding(horizontal = 6.dp, vertical = 6.dp)
-            .clip(shape)
-            .background(Color.White.copy(alpha = bgA))
-            .border(2.dp, Color.White.copy(alpha = borderA), shape)
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = onClick,
-                onLongClick = { onLongPress?.invoke() }
-            ),
-        contentAlignment = Alignment.Center
+                onClick = onClick
+            )
+            .padding(horizontal = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = Color.White.copy(alpha = iconA),
-            modifier = Modifier.size(18.dp)
+
+        Box(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = Color.White.copy(alpha = iconA),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .height(2.dp)
+                .width(if (selected) 22.dp else 0.dp)
+                .background(if (selected) Color.White else Color.Transparent)
         )
     }
 }
