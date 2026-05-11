@@ -241,6 +241,36 @@ fun SettingsScreen(
         context.startActivity(intent)
     }
 
+    fun openDefaultHomeSettings() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleManager = context.getSystemService(android.app.role.RoleManager::class.java)
+            if (roleManager?.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME) == true) {
+                val intent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME)
+                try {
+                    context.startActivity(intent)
+                    return
+                } catch (_: Exception) {
+                }
+            }
+        }
+
+        try {
+            val intent = Intent(Settings.ACTION_HOME_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            try {
+                val intent = Intent(Settings.ACTION_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            } catch (e2: Exception) {
+                android.widget.Toast.makeText(context, "Error", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     fun isNotificationListenerEnabled(ctx: Context): Boolean {
         val enabled = Settings.Secure.getString(
             ctx.contentResolver,
@@ -425,6 +455,12 @@ fun SettingsScreen(
                 subtitle = stringResource(R.string.settings_app_permissions_subtitle)
             ) {
                 openAppDetails()
+            },
+            action(
+                title = stringResource(R.string.settings_default_home_title),
+                subtitle = stringResource(R.string.settings_default_home_subtitle)
+            ) {
+                openDefaultHomeSettings()
             }
         )
 

@@ -106,6 +106,9 @@
     <string name="settings_system_settings_title">System settings</string>
     <string name="settings_android_settings_subtitle">Android Settings</string>
 
+    <string name="settings_default_home_title">Default home screen</string>
+    <string name="settings_default_home_subtitle">Make this app the default home screen</string>
+
     <!-- ===================== -->
     <!-- TOPBAR -->
     <!-- ===================== -->

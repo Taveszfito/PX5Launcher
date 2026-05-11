@@ -403,7 +403,8 @@ Itt később megjelenhetnek a felhasznált könyvtárak, assetek és egyéb kös
 
     <string name="search_title">Keresés</string>
     <string name="search_placeholder">Írd be az app nevét…</string>
-    <string name="search_no_results">Találatok itt fognak megjelenni.</string>
+    <string name="settings_default_home_title">Alapértelmezett kezdőképernyő</string>
+    <string name="settings_default_home_subtitle">Legyen ez az alkalmazás az alapértelmezett kezdőképernyő</string>
 
     <string name="notifications_title">Értesítések</string>
     <string name="delete_badge_text">X</string>
