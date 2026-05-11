@@ -11,7 +11,6 @@ import com.dueboysenberry1226.px5launcher.data.LaunchableApp
 import com.dueboysenberry1226.px5launcher.data.Tab
 import com.dueboysenberry1226.px5launcher.data.TopItem
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 
 internal fun buildPSHomeKeyHandler(
     context: Context,
@@ -346,7 +345,7 @@ internal fun buildPSHomeKeyHandler(
                         AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
                             setHomeSection(HomeSection.ACTIONS)
                             setActionIndex(0)
-                            goActions()
+                            focusActions()
                             true
                         }
                         AndroidKeyEvent.KEYCODE_DPAD_CENTER,
@@ -445,13 +444,13 @@ internal fun buildPSHomeKeyHandler(
                             AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> moveBottomPanelHorizontal(+1)
                             AndroidKeyEvent.KEYCODE_DPAD_UP -> {
                                 setHomeSection(HomeSection.ACTIONS)
-                                goActions()
+                                focusActions()
                                 true
                             }
                             AndroidKeyEvent.KEYCODE_BACK,
                             AndroidKeyEvent.KEYCODE_BUTTON_B -> {
                                 setHomeSection(HomeSection.ACTIONS)
-                                goActions()
+                                focusActions()
                                 true
                             }
                             AndroidKeyEvent.KEYCODE_DPAD_DOWN -> true

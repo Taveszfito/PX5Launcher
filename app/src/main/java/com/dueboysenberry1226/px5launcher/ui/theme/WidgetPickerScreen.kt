@@ -24,8 +24,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -362,15 +360,7 @@ fun WidgetPickerScreen(
             Spacer(Modifier.height(12.dp))
         }
 
-        SearchBarLike(
-            value = state.query,
-            onValueChange = state::updateQuery,
-            placeholder = stringResource(R.string.common_search),
-            modifier = Modifier.fillMaxWidth(),
-            embeddedInPhonePopup = embeddedInPhonePopup
-        )
 
-        Spacer(Modifier.height(12.dp))
 
         Card(
             shape = shape,
@@ -433,67 +423,6 @@ fun WidgetPickerScreen(
             }
         }
     }
-}
-
-@Composable
-private fun SearchBarLike(
-    value: String,
-    onValueChange: (String) -> Unit,
-    placeholder: String,
-    modifier: Modifier = Modifier,
-    embeddedInPhonePopup: Boolean = false
-) {
-    val cs = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(22.dp)
-
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        singleLine = true,
-        placeholder = {
-            Text(
-                text = placeholder,
-                color = if (embeddedInPhonePopup) {
-                    Color.White.copy(alpha = 0.58f)
-                } else {
-                    cs.onSurface.copy(alpha = 0.58f)
-                }
-            )
-        },
-        leadingIcon = {
-            Text(
-                text = "🔍",
-                fontSize = if (embeddedInPhonePopup) 16.sp else 16.sp
-            )
-        },
-        shape = shape,
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedTextColor = if (embeddedInPhonePopup) Color.White else cs.onSurface,
-            unfocusedTextColor = if (embeddedInPhonePopup) Color.White else cs.onSurface,
-            focusedBorderColor = if (embeddedInPhonePopup) {
-                Color.White.copy(alpha = 0.22f)
-            } else {
-                cs.outline
-            },
-            unfocusedBorderColor = if (embeddedInPhonePopup) {
-                Color.White.copy(alpha = 0.16f)
-            } else {
-                cs.outline.copy(alpha = 0.7f)
-            },
-            focusedContainerColor = if (embeddedInPhonePopup) {
-                Color.White.copy(alpha = 0.035f)
-            } else {
-                cs.surface
-            },
-            unfocusedContainerColor = if (embeddedInPhonePopup) {
-                Color.White.copy(alpha = 0.035f)
-            } else {
-                cs.surface
-            },
-            cursorColor = if (embeddedInPhonePopup) Color.White else cs.primary
-        ),
-        modifier = modifier.height(if (embeddedInPhonePopup) 54.dp else 56.dp)
-    )
 }
 
 @Composable
