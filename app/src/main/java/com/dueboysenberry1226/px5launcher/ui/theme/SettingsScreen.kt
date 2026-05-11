@@ -147,6 +147,34 @@ private fun getAppVersionName(context: Context): String {
     }
 }
 
+private fun isNotificationListenerEnabled(ctx: Context): Boolean {
+    val enabled = Settings.Secure.getString(
+        ctx.contentResolver,
+        "enabled_notification_listeners"
+    ) ?: return false
+    val target = ComponentName(
+        ctx,
+        PX5NotificationListener::class.java
+    ).flattenToString()
+    return enabled.contains(target)
+}
+
+private fun isDefaultLauncher(ctx: Context): Boolean {
+    val intent = Intent(Intent.ACTION_MAIN).apply {
+        addCategory(Intent.CATEGORY_HOME)
+    }
+    val resolveInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        ctx.packageManager.resolveActivity(
+            intent,
+            PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_DEFAULT_ONLY.toLong())
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        ctx.packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+    }
+    return resolveInfo?.activityInfo?.packageName == ctx.packageName
+}
+
 @Composable
 fun SettingsScreen(
     onBackToHome: () -> Unit,
@@ -204,6 +232,14 @@ fun SettingsScreen(
 
     val rootFocusRequester = remember { FocusRequester() }
 
+    var isDefaultHome by remember { mutableStateOf<Boolean>(isDefaultLauncher(context)) }
+
+    val roleLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) {
+        isDefaultHome = isDefaultLauncher(context)
+    }
+
     LaunchedEffect(Unit) {
         rootFocusRequester.requestFocus()
     }
@@ -242,46 +278,46 @@ fun SettingsScreen(
     }
 
     fun openDefaultHomeSettings() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        try {
             val roleManager = context.getSystemService(android.app.role.RoleManager::class.java)
-            if (roleManager?.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME) == true) {
+            if (roleManager != null && roleManager.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME)) {
                 val intent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME)
-                try {
-                    context.startActivity(intent)
-                    return
-                } catch (_: Exception) {
-                }
+                roleLauncher.launch(intent)
+                return
             }
+        } catch (_: Exception) {
         }
 
+        // Fallback 1: Official Home Settings
         try {
             val intent = Intent(Settings.ACTION_HOME_SETTINGS).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
-        } catch (e: Exception) {
-            try {
-                val intent = Intent(Settings.ACTION_SETTINGS).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(intent)
-            } catch (e2: Exception) {
-                android.widget.Toast.makeText(context, "Error", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        } catch (_: Exception) {
+        }
+
+        // Fallback 2: General Settings + Toast
+        try {
+            val intent = Intent(Settings.ACTION_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
+            context.startActivity(intent)
+            android.widget.Toast.makeText(
+                context,
+                "Keresse az 'Alapértelmezett alkalmazások' menüt",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        } catch (_: Exception) {
+            android.widget.Toast.makeText(
+                context,
+                "Nem sikerült megnyitni a beállításokat",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
-    fun isNotificationListenerEnabled(ctx: Context): Boolean {
-        val enabled = Settings.Secure.getString(
-            ctx.contentResolver,
-            "enabled_notification_listeners"
-        ) ?: return false
-        val target = ComponentName(
-            ctx,
-            PX5NotificationListener::class.java
-        ).flattenToString()
-        return enabled.contains(target)
-    }
 
     fun toggle(
         title: String,
@@ -458,7 +494,11 @@ fun SettingsScreen(
             },
             action(
                 title = stringResource(R.string.settings_default_home_title),
-                subtitle = stringResource(R.string.settings_default_home_subtitle)
+                subtitle = if (isDefaultHome) {
+                    stringResource(R.string.common_active)
+                } else {
+                    stringResource(R.string.settings_default_home_subtitle)
+                }
             ) {
                 openDefaultHomeSettings()
             }
