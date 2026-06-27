@@ -278,17 +278,23 @@ fun SettingsScreen(
     }
 
     fun openDefaultHomeSettings() {
-        try {
-            val roleManager = context.getSystemService(android.app.role.RoleManager::class.java)
-            if (roleManager != null && roleManager.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME)) {
-                val intent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME)
-                roleLauncher.launch(intent)
-                return
+        val isAlreadyDefault = isDefaultLauncher(context)
+
+        // Ha nem mi vagyunk az alapértelmezettek, a RoleManager a legegyszerűbb (dialógust dob)
+        if (!isAlreadyDefault) {
+            try {
+                val roleManager = context.getSystemService(android.app.role.RoleManager::class.java)
+                if (roleManager != null && roleManager.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME)) {
+                    val intent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME)
+                    roleLauncher.launch(intent)
+                    return
+                }
+            } catch (_: Exception) {
             }
-        } catch (_: Exception) {
         }
 
-        // Fallback 1: Official Home Settings
+        // Ha már mi vagyunk az alapértelmezettek, vagy a RoleManager nem elérhető:
+        // Megpróbáljuk megnyitni a rendszerszintű választót/beállítást.
         try {
             val intent = Intent(Settings.ACTION_HOME_SETTINGS).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -298,7 +304,16 @@ fun SettingsScreen(
         } catch (_: Exception) {
         }
 
-        // Fallback 2: General Settings + Toast
+        try {
+            val intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            return
+        } catch (_: Exception) {
+        }
+
+        // Fallback: Általános beállítások + Toast
         try {
             val intent = Intent(Settings.ACTION_SETTINGS).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
